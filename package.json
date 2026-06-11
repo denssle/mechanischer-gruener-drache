@@ -1,0 +1,11 @@
+{
+  "name": "mechanischer-grüner-drache",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "private": true,
+  "dependencies": {
+    "discord.js": "^14.26.4"
+  }
+}
