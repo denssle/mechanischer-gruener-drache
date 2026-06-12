@@ -30,15 +30,15 @@ async function handlePing(message) {
 }
 
 async function getScore(userId) {
-    let score = await get(generatePingPongKey(userId));
-    if (score === null) {
-        return await updateScore(userId, 0)
+    let score = Number(await get(generatePingPongKey(userId)));
+    if (score === null || isNaN(score)) {
+        return Number(updateScore(userId, 0));
     }
     return Number(score);
 }
 
 async function updateScore(userId, score) {
-    return await set(generatePingPongKey(userId), score);
+    return Number(await set(generatePingPongKey(userId), score));
 }
 
 function generatePingPongKey(userId) {
