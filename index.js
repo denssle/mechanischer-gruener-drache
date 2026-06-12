@@ -1,7 +1,7 @@
 import Discord from "discord.js";
 import config from "./config.json" with {type: "json"};
 import {createClient} from 'redis';
-
+import pjson from './package.json' with {type: 'json'};
 
 const client = new Discord.Client({
     intents: [
@@ -12,7 +12,6 @@ const client = new Discord.Client({
     ]
 });
 
-const pjson = require('./package.json');
 
 const redisClient = createClient();
 
