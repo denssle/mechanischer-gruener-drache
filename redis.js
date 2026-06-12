@@ -20,3 +20,11 @@ export async function startRedis() {
     await client.connect();
     console.log("Redis connected");
 }
+
+export function set(key, value) {
+    return client.set(key, value);
+}
+
+export function get(key) {
+    return client.get(key);
+}
