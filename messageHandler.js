@@ -24,14 +24,16 @@ function handleCommand(message) {
 async function handlePing(message) {
     let score = await getScore(message.author.id);
     if (Date.now() % 2 === 0) {
-        return message.reply("Du hast einen Punkt gemacht! Du hast aktuell " + await updateScore(message.author.id, score + 1) + " Punkte!");
+        const newVar = await updateScore(message.author.id, score++);
+        return message.reply("Du hast einen Punkt gemacht! Du hast aktuell " + newVar + " Punkte!");
     }
     return message.reply("Das war leider nichts! Du bleibst bei " + score + " Punkten!");
 }
 
 async function getScore(userId) {
     let score = await get(generatePingPongKey(userId));
-    console.log("Retrieved score:", score);
+    console.log("Retrieved score for user", userId, "to", score);
+
     if (!score) {
         return await updateScore(userId, 0);
     }
@@ -39,11 +41,14 @@ async function getScore(userId) {
 }
 
 async function updateScore(userId, score) {
+    console.log("Updating score for user", userId, "to", score);
+
     return convertScoreToNumber(await set(generatePingPongKey(userId), score));
 }
 
 function convertScoreToNumber(score) {
     console.log("Converting score to number:", score);
+
     if (!score || isNaN(score)) {
         return 0;
     }
