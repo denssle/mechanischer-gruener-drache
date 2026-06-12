@@ -31,14 +31,22 @@ async function handlePing(message) {
 
 async function getScore(userId) {
     let score = Number(await get(generatePingPongKey(userId)));
-    if (score === null || isNaN(score)) {
-        return Number(updateScore(userId, 0));
+    if (!score) {
+        return convertScoreToNumber(await updateScore(userId, 0));
     }
-    return Number(score);
+    return convertScoreToNumber(score);
 }
 
 async function updateScore(userId, score) {
-    return Number(await set(generatePingPongKey(userId), score));
+    return convertScoreToNumber(await set(generatePingPongKey(userId), score));
+}
+
+function convertScoreToNumber(score) {
+    console.log("Converting score to number:", score);
+    if (!score || isNaN(score)) {
+        return 0;
+    }
+    return Number(score);
 }
 
 function generatePingPongKey(userId) {
