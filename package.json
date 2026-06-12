@@ -6,6 +6,7 @@
   "scripts": {
     "start-server": "npm install && node index.js"
   },
+  "type": "module",
   "private": true,
   "dependencies": {
     "discord.js": "^14.26.4",

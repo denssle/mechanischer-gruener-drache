@@ -1,5 +1,5 @@
 import pjson from "./package.json" with {type: "json"};
-import {get, set} from "./redis";
+import {get, set} from "./redis.js";
 
 export async function handleMessage(message) {
     console.log(
