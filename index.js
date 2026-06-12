@@ -10,6 +10,7 @@ const client = new Discord.Client({
         Discord.GatewayIntentBits.GuildMembers
     ]
 });
+const pjson = require('./package.json');
 
 client.on(Discord.Events.ClientReady, () => {
     console.log(`Eingeloggt als ${client.user.tag}!`);
@@ -17,7 +18,7 @@ client.on(Discord.Events.ClientReady, () => {
 
 client.on(Discord.Events.MessageCreate, message => {
     // Ignoriere Nachrichten von Bots (inklusive sich selbst)
-    if (message.author.bot) return;
+    // if (message.author.bot) return;
 
     console.log(`Nachricht von ${message.author.tag}: ${message.content}`);
 
@@ -26,8 +27,7 @@ client.on(Discord.Events.MessageCreate, message => {
     }
 
     if (message.content === "!version") {
-        const pjson = require('./package.json');
-        console.log(pjson.version);
+        message.reply(pjson.version);
     }
 });
 
