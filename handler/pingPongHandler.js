@@ -44,11 +44,12 @@ function generatePingPongKey(userId) {
 }
 
 function setHighscore(userId, newScore) {
+    console.log("Setting highscore for user", userId, "to", newScore);
     setSortedSet(PING_PONG_KEY, userId, newScore)
 }
 
 export async function handlePingPongHighscore(message) {
-    let score = await getSortedSet(PING_PONG_KEY);
-    console.log("Retrieved highscore for user", message.author.id, "to", score)
-    return message.reply("Highscore: " + score);
+    const highscore = await getSortedSet(PING_PONG_KEY);
+    console.log("Retrieved highscore for user", message.author.id, "to", highscore)
+    return message.reply("Highscore: " + highscore);
 }

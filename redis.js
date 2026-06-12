@@ -31,7 +31,7 @@ export function get(key) {
 }
 
 export function setSortedSet(key, scoreKey, scoreValue) {
-    client.zAdd(key, {value: scoreValue, key: scoreKey});
+    client.zAdd(key, {score: scoreValue, value: scoreKey});
 }
 
 export function getSortedSet(key) {
