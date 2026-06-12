@@ -17,10 +17,10 @@ client.on(Discord.Events.ClientReady, () => {
 });
 
 client.on(Discord.Events.MessageCreate, message => {
-    // Ignoriere Nachrichten von Bots (inklusive sich selbst)
-    // if (message.author.bot) return;
-
     console.log(`Nachricht von ${message.author.tag}: ${message.content}`);
+
+    // Ignoriere Nachrichten von Bots (inklusive sich selbst)
+    if (message.author.bot) return;
 
     if (message.content === "!ping") {
         message.reply("Pong!");
