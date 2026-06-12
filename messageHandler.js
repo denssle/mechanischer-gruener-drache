@@ -30,7 +30,8 @@ async function handlePing(message) {
 }
 
 async function getScore(userId) {
-    let score = Number(await get(generatePingPongKey(userId)));
+    let score = await get(generatePingPongKey(userId));
+    console.log("Retrieved score:", score);
     if (!score) {
         return convertScoreToNumber(await updateScore(userId, 0));
     }
