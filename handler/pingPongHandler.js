@@ -1,27 +1,9 @@
-import pjson from "./package.json" with {type: "json"};
-import {get, set} from "./redis.js";
+import {get, getSortedSet, set, setSortedSet} from "../redis.js";
 
-export async function handleMessage(message) {
-    console.log(
-        `Nachricht von ${message.author.tag}: ${message.content}`
-    );
+const PING_PONG_KEY = "PING_PONG";
 
-    // Ignore bots
-    if (message.author.bot) return;
 
-    handleCommand(message);
-}
-
-function handleCommand(message) {
-    switch (message.content) {
-        case "!ping":
-            return handlePing(message);
-        case "!version":
-            return message.reply(`Aktuelle Version: ${pjson.version}`);
-    }
-}
-
-async function handlePing(message) {
+export async function handlePingPong(message) {
     let score = await getScore(message.author.id);
     if (Date.now() % 2 === 0) {
         const newVar = await updateScore(message.author.id, score + 1);
@@ -42,8 +24,9 @@ async function getScore(userId) {
 
 async function updateScore(userId, score) {
     console.log("Updating score for user", userId, "to", score);
-
-    return convertScoreToNumber(await set(generatePingPongKey(userId), score));
+    const newScore = convertScoreToNumber(await set(generatePingPongKey(userId), score))
+    setHighscore(userId, newScore);
+    return newScore;
 }
 
 function convertScoreToNumber(score) {
@@ -55,6 +38,16 @@ function convertScoreToNumber(score) {
     return Number(score);
 }
 
+
 function generatePingPongKey(userId) {
-    return userId + "PING_PONG";
+    return userId + PING_PONG_KEY;
+}
+
+function setHighscore(userId, newScore) {
+    setSortedSet(PING_PONG_KEY, userId, newScore)
+}
+
+export async function handlePingPongHighscore(message) {
+    let score = await getSortedSet(PING_PONG_KEY);
+    return message.reply(score);
 }

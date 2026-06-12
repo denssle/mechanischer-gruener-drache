@@ -3,7 +3,7 @@ import config from "./config.json" with {type: "json"};
 import pjson from "./package.json" with {type: "json"};
 
 import {startRedis} from "./redis.js";
-import {handleMessage} from "./messageHandler.js";
+import {handleMessage} from "./handler/messageHandler.js";
 
 const client = new Discord.Client({
     intents: [

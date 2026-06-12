@@ -29,3 +29,11 @@ export async function set(key, value) {
 export function get(key) {
     return client.get(key);
 }
+
+export function setSortedSet(key, scoreKey, scoreValue) {
+    client.zAdd(key, {value: scoreValue, key: scoreKey});
+}
+
+export function getSortedSet(key) {
+    return client.zRangeWithScores(key, 0, -1);
+}
