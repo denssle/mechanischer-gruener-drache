@@ -1,5 +1,6 @@
 const Discord = require("discord.js");
 const config = require("./config.json");
+import {createClient} from 'redis';
 
 
 const client = new Discord.Client({
@@ -11,6 +12,12 @@ const client = new Discord.Client({
     ]
 });
 const pjson = require('./package.json');
+
+const redisClient = createClient();
+
+redisClient.on('error', err => console.log('Redis Client Error', err));
+
+await redisClient.connect();
 
 client.on(Discord.Events.ClientReady, () => {
     console.log(`Eingeloggt als ${client.user.tag}! Version ${pjson.version}`);
@@ -27,8 +34,9 @@ client.on(Discord.Events.MessageCreate, message => {
     }
 
     if (message.content === "!version") {
-        message.reply(pjson.version);
+        message.reply("Aktuelle Version: " + pjson.version);
     }
 });
+
 
 client.login(config.BOT_TOKEN);
