@@ -50,6 +50,6 @@ function setHighscore(userId, newScore) {
 
 export async function handlePingPongHighscore(message) {
     const highscore = await getSortedSet(PING_PONG_KEY);
-    console.log("Retrieved highscore for user", message.author.id, "to", highscore)
+    console.log("Retrieved highscore for user", message.author.tag, "to", highscore)
     return message.reply("Highscore: " + highscore);
 }
