@@ -1,5 +1,5 @@
-const Discord = require("discord.js");
-const config = require("./config.json");
+import Discord from "discord.js";
+import config from "./config.json" with {type: "json"};
 import {createClient} from 'redis';
 
 
@@ -11,6 +11,7 @@ const client = new Discord.Client({
         Discord.GatewayIntentBits.GuildMembers
     ]
 });
+
 const pjson = require('./package.json');
 
 const redisClient = createClient();
