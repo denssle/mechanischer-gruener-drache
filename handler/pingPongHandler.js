@@ -25,7 +25,7 @@ async function getScore(message) {
 async function updateScore(userId, score, usertag) {
     console.log("Updating score for user", userId, "to", score);
     const newScore = convertScoreToNumber(await set(generatePingPongKey(userId), score))
-    setHighscore(usertag, newScore);
+    setHighscore(usertag, newScore, usertag);
     return newScore;
 }
 
@@ -51,7 +51,7 @@ function setHighscore(usertag, newScore) {
 export async function handlePingPongHighscore(message) {
     const highscore = await getSortedSet(PING_PONG_KEY);
     console.log("Retrieved highscore for user", message.author.tag, "to", highscore)
-    return message.reply("Highscore: " + highscore
+    return message.reply(highscore
         .sort((a, b) => b.score - a.score)
         .map((item, index) => `- ${index + 1}. ${item.value} - ${item.score}`)
         .join('\n'));
