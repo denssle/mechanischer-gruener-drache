@@ -13,7 +13,7 @@ const client = new Discord.Client({
 const pjson = require('./package.json');
 
 client.on(Discord.Events.ClientReady, () => {
-    console.log(`Eingeloggt als ${client.user.tag}!`);
+    console.log(`Eingeloggt als ${client.user.tag}! Version ${pjson.version}`);
 });
 
 client.on(Discord.Events.MessageCreate, message => {
