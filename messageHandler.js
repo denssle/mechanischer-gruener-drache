@@ -24,7 +24,7 @@ function handleCommand(message) {
 async function handlePing(message) {
     let score = await getScore(message.author.id);
     if (Date.now() % 2 === 0) {
-        const newVar = await updateScore(message.author.id, score++);
+        const newVar = await updateScore(message.author.id, score + 1);
         return message.reply("Du hast einen Punkt gemacht! Du hast aktuell " + newVar + " Punkte!");
     }
     return message.reply("Das war leider nichts! Du bleibst bei " + score + " Punkten!");
