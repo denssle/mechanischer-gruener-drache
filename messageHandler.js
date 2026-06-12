@@ -33,7 +33,7 @@ async function getScore(userId) {
     let score = await get(generatePingPongKey(userId));
     console.log("Retrieved score:", score);
     if (!score) {
-        return convertScoreToNumber(await updateScore(userId, 0));
+        return await updateScore(userId, 0);
     }
     return convertScoreToNumber(score);
 }
