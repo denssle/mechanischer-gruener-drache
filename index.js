@@ -24,6 +24,11 @@ client.on(Discord.Events.MessageCreate, message => {
     if (message.content === "!ping") {
         message.reply("Pong!");
     }
+
+    if (message.content === "!version") {
+        const pjson = require('./package.json');
+        console.log(pjson.version);
+    }
 });
 
 client.login(config.BOT_TOKEN);
