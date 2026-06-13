@@ -8,7 +8,8 @@
     "start": "node dist/index.js",
     "start-server": "npm ci && npm run build && npm start",
     "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix"
+    "lint:fix": "eslint src/ --fix",
+    "test": "vitest run"
   },
   "type": "module",
   "private": true,
@@ -20,6 +21,7 @@
     "@eslint/js": "^10.0.1",
     "eslint": "^10.5.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.61.0"
+    "typescript-eslint": "^8.61.0",
+    "vitest": "^4.1.8"
   }
 }
