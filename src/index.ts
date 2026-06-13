@@ -5,6 +5,7 @@ import {deployCommands} from "./deploy-commands.js";
 import {loadAllMembers} from "./handlers/member.handler.js";
 import messageHandler from "./handlers/message.handler.js";
 import "./handlers/interaction.handler.js";
+import config from "../config.json" with {type: "json"};
 
 client.on(Events.MessageCreate, messageHandler.messageCreate);
 
@@ -14,4 +15,4 @@ client.once(Events.ClientReady, async () => {
     await loadAllMembers();
 });
 
-await client.login(process.env.BOT_TOKEN!);
+await client.login(config.BOT_TOKEN);
