@@ -1,9 +1,11 @@
-import ping from "./ping.js";
-import version from "./version.js";
-import pingHighscore from "./pingHighscore.js";
+import ping from "./ping.command.js";
+import version from "./version.command.js";
+import pingHighscore from "./pingHighscore.command.js";
+import sport from "./sport.command.js";
 
 export default [
     ping,
     version,
-    pingHighscore
+    pingHighscore,
+    sport
 ];

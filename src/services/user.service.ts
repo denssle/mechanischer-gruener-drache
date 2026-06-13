@@ -1,6 +1,6 @@
 import redisService from "./redis.service.js";
 import {GuildMember} from "discord.js";
-import {StoredUser} from "../interfaces/StoredUser.js";
+import {StoredUser} from "../types/storedUser.js";
 
 
 class UserService {

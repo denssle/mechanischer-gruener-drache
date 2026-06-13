@@ -18,7 +18,7 @@ class RedisService {
         this.#client.connect().then(() => console.log("Redis connected"))
     }
 
-    async set(key: string, value: string) {
+    async set(key: string, value: string): Promise<string> {
         await this.#client.set(key, value);
         return value;
     }
@@ -27,14 +27,34 @@ class RedisService {
         return await this.#client.get(key);
     }
 
-    setSortedSet(key: string, value: string, score: number) {
-        this.#client.zAdd(key, {value: value, score: score});
+    async setSortedSet(key: string, value: string, score: number): Promise<void> {
+        await this.#client.zAdd(key, {value, score});
     }
 
     getSortedSet(key: string) {
         return this.#client.zRangeWithScores(key, 0, 9, {
             REV: true
         });
+    }
+
+    async delete(key: string): Promise<void> {
+        await this.#client.del(key);
+    }
+
+    async addToList(key: string, value: string): Promise<void> {
+        await this.#client.rPush(key, value);
+    }
+
+    async removeFromList(key: string, value: string): Promise<void> {
+        await this.#client.lRem(key, 0, value);
+    }
+
+    async getList(key: string): Promise<string[]> {
+        return this.#client.lRange(key, 0, -1);
+    }
+
+    async incrementSortedSet(key: string, value: string, increment: number): Promise<void> {
+        await this.#client.zIncrBy(key, increment, value);
     }
 }
 
