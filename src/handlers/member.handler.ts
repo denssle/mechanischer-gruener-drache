@@ -11,11 +11,14 @@ client.on(Events.GuildMemberRemove, (member) => {
 });
 
 client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
-    console.log(`${newMember.user.tag} wurde aktualisiert.`);
+    userService.saveUser(newMember);
 });
 
-client.on(Events.UserUpdate, (oldUser, newUser) => {
-    console.log(`${oldUser.username} -> ${newUser.username}`);
+client.on(Events.UserUpdate, async (oldUser, newUser) => {
+    const member = await client.guilds.cache
+        .first()
+        ?.members.fetch(newUser.id);
+    if (member) userService.saveUser(member);
 });
 
 export async function loadAllMembers(): Promise<void> {

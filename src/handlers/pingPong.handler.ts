@@ -26,15 +26,12 @@ class PingPongHandler {
     }
 
     async updateScore(userId: string, score: number): Promise<number> {
-        console.log("Updating score for user", userId, "to", score);
         const newScore: number = this.convertScoreToNumber(await redisService.set(this.generatePingPongKey(userId), score.toString()))
         this.setHighscore(userId, newScore);
         return newScore;
     }
 
     convertScoreToNumber(score: string | number): number {
-        console.log("Converting score to number:", score);
-
         if (!score || isNaN(<number>score)) {
             return 0;
         }
@@ -46,13 +43,11 @@ class PingPongHandler {
     }
 
     setHighscore(userId: string, newScore: number) {
-        console.log("Setting highscore for user", userId, "to", newScore);
         redisService.setSortedSet(this.#PING_PONG_KEY, userId, newScore)
     }
 
     async handlePingPongHighscore(interaction: ChatInputCommandInteraction) {
         const highscore = await redisService.getSortedSet(this.#PING_PONG_KEY);
-        console.log("Retrieved highscore for user", interaction.user.tag, "to", highscore)
         const sorted = highscore.sort((a, b) => b.score - a.score);
 
         const users = await Promise.all(
