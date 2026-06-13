@@ -29,4 +29,4 @@ jobs:
           host: ${{ secrets.UBERSPACE_HOST }}
           username: ${{ secrets.UBERSPACE_USER }}
           key: ${{ secrets.DEPLOY_KEY_PRIVATE }}
-          script: supervisorctl restart mechanischer-gruener-drache
+          script: supervisorctl restart drache
