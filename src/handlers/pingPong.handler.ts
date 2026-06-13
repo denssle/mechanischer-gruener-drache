@@ -7,7 +7,7 @@ class PingPongHandler {
     #PING_PONG_KEY = "PING_PONG";
 
     async handlePingPong(interaction: ChatInputCommandInteraction) {
-        let score: number = await this.getScore(interaction);
+        const score: number = await this.getScore(interaction);
         if (Date.now() % 2 === 0) {
             const newVar = await this.updateScore(interaction.user.id, score + 1);
             return interaction.reply("Du hast einen Punkt gemacht! Du hast aktuell " + newVar + " Punkte!");
@@ -16,7 +16,7 @@ class PingPongHandler {
     }
 
     async getScore(message: ChatInputCommandInteraction): Promise<number> {
-        let score = await redisService.get(this.generatePingPongKey(message.user.id));
+        const score = await redisService.get(this.generatePingPongKey(message.user.id));
         console.log("Retrieved score for user", message.user.id, "to", score);
 
         if (!score) {

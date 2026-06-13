@@ -1,13 +1,14 @@
 {
   "name": "mechanischer-gruener-drache",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "start-server": "npm ci && npm run build && npm start",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix"
   },
   "type": "module",
   "private": true,
@@ -16,6 +17,9 @@
     "redis": "^6.0.0"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.5.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.0"
   }
 }
