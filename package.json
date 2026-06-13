@@ -1,15 +1,21 @@
 {
   "name": "mechanischer-gruener-drache",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start-server": "npm install && node index.js"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "start-server": "npm ci && npm run build && npm start",
+    "typecheck": "tsc --noEmit"
   },
   "type": "module",
   "private": true,
   "dependencies": {
     "discord.js": "^14.26.4",
     "redis": "^6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
   }
 }

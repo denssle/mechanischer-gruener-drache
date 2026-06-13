@@ -34,7 +34,7 @@ Der Bot benötigt ein Token, um sich mit Discord zu verbinden.
 
 Um den Bot zu starten, führe folgenden Befehl aus:
 ```bash
-node index.js
+node index.ts
 ```
 Sobald der Bot online ist, erscheint die Meldung `Bot is online` in der Konsole.
 

@@ -5,7 +5,8 @@ import os from 'node:os';
 class RedisService {
     #client = createClient({
         socket: {
-            path: path.join(os.homedir(), '.redis', 'sock')
+            path: path.join(os.homedir(), '.redis', 'sock'),
+            tls: false
         }
     });
 
@@ -17,20 +18,20 @@ class RedisService {
         this.#client.connect().then(() => console.log("Redis connected"))
     }
 
-    async set(key, value) {
+    async set(key: string, value: string) {
         await this.#client.set(key, value);
         return value;
     }
 
-    async get(key) {
+    async get(key: string): Promise<string | null> {
         return await this.#client.get(key);
     }
 
-    setSortedSet(key, value, score) {
+    setSortedSet(key: string, value: string, score: number) {
         this.#client.zAdd(key, {value: value, score: score});
     }
 
-    getSortedSet(key) {
+    getSortedSet(key: string) {
         return this.#client.zRangeWithScores(key, 0, 9, {
             REV: true
         });

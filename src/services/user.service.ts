@@ -1,7 +1,8 @@
 import redisService from "./redis.service.js";
+import {GuildMember} from "discord.js";
 
 class UserService {
-    saveUser(user) {
+    saveUser(user: GuildMember) {
         console.log(user);
     }
 }

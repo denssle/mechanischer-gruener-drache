@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import {ChatInputCommandInteraction, SlashCommandBuilder} from 'discord.js';
 import pingPongHandler from "../handlers/pingPong.handler.js";
 
 export default {
@@ -6,7 +6,7 @@ export default {
         .setName('ping')
         .setDescription('Spielt Ping Pong'),
 
-    async execute(interaction) {
+    async execute(interaction: ChatInputCommandInteraction) {
         await pingPongHandler.handlePingPong(interaction);
     }
 };
