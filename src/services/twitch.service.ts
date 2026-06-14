@@ -1,0 +1,106 @@
+import config from '../../config.json' with {type: 'json'};
+import {TwitchAccessToken} from "../types/twitchAccessToken.js";
+import {TwitchUser} from "../types/twitchUser.js";
+import {EventSubSubscription} from "../types/eventSubSubscription.js";
+
+const TWITCH_API_BASE = 'https://api.twitch.tv/helix';
+const TWITCH_AUTH_URL = 'https://id.twitch.tv/oauth2/token';
+const WEBHOOK_CALLBACK_URL = 'https://enzlor.uber.space/twitch/eventsub';
+
+class TwitchService {
+    #accessToken: string | null = null;
+    #tokenExpiry: number = 0;
+
+    async #getAccessToken(): Promise<string> {
+        if (this.#accessToken && Date.now() < this.#tokenExpiry) {
+            return this.#accessToken;
+        }
+
+        const response = await fetch(TWITCH_AUTH_URL, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({
+                client_id: config.TWITCH_CLIENT_ID,
+                client_secret: config.TWITCH_CLIENT_SECRET,
+                grant_type: 'client_credentials',
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Twitch Auth fehlgeschlagen: ${response.statusText}`);
+        }
+
+        const data = await response.json() as TwitchAccessToken;
+        this.#accessToken = data.access_token;
+        this.#tokenExpiry = Date.now() + (data.expires_in - 3600) * 1000;
+        console.log('✅ Twitch Access Token erneuert');
+        return this.#accessToken;
+    }
+
+    async #twitchRequest(path: string, options: RequestInit = {}): Promise<Response> {
+        const token = await this.#getAccessToken();
+        return fetch(`${TWITCH_API_BASE}${path}`, {
+            ...options,
+            headers: {
+                'Client-Id': config.TWITCH_CLIENT_ID,
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                ...options.headers,
+            },
+        });
+    }
+
+    async getUserByLogin(login: string): Promise<TwitchUser | null> {
+        const response = await this.#twitchRequest(`/users?login=${login}`);
+
+        if (!response.ok) {
+            console.error(`Fehler beim Abrufen des Twitch-Users: ${response.statusText}`);
+            return null;
+        }
+
+        const data = await response.json() as { data: TwitchUser[] };
+        return data.data[0] ?? null;
+    }
+
+    async subscribeToStreamOnline(twitchUserId: string): Promise<string | null> {
+        const response = await this.#twitchRequest('/eventsub/subscriptions', {
+            method: 'POST',
+            body: JSON.stringify({
+                type: 'stream.online',
+                version: '1',
+                condition: {broadcaster_user_id: twitchUserId},
+                transport: {
+                    method: 'webhook',
+                    callback: WEBHOOK_CALLBACK_URL,
+                    secret: config.TWITCH_WEBHOOK_SECRET,
+                },
+            }),
+        });
+
+        if (!response.ok) {
+            console.error(`Fehler beim Registrieren der EventSub-Subscription: ${response.statusText}`);
+            return null;
+        }
+
+        const data = await response.json() as { data: EventSubSubscription[] };
+        const subscriptionId = data.data[0]?.id ?? null;
+        console.log(`✅ EventSub-Subscription registriert: ${subscriptionId}`);
+        return subscriptionId;
+    }
+
+    async unsubscribeFromStreamOnline(subscriptionId: string): Promise<boolean> {
+        const response = await this.#twitchRequest(`/eventsub/subscriptions?id=${subscriptionId}`, {
+            method: 'DELETE',
+        });
+
+        if (!response.ok) {
+            console.error(`Fehler beim Löschen der EventSub-Subscription: ${response.statusText}`);
+            return false;
+        }
+
+        console.log(`✅ EventSub-Subscription gelöscht: ${subscriptionId}`);
+        return true;
+    }
+}
+
+export default new TwitchService();
