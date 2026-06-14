@@ -48,7 +48,10 @@ export default {
             .setDescription('Top 10 der fleißigsten Sportler'))
         .addSubcommand(sub => sub
             .setName('statistik')
-            .setDescription('Deine persönliche Sportstatistik')),
+            .setDescription('Deine persönliche Sportstatistik'))
+        .addSubcommand(sub => sub
+            .setName('hilfe')
+            .setDescription('Zeigt alle verfügbaren Sport-Befehle')),
 
     async execute(interaction: ChatInputCommandInteraction) {
         const subcommand = interaction.options.getSubcommand();
@@ -64,6 +67,8 @@ export default {
                 return sportHandler.handleBestenliste(interaction);
             case 'statistik':
                 return sportHandler.handleStatistik(interaction);
+            case 'hilfe':
+                return sportHandler.handleHilfe(interaction);
         }
     }
 };
