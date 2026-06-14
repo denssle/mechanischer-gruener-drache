@@ -104,7 +104,7 @@ class SportHandler {
             `**/sport hinzufuegen** – Neuen Sport-Eintrag hinzufügen\n` +
             `**/sport loeschen** – Eintrag anhand der ID löschen\n` +
             `**/sport bearbeiten** – Kilometeranzahl eines Eintrags korrigieren\n` +
-            `**/sport bestenliste** – Top 10 der fleißigsten Sportler\n` +
+            // `**/sport bestenliste** – Top 10 der fleißigsten Sportler\n` +
             `**/sport statistik** – Deine persönliche Übersicht pro Aktivität\n` +
             `**/sport hilfe** – Zeigt diese Übersicht`
         );

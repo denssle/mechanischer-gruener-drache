@@ -43,9 +43,9 @@ export default {
                 .setDescription('Neue Kilometeranzahl')
                 .setRequired(true)
                 .setMinValue(0)))
-        .addSubcommand(sub => sub
-            .setName('bestenliste')
-            .setDescription('Top 10 der fleißigsten Sportler'))
+        // .addSubcommand(sub => sub
+        //     .setName('bestenliste')
+        //     .setDescription('Top 10 der fleißigsten Sportler'))
         .addSubcommand(sub => sub
             .setName('statistik')
             .setDescription('Deine persönliche Sportstatistik'))
@@ -63,8 +63,8 @@ export default {
                 return sportHandler.handleLoeschen(interaction);
             case 'bearbeiten':
                 return sportHandler.handleBearbeiten(interaction);
-            case 'bestenliste':
-                return sportHandler.handleBestenliste(interaction);
+            // case 'bestenliste':
+            //     return sportHandler.handleBestenliste(interaction);
             case 'statistik':
                 return sportHandler.handleStatistik(interaction);
             case 'hilfe':
