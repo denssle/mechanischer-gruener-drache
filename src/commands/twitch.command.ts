@@ -28,7 +28,14 @@ export default {
                 .setRequired(true)))
         .addSubcommand(sub => sub
             .setName('hilfe')
-            .setDescription('Zeigt alle verfügbaren Twitch-Befehle')),
+            .setDescription('Zeigt alle verfügbaren Twitch-Befehle'))
+        .addSubcommand(sub => sub
+            .setName('notification-rolle')
+            .setDescription('Rolle die bei Twitch-Notifications gepingt wird (nur Admins)')
+            .addRoleOption(option => option
+                .setName('rolle')
+                .setDescription('Zu pingende Rolle')
+                .setRequired(true))),
 
     async execute(interaction: ChatInputCommandInteraction) {
         const subcommand = interaction.options.getSubcommand();
@@ -44,6 +51,8 @@ export default {
                 return twitchHandler.handleNotificationChannel(interaction);
             case 'hilfe':
                 return twitchHandler.handleHilfe(interaction);
+            case 'notification-rolle':
+                return twitchHandler.handleNotificationRolle(interaction);
         }
     }
 };

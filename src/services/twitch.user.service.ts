@@ -76,6 +76,14 @@ class TwitchUserService {
     async getNotificationChannel(): Promise<string | null> {
         return redisService.get(KEYS.notificationChannel);
     }
+
+    async setNotificationRole(roleId: string): Promise<void> {
+        await redisService.set('TWITCH:NOTIFICATION_ROLE', roleId);
+    }
+
+    async getNotificationRole(): Promise<string | null> {
+        return redisService.get('TWITCH:NOTIFICATION_ROLE');
+    }
 }
 
 export default new TwitchUserService();

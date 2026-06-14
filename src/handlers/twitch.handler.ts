@@ -107,6 +107,7 @@ class TwitchHandler {
             `**/twitch remove** – Deine Twitch-Verknüpfung entfernen\n` +
             `**/twitch info** – Deine aktuelle Verknüpfung anzeigen\n` +
             `**/twitch notification-channel** – Notification-Channel festlegen (nur Admins)\n` +
+            `**/twitch notification-rolle** – Rolle für Notifications festlegen (nur Admins)\n` +
             `**/twitch hilfe** – Zeigt diese Übersicht`
         );
     }
@@ -132,10 +133,29 @@ class TwitchHandler {
             minute: '2-digit'
         });
 
+        const roleId = await twitchUserService.getNotificationRole();
+        const roleMention = roleId ? `<@&${roleId}> ` : '';
+
         await channel.send(
-            `🔴 **${displayName}** ist jetzt live auf Twitch!\n` +
+            `${roleMention}🔴 **${displayName}** ist jetzt live auf Twitch!\n` +
             `📺 https://twitch.tv/${event.broadcaster_user_login}\n` +
             `⏰ Live seit ${startedAt} Uhr`
+        );
+    }
+
+    async handleNotificationRolle(interaction: ChatInputCommandInteraction) {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({
+                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                ephemeral: true
+            });
+        }
+
+        const rolle = interaction.options.getRole('rolle', true);
+        await twitchUserService.setNotificationRole(rolle.id);
+
+        return interaction.reply(
+            `✅ Bei Twitch-Notifications wird ab jetzt <@&${rolle.id}> gepingt.`
         );
     }
 }
