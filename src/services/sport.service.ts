@@ -1,12 +1,14 @@
-import { randomUUID } from 'crypto';
+import {randomUUID} from 'crypto';
 import redisService from './redis.service.js';
-import { SportEntry, SportActivity } from '../types/sport.js';
+import {SportEntry, SportActivity} from '../types/sport.js';
 
 const KEYS = {
     entry: (id: string) => `SPORT:ENTRY:${id}`,
     userEntries: (userId: string) => `SPORT:USER:${userId}`,
     highscore: 'SPORT:HIGHSCORE',
 };
+
+const DUMMY_USER_ID = 'LEGACY_KILOMETERS';
 
 class SportService {
     async addEntry(userId: string, activity: SportActivity, kilometers: number): Promise<SportEntry> {
@@ -74,7 +76,20 @@ class SportService {
         return results
             .sort((a, b) => b.score - a.score)
             .slice(0, 10)
-            .map(item => ({ userId: item.value, kilometers: item.score }));
+            .map(item => ({userId: item.value, kilometers: item.score}));
+    }
+
+    async setKilometer(userId: string, kilometers: number): Promise<void> {
+        await redisService.setSortedSet(KEYS.highscore, userId, kilometers);
+    }
+
+    async getGesamtKilometer(): Promise<number> {
+        const highscore = await redisService.getSortedSet(KEYS.highscore);
+        return highscore.reduce((sum, item) => sum + item.score, 0);
+    }
+
+    async addLegacyKilometer(kilometers: number): Promise<void> {
+        await redisService.incrementSortedSet(KEYS.highscore, DUMMY_USER_ID, kilometers);
     }
 }
 

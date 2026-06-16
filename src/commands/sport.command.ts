@@ -51,7 +51,30 @@ export default {
             .setDescription('Deine persönliche Sportstatistik'))
         .addSubcommand(sub => sub
             .setName('hilfe')
-            .setDescription('Zeigt alle verfügbaren Sport-Befehle')),
+            .setDescription('Zeigt alle verfügbaren Sport-Befehle'))
+        .addSubcommand(sub => sub
+            .setName('setzen')
+            .setDescription('Kilometer eines Users manuell setzen (nur Admins)')
+            .addUserOption(option => option
+                .setName('user')
+                .setDescription('Discord-User')
+                .setRequired(true))
+            .addNumberOption(option => option
+                .setName('kilometer')
+                .setDescription('Kilometerstand der gesetzt werden soll')
+                .setRequired(true)
+                .setMinValue(0)))
+        .addSubcommand(sub => sub
+            .setName('gesamt')
+            .setDescription('Gesamtkilometer aller Sportler'))
+        .addSubcommand(sub => sub
+            .setName('legacy')
+            .setDescription('Altkilometer ohne User einspeisen (nur Admins)')
+            .addNumberOption(option => option
+                .setName('kilometer')
+                .setDescription('Anzahl der Kilometer')
+                .setRequired(true)
+                .setMinValue(0))),
 
     async execute(interaction: ChatInputCommandInteraction) {
         const subcommand = interaction.options.getSubcommand();
@@ -69,6 +92,12 @@ export default {
                 return sportHandler.handleStatistik(interaction);
             case 'hilfe':
                 return sportHandler.handleHilfe(interaction);
+            case "setzen":
+                return sportHandler.handleSetzen(interaction);
+            case 'gesamt':
+                return sportHandler.handleGesamt(interaction);
+            case 'legacy':
+                return sportHandler.handleLegacy(interaction);
         }
     }
 };
