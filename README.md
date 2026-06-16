@@ -7,5 +7,5 @@ Ein einfacher Bot für den Discord-Server von [LotgD](http://www.lotgd.de/).
 - logging
 - Rollenvergabe
 - Tage bis zum Treffen
-- Sport: Summe der Kilometer bearbeitbar
 - den Bot generalisiert für jeden Server
+- News aus dem Game anzeigen
