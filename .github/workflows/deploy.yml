@@ -22,7 +22,7 @@ jobs:
         run: npm ci
 
       - name: Create dummy config
-        run: echo '{"BOT_TOKEN":"test","CLIENT_ID":"test","GUILD_ID":"test","TWITCH_WEBHOOK_SECRET":"test-secret"}' > config.json
+        run: echo '{"BOT_TOKEN":"test","CLIENT_ID":"test","GUILD_ID":"test","TWITCH_WEBHOOK_SECRET":"test-secret","TWITCH_CLIENT_ID":"test","TWITCH_CLIENT_SECRET":"test"}' > config.json
 
       - name: Run tests
         run: npm test
@@ -36,8 +36,8 @@ jobs:
           node dist/index.js &
           # Warten bis der Server bereit ist
           sleep 5
-          # Webhook Test ausführen
-          npx ts-node scripts/test-twitch-webhook.ts notify
+          # Webhook Test ausführen - Transpile-only um TS6059 zu vermeiden
+          npx ts-node --transpile-only scripts/test-twitch-webhook.ts notify
           # Bot beenden
           kill $!
 
