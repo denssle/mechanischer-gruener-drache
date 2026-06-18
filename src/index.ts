@@ -8,10 +8,10 @@ import messageHandler from "./handlers/message.handler.js";
 import "./handlers/interaction.handler.js";
 import config from "../config.json" with {type: "json"};
 import webhookServer from './server/twitch.webhook.server.js';
+import twitchHandler from "./handlers/twitch.handler.js";
 
 webhookServer.onNotification((twitchUserId, streamData) => {
-    // kommt später: Discord-Nachricht schicken
-    console.log(`${streamData.broadcaster_user_name} ist live!`);
+    twitchHandler.handleStreamOnline(twitchUserId, streamData);
 });
 
 webhookServer.start(3000);
@@ -25,4 +25,8 @@ client.once(Events.ClientReady, async () => {
     await loadAllMembers();
 });
 
-await client.login(config.BOT_TOKEN);
+if (process.env.CI) {
+    console.log("CI-Umgebung erkannt - überspringe Discord-Login.");
+} else {
+    await client.login(config.BOT_TOKEN);
+}

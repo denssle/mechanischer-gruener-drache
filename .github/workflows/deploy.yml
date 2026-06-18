@@ -40,6 +40,8 @@ jobs:
           npx ts-node --transpile-only scripts/test-twitch-webhook.ts notify
           # Bot beenden
           kill $!
+        env:
+          CI: true
 
       - name: rsync deployments
         uses: burnett01/rsync-deployments@7.1.0

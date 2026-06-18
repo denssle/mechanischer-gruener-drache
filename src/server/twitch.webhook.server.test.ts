@@ -16,7 +16,7 @@ describe('TwitchWebhookServer', () => {
     const getSignature = (messageId: string, timestamp: string, body: string) => {
         const message = messageId + timestamp + body;
         return 'sha256=' + createHmac('sha256', secret)
-            .update(message)
+            .update(Buffer.from(message, 'utf8'))
             .digest('hex');
     };
 

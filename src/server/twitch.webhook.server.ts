@@ -77,7 +77,7 @@ class TwitchWebhookServer {
         const timestamp = req.headers[TWITCH_MESSAGE_TIMESTAMP] as string;
         const signature = req.headers[TWITCH_MESSAGE_SIGNATURE] as string;
 
-        const message = messageId + timestamp + req.body;
+        const message = messageId + timestamp + req.body.toString('utf8');
         const expectedSignature = 'sha256=' + createHmac('sha256', config.TWITCH_WEBHOOK_SECRET)
             .update(message)
             .digest('hex');
