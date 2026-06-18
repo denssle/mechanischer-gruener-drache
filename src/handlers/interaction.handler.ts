@@ -1,6 +1,5 @@
 import {Events, Interaction} from "discord.js";
 import client from "../client.js";
-import '../types/discord.js';
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     if (!interaction.isChatInputCommand()) return;
