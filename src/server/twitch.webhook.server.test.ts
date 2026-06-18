@@ -1,10 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createHmac } from 'crypto';
+
+// Wir mocken die Config, bevor wir den Server importieren
+vi.mock('../../config.json', () => ({
+    default: {
+        TWITCH_WEBHOOK_SECRET: 'test-secret'
+    }
+}));
+
 import twitchWebhookServer from './twitch.webhook.server.js';
-import config from '../../config.json' with { type: 'json' };
 
 describe('TwitchWebhookServer', () => {
-    const secret = config.TWITCH_WEBHOOK_SECRET;
+    const secret = 'test-secret';
     
     const getSignature = (messageId: string, timestamp: string, body: string) => {
         const message = messageId + timestamp + body;

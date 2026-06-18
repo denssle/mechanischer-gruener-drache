@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Create dummy config
+        run: echo '{"BOT_TOKEN":"test","CLIENT_ID":"test","GUILD_ID":"test","TWITCH_WEBHOOK_SECRET":"test-secret"}' > config.json
+
       - name: Run tests
         run: npm test
 
@@ -29,8 +32,6 @@ jobs:
 
       - name: Twitch Webhook Test
         run: |
-          # Dummy config für den Test erstellen
-          echo '{"BOT_TOKEN":"test","CLIENT_ID":"test","GUILD_ID":"test","TWITCH_WEBHOOK_SECRET":"test-secret"}' > config.json
           # Bot im Hintergrund starten
           node dist/index.js &
           # Warten bis der Server bereit ist
