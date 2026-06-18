@@ -2,6 +2,10 @@ import {createClient} from "redis";
 import path from 'node:path';
 import os from 'node:os';
 
+export const REDIS_KEYS = {
+    PING_PONG: "PING_PONG",
+} as const;
+
 class RedisService {
     #client = createClient({
         socket: {
@@ -10,12 +14,11 @@ class RedisService {
         }
     });
 
-    constructor() {
-        this.#client.on("error", (err) => {
-            console.error("Redis Client Error", err);
-        });
-
-        this.#client.connect().then(() => console.log("Redis connected"))
+    async connect(): Promise<void> {
+        if (!this.#client.isOpen) {
+            await this.#client.connect();
+            console.log("Redis connected");
+        }
     }
 
     async set(key: string, value: string): Promise<string> {

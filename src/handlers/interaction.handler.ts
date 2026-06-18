@@ -4,7 +4,6 @@ import client from "../client.js";
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    // @ts-ignore
     const command = client.commands.get(interaction.commandName);
 
     if (!command) return;

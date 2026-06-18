@@ -24,6 +24,22 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Build
+        run: npm run build
+
+      - name: Twitch Webhook Test
+        run: |
+          # Dummy config für den Test erstellen
+          echo '{"BOT_TOKEN":"test","CLIENT_ID":"test","GUILD_ID":"test","TWITCH_WEBHOOK_SECRET":"test-secret"}' > config.json
+          # Bot im Hintergrund starten
+          node dist/index.js &
+          # Warten bis der Server bereit ist
+          sleep 5
+          # Webhook Test ausführen
+          npx ts-node scripts/test-twitch-webhook.ts notify
+          # Bot beenden
+          kill $!
+
       - name: rsync deployments
         uses: burnett01/rsync-deployments@7.1.0
         with:

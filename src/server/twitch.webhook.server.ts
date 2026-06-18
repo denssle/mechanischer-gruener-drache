@@ -18,6 +18,10 @@ class TwitchWebhookServer {
     #app = express();
     #notificationCallback: NotificationCallback | null = null;
 
+    get app() {
+        return this.#app;
+    }
+
     constructor() {
         this.#app.use('/twitch', express.raw({type: 'application/json'}));
         this.#app.post('/twitch/eventsub', (req: Request, res: Response) => {
@@ -29,26 +33,7 @@ class TwitchWebhookServer {
         this.#notificationCallback = callback;
     }
 
-    start(port: number = 3000) {
-        this.#app.listen(port, () => {
-            console.log(`Webhook-Server läuft auf Port ${port}`);
-        });
-    }
-
-    #verifySignature(req: Request): boolean {
-        const messageId = req.headers[TWITCH_MESSAGE_ID] as string;
-        const timestamp = req.headers[TWITCH_MESSAGE_TIMESTAMP] as string;
-        const signature = req.headers[TWITCH_MESSAGE_SIGNATURE] as string;
-
-        const message = messageId + timestamp + req.body;
-        const expectedSignature = 'sha256=' + createHmac('sha256', config.TWITCH_WEBHOOK_SECRET)
-            .update(message)
-            .digest('hex');
-
-        return expectedSignature === signature;
-    }
-
-    #handleEventSub(req: Request, res: Response) {
+    handleEventSub(req: Request, res: Response) {
         if (!this.#verifySignature(req)) {
             console.warn('⚠️ Ungültige Twitch-Signatur');
             res.sendStatus(403);
@@ -79,6 +64,29 @@ class TwitchWebhookServer {
             default:
                 res.sendStatus(204);
         }
+    }
+
+    start(port: number = 3000) {
+        this.#app.listen(port, () => {
+            console.log(`Webhook-Server läuft auf Port ${port}`);
+        });
+    }
+
+    #verifySignature(req: Request): boolean {
+        const messageId = req.headers[TWITCH_MESSAGE_ID] as string;
+        const timestamp = req.headers[TWITCH_MESSAGE_TIMESTAMP] as string;
+        const signature = req.headers[TWITCH_MESSAGE_SIGNATURE] as string;
+
+        const message = messageId + timestamp + req.body;
+        const expectedSignature = 'sha256=' + createHmac('sha256', config.TWITCH_WEBHOOK_SECRET)
+            .update(message)
+            .digest('hex');
+
+        return expectedSignature === signature;
+    }
+
+    #handleEventSub(req: Request, res: Response) {
+        this.handleEventSub(req, res);
     }
 }
 

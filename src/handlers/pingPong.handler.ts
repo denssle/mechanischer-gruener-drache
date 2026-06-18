@@ -1,18 +1,22 @@
 import {ChatInputCommandInteraction} from "discord.js";
-import redisService from "../services/redis.service.js";
+import redisService, {REDIS_KEYS} from "../services/redis.service.js";
 import userService from "../services/user.service.js";
 
 
 class PingPongHandler {
-    #PING_PONG_KEY = "PING_PONG";
 
     async handlePingPong(interaction: ChatInputCommandInteraction) {
-        const score: number = await this.getScore(interaction);
-        if (Date.now() % 2 === 0) {
-            const newVar = await this.updateScore(interaction.user.id, score + 1);
-            return interaction.reply("Du hast einen Punkt gemacht! Du hast aktuell " + newVar + " Punkte!");
+        try {
+            const score: number = await this.getScore(interaction);
+            if (Math.random() < 0.5) {
+                const newVar = await this.updateScore(interaction.user.id, score + 1);
+                return interaction.reply("Du hast einen Punkt gemacht! Du hast aktuell " + newVar + " Punkte!");
+            }
+            return interaction.reply("Das war leider nichts! Du bleibst bei " + score + " Punkten!");
+        } catch (error) {
+            console.error("Error handling ping pong:", error);
+            return interaction.reply({ content: "Es gab einen Fehler beim Ausführen des Befehls.", ephemeral: true });
         }
-        return interaction.reply("Das war leider nichts! Du bleibst bei " + score + " Punkten!");
     }
 
     async getScore(message: ChatInputCommandInteraction): Promise<number> {
@@ -27,42 +31,50 @@ class PingPongHandler {
 
     async updateScore(userId: string, score: number): Promise<number> {
         const newScore: number = this.convertScoreToNumber(await redisService.set(this.generatePingPongKey(userId), score.toString()))
-        this.setHighscore(userId, newScore);
+        await this.setHighscore(userId, newScore);
         return newScore;
     }
 
     convertScoreToNumber(score: string | number): number {
-        if (!score || isNaN(<number>score)) {
+        if (!score || isNaN(Number(score))) {
             return 0;
         }
         return Number(score);
     }
 
     generatePingPongKey(userId: string): string {
-        return userId + this.#PING_PONG_KEY;
+        return userId + REDIS_KEYS.PING_PONG;
     }
 
-    setHighscore(userId: string, newScore: number) {
-        redisService.setSortedSet(this.#PING_PONG_KEY, userId, newScore)
+    async setHighscore(userId: string, newScore: number) {
+        await redisService.setSortedSet(REDIS_KEYS.PING_PONG, userId, newScore)
     }
 
     async handlePingPongHighscore(interaction: ChatInputCommandInteraction) {
-        const highscore = await redisService.getSortedSet(this.#PING_PONG_KEY);
-        const sorted = highscore.sort((a, b) => b.score - a.score);
+        try {
+            const highscore = await redisService.getSortedSet(REDIS_KEYS.PING_PONG);
 
-        const users = await Promise.all(
-            sorted.map(item => userService.getUser(item.value))
-        );
+            if (highscore.length === 0) {
+                return interaction.reply("Es gibt noch keine Highscores!");
+            }
 
-        const message = sorted
-            .map((item, index) => {
-                const user = users[index];
-                const displayName = user?.displayName ?? item.value;
-                return `${index + 1}. ${displayName} - ${item.score}`;
-            })
-            .join('\n');
+            const users = await Promise.all(
+                highscore.map(item => userService.getUser(item.value))
+            );
 
-        return interaction.reply(message);
+            const message = highscore
+                .map((item, index) => {
+                    const user = users[index];
+                    const displayName = user?.displayName ?? item.value;
+                    return `${index + 1}. ${displayName} - ${item.score}`;
+                })
+                .join('\n');
+
+            return interaction.reply(message);
+        } catch (error) {
+            console.error("Error handling ping pong highscore:", error);
+            return interaction.reply({ content: "Es gab einen Fehler beim Abrufen der Highscores.", ephemeral: true });
+        }
     }
 }
 
