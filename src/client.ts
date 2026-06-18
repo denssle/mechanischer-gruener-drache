@@ -1,5 +1,12 @@
 import {Client, Collection, GatewayIntentBits} from "discord.js";
 import commands from './commands/index.js';
+import { Command } from './types/discord.js';
+
+declare module 'discord.js' {
+    interface Client {
+        commands: Collection<string, Command>;
+    }
+}
 
 const client = new Client({
     intents: [

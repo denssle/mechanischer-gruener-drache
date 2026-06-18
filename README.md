@@ -56,8 +56,14 @@ Wir nutzen **Vitest** für Unit- und Integrationstests. Diese werden auch bei je
 npm test
 ```
 
+### Twitch Integrationstest (automatisiert)
+Um den Twitch-Webhook-Ablauf lokal automatisiert zu testen (startet intern den Server, sendet einen Test-Webhook und beendet den Server wieder):
+```bash
+npm run test:twitch
+```
+
 ### Manueller Twitch-Webhook Test
-Um den Webhook-Server lokal zu testen, ohne auf ein echtes Twitch-Event zu warten:
+Um den Webhook-Server lokal manuell zu testen:
 1. Bot starten (`npm start`).
 2. In einem neuen Terminal:
    ```bash

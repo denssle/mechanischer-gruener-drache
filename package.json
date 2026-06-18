@@ -9,7 +9,8 @@
     "start-server": "npm ci && npm run build && npm start",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:twitch": "npx ts-node --transpile-only scripts/run-integration-test.ts"
   },
   "type": "module",
   "private": true,
