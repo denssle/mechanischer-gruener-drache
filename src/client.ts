@@ -1,5 +1,6 @@
 import {Client, Collection, GatewayIntentBits} from "discord.js";
 import commands from './commands/index.js';
+import './types/discord.js';
 
 const client = new Client({
     intents: [
