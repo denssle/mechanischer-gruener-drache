@@ -184,4 +184,62 @@ describe('LoggingHandler', () => {
             await expect(loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any)).resolves.not.toThrow();
         });
     });
+
+    describe('handleGuildMemberAdd', () => {
+        const mockMember = () => ({ user: { tag: 'Neuling#0001' } } as any);
+
+        it('tut nichts wenn kein Log-Channel konfiguriert ist', async () => {
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue(null);
+
+            await loggingHandler.handleGuildMemberAdd(mockMember());
+
+            expect(client.channels.fetch).not.toHaveBeenCalled();
+        });
+
+        it('loggt den Server-Beitritt', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await loggingHandler.handleGuildMemberAdd(mockMember());
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Neuling#0001'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('beigetreten'));
+        });
+
+        it('fängt Fehler beim Loggen ab', async () => {
+            vi.mocked(loggingService.getLogChannel).mockRejectedValue(new Error('Redis kaputt'));
+
+            await expect(loggingHandler.handleGuildMemberAdd(mockMember())).resolves.not.toThrow();
+        });
+    });
+
+    describe('handleGuildMemberRemove', () => {
+        const mockMember = () => ({ user: { tag: 'Ex-User#0002' } } as any);
+
+        it('tut nichts wenn kein Log-Channel konfiguriert ist', async () => {
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue(null);
+
+            await loggingHandler.handleGuildMemberRemove(mockMember());
+
+            expect(client.channels.fetch).not.toHaveBeenCalled();
+        });
+
+        it('loggt den Server-Austritt', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await loggingHandler.handleGuildMemberRemove(mockMember());
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Ex-User#0002'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('verlassen'));
+        });
+
+        it('fängt Fehler beim Loggen ab', async () => {
+            vi.mocked(loggingService.getLogChannel).mockRejectedValue(new Error('Redis kaputt'));
+
+            await expect(loggingHandler.handleGuildMemberRemove(mockMember())).resolves.not.toThrow();
+        });
+    });
 });

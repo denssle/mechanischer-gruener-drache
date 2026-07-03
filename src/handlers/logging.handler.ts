@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, Message, PartialMessage, PermissionFlagsBits, TextChannel} from 'discord.js';
+import {ChatInputCommandInteraction, GuildMember, Message, PartialGuildMember, PartialMessage, PermissionFlagsBits, TextChannel} from 'discord.js';
 import client from '../client.js';
 import loggingService from '../services/logging.service.js';
 
@@ -64,6 +64,28 @@ class LoggingHandler {
             );
         } catch (error) {
             console.error('Fehler beim Loggen der bearbeiteten Nachricht:', error);
+        }
+    }
+
+    async handleGuildMemberAdd(member: GuildMember) {
+        try {
+            const logChannel = await this.getLogChannel();
+            if (!logChannel) return;
+
+            await logChannel.send(`📥 **${member.user.tag}** ist dem Server beigetreten.`);
+        } catch (error) {
+            console.error('Fehler beim Loggen des Server-Beitritts:', error);
+        }
+    }
+
+    async handleGuildMemberRemove(member: GuildMember | PartialGuildMember) {
+        try {
+            const logChannel = await this.getLogChannel();
+            if (!logChannel) return;
+
+            await logChannel.send(`📤 **${member.user.tag}** hat den Server verlassen.`);
+        } catch (error) {
+            console.error('Fehler beim Loggen des Server-Austritts:', error);
         }
     }
 

@@ -8,7 +8,7 @@ Ein Discord-Bot für den Discord-Server von [LotgD](http://www.lotgd.de/), gesch
 - **Twitch-Integration**: Sendet Benachrichtigungen, wenn ein Streamer online geht (via Webhooks).
 - **Sport-Tracking**: Verfolgung von sportlichen Aktivitäten (Summe der Kilometer).
 - **Automatisches Rollen-Management**: Aktualisiert User-Daten bei Namensänderungen oder Rollen-Updates.
-- **Nachrichten-Logging**: Postet bearbeitete/gelöschte Nachrichten in einen konfigurierbaren Log-Channel (`/log`).
+- **Nachrichten-Logging**: Postet bearbeitete/gelöschte Nachrichten sowie Server-Beitritte/-Austritte in einen konfigurierbaren Log-Channel (`/log`).
 
 ## 🛠 Architektur
 

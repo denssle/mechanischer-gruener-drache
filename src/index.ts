@@ -28,6 +28,8 @@ webhookServer.start(3000);
 client.on(Events.MessageCreate, messageHandler.messageCreate);
 client.on(Events.MessageDelete, (message) => loggingHandler.handleMessageDelete(message));
 client.on(Events.MessageUpdate, (oldMessage, newMessage) => loggingHandler.handleMessageUpdate(oldMessage, newMessage));
+client.on(Events.GuildMemberAdd, (member) => loggingHandler.handleGuildMemberAdd(member));
+client.on(Events.GuildMemberRemove, (member) => loggingHandler.handleGuildMemberRemove(member));
 
 client.once(Events.ClientReady, async () => {
     console.log(`Eingeloggt als ${client.user?.tag} - Version ${pjson.version}`);

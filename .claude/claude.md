@@ -59,6 +59,7 @@ Discord-Bot für den Community-Server von [Legend of the Green Dragon (LotGD)](h
 - `client.ts` braucht `partials: [Partials.Message, Partials.Channel]`, sonst feuern `MessageDelete`/`MessageUpdate` für nicht (mehr) gecachte Nachrichten gar nicht erst – ohne das würde das Feature den Großteil der Deletes/Edits einfach verpassen.
 - Alter Inhalt ist bei nicht gecachten Nachrichten grundsätzlich nicht rekonstruierbar (Discord-API-Grenze, kein Bug) – zeigt dann `*nicht verfügbar*` statt zu crashen oder leer zu bleiben.
 - Bot-Nachrichten werden ignoriert (sonst loggt der Bot ständig seine eigenen Antworten). `MessageUpdate` ohne echte Content-Änderung wird ebenfalls ignoriert (Discord feuert das Event z.B. auch beim Nachladen von Link-Embeds, nicht nur bei echten Edits).
+- Loggt seit 2026-07-03 zusätzlich Server-Beitritt/-Austritt (`GuildMemberAdd`/`GuildMemberRemove`) in denselben Log-Channel. `member.handler.ts` hört auf **dieselben** Events für einen anderen Zweck (aktuell nur `console.log`, historisch war da mal mehr geplant) – zwei separate `client.on(...)`-Registrierungen für dasselbe Event in unterschiedlichen Dateien sind hier bewusst so, nicht redundant: unterschiedliche Zuständigkeiten (User-Daten-Tracking vs. Audit-Log-Channel).
 
 ## Member-Handling (`src/handlers/member.handler.ts`)
 
