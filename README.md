@@ -33,9 +33,12 @@ Das Projekt folgt dem Prinzip der *Separation of Concerns*:
      "BOT_TOKEN": "DEIN_DISCORD_TOKEN",
      "CLIENT_ID": "DEIN_BOT_CLIENT_ID",
      "GUILD_ID": "DEINE_SERVER_ID",
-     "TWITCH_WEBHOOK_SECRET": "DEIN_GEHEIMNIS"
+     "TWITCH_WEBHOOK_SECRET": "DEIN_GEHEIMNIS",
+     "TWITCH_CLIENT_ID": "DEINE_TWITCH_CLIENT_ID",
+     "TWITCH_CLIENT_SECRET": "DEIN_TWITCH_CLIENT_SECRET"
    }
    ```
+   `TWITCH_WEBHOOK_CALLBACK_URL` ist optional und muss nur gesetzt werden, wenn der Webhook nicht unter der Standard-URL in `twitch.service.ts` erreichbar ist.
 
 3. **Befehle registrieren:**
    ```bash
@@ -67,7 +70,8 @@ Um den Webhook-Server lokal manuell zu testen:
 1. Bot starten (`npm start`).
 2. In einem neuen Terminal:
    ```bash
-   npx ts-node scripts/test-twitch-webhook.ts notify
+   npm run build:scripts
+   node dist-scripts/test-twitch-webhook.js notify
    ```
 
 ## ✅ Fortschritt / Todo
@@ -80,5 +84,5 @@ Um den Webhook-Server lokal manuell zu testen:
 - [ ] Rollenvergabe (in Arbeit)
 - [ ] Tage bis zum Treffen
 - [ ] News aus dem Game anzeigen
-- [ ] Sport: Summe der Kilometer bearbeitbar
+- [x] Sport: Summe der Kilometer bearbeitbar (`/sport bearbeiten` für eigene Einträge, `/sport setzen` als Admin-Korrektur)
 - [ ] Den Bot generalisieren für jeden Server
