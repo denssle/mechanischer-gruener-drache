@@ -24,6 +24,7 @@
 ## Deployment
 
 - GitHub Actions (`.github/workflows/deploy.yml`) deployt bei jedem Push auf `main` **direkt in Produktion** auf Uberspace, kein Staging. `npm test` → `npm run build` → Twitch-Webhook-Integrationstest gegen den echten laufenden `dist/index.js` → `rsync` → `supervisorctl restart drache`. Ein rotes Gate verhindert das Deployment, ist also bewusst streng zu behandeln, nicht nur "CI grün bekommen".
+- Supervisor auf dem Uberspace-Host startet den Bot über `npm run start-server` (= `npm ci && npm run build && npm start`) – der Server baut sich also bei jedem Restart selbst nochmal aus dem gerade gerynchten Source neu, das per CI vorgebaute `dist/` aus dem Workflow wird dabei überschrieben. D.h. `npm run build` muss nicht nur in der CI, sondern auch mit dem Node/npm auf Uberspace funktionieren.
 - Skripte unter `scripts/*.ts` werden für CI/lokale Nutzung mit `tsconfig.scripts.json` zu `dist-scripts/` kompiliert und mit purem `node` ausgeführt (`npm run build:scripts`, `npm run test:twitch`). **Kein ts-node** – dessen ESM-Loader-Registrierung (`--esm`/`--transpile-only`) ist zwischen Node-Versionen/npx-Installationen unzuverlässig; hat lokal auf Node 24 funktioniert, in der Node-20-CI aber mit `ERR_UNKNOWN_FILE_EXTENSION` zuverlässig gecrasht.
 
 ## Bekannte Stolperfallen
