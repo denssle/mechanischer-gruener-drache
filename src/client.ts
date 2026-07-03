@@ -1,4 +1,4 @@
-import {Client, Collection, GatewayIntentBits} from "discord.js";
+import {Client, Collection, GatewayIntentBits, Partials} from "discord.js";
 import commands from './commands/index.js';
 import { Command } from './types/discord.js';
 
@@ -14,7 +14,10 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers
-    ]
+    ],
+    // Ohne Partials feuern MessageDelete/MessageUpdate für nicht (mehr) gecachte
+    // Nachrichten gar nicht erst - wichtig fürs Nachrichten-Logging.
+    partials: [Partials.Message, Partials.Channel]
 });
 
 client.commands = new Collection();

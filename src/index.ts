@@ -6,6 +6,7 @@ import {deployCommands} from "./deploy-commands.js";
 import memberHandler from "./handlers/member.handler.js";
 import messageHandler from "./handlers/message.handler.js";
 import "./handlers/interaction.handler.js";
+import loggingHandler from "./handlers/logging.handler.js";
 import config from "../config.json" with {type: "json"};
 import webhookServer from './server/twitch.webhook.server.js';
 import twitchHandler from "./handlers/twitch.handler.js";
@@ -25,6 +26,8 @@ webhookServer.onRevocation((subscriptionId, reason) => {
 webhookServer.start(3000);
 
 client.on(Events.MessageCreate, messageHandler.messageCreate);
+client.on(Events.MessageDelete, (message) => loggingHandler.handleMessageDelete(message));
+client.on(Events.MessageUpdate, (oldMessage, newMessage) => loggingHandler.handleMessageUpdate(oldMessage, newMessage));
 
 client.once(Events.ClientReady, async () => {
     console.log(`Eingeloggt als ${client.user?.tag} - Version ${pjson.version}`);
