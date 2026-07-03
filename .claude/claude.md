@@ -50,6 +50,11 @@
 - `/sport setzen` (Admin, Kilometerstand eines Users direkt setzen) schreibt nur den Bestenlisten-Score, legt aber keinen `SportEntry` an. Der eigene `/sport statistik`-Wert (aus den individuellen Einträgen berechnet) kann danach vom `/sport gesamt`-Beitrag dieses Users abweichen – als Admin-Korrekturwerkzeug für Altdaten so gewollt, aber gut zu wissen falls das mal für Verwirrung sorgt.
 - `LEGACY_KILOMETERS` ist ein Dummy-User in der Bestenliste (`/sport legacy`, Admin) für Kilometer ohne zuordenbaren Discord-User – zählt zu `/sport gesamt` dazu, taucht aber nirgends als "Person" auf (seit Entfernung von `bestenliste` sowieso irrelevant, war vorher aber explizit rausgefiltert).
 
+## Member-Handling (`src/handlers/member.handler.ts`)
+
+- Einzige Handler-Datei, die (bis 2026-07-03) Logik direkt inline in `client.on(...)`-Callbacks statt als benannte Klassenmethoden hatte – deshalb ungetestet und beim Command-Block-Review leicht übersehen (kein Slash-Command). Jetzt wie die anderen Handler als `MemberHandler`-Klasse mit Methoden, `memberHandler` als Default-Export, `client.on(...)`-Verkabelung bleibt in der Datei selbst (nicht in `index.ts`, nur `loadAllMembers()` wird von dort aufgerufen).
+- `handleUserUpdate` nutzt `client.guilds.cache.get(config.GUILD_ID)` statt `.first()` – der Bot ist aktuell ohnehin fest auf eine Guild ausgelegt (siehe README-Todo "Bot generalisieren für jeden Server"), aber `.first()` war eine implizite Annahme statt einer expliziten Referenz auf die konfigurierte Guild.
+
 ## Links
 
 - [GitHub](https://github.com/denssle/mechanischer-gruener-drache)

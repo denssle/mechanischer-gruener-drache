@@ -3,7 +3,7 @@ import pjson from "../package.json" with {type: "json"};
 import client from "./client.js";
 import redisService from "./services/redis.service.js";
 import {deployCommands} from "./deploy-commands.js";
-import {loadAllMembers} from "./handlers/member.handler.js";
+import memberHandler from "./handlers/member.handler.js";
 import messageHandler from "./handlers/message.handler.js";
 import "./handlers/interaction.handler.js";
 import config from "../config.json" with {type: "json"};
@@ -31,7 +31,7 @@ client.once(Events.ClientReady, async () => {
     try {
         await redisService.connect();
         await deployCommands();
-        await loadAllMembers();
+        await memberHandler.loadAllMembers();
     } catch (error) {
         console.error('Fehler beim Initialisieren nach dem Discord-Login:', error);
     }
