@@ -11,7 +11,9 @@ import webhookServer from './server/twitch.webhook.server.js';
 import twitchHandler from "./handlers/twitch.handler.js";
 
 webhookServer.onNotification((twitchUserId, streamData) => {
-    twitchHandler.handleStreamOnline(twitchUserId, streamData);
+    twitchHandler.handleStreamOnline(twitchUserId, streamData).catch((error) => {
+        console.error('Fehler bei der Verarbeitung der Twitch-Benachrichtigung:', error);
+    });
 });
 
 webhookServer.start(3000);
