@@ -21,8 +21,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Create dummy config
+        run: echo '{"BOT_TOKEN":"test","CLIENT_ID":"test","GUILD_ID":"test","TWITCH_WEBHOOK_SECRET":"test-secret","TWITCH_CLIENT_ID":"test","TWITCH_CLIENT_SECRET":"test"}' > config.json
+
       - name: Run tests
         run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Twitch Webhook Test
+        run: |
+          # Bot im Hintergrund starten
+          node dist/index.js &
+          # Warten bis der Server bereit ist
+          sleep 5
+          # Webhook Test ausführen - Transpile-only um TS6059 zu vermeiden
+          npx ts-node --transpile-only scripts/test-twitch-webhook.ts notify
+          # Bot beenden
+          kill $!
+        env:
+          CI: true
 
       - name: rsync deployments
         uses: burnett01/rsync-deployments@7.1.0

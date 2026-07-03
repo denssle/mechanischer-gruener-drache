@@ -1,5 +1,12 @@
 import {Client, Collection, GatewayIntentBits} from "discord.js";
 import commands from './commands/index.js';
+import { Command } from './types/discord.js';
+
+declare module 'discord.js' {
+    interface Client {
+        commands: Collection<string, Command>;
+    }
+}
 
 const client = new Client({
     intents: [
@@ -10,11 +17,9 @@ const client = new Client({
     ]
 });
 
-// @ts-ignore
 client.commands = new Collection();
 
 for (const command of commands) {
-// @ts-ignore
     client.commands.set(command.data.name, command);
 }
 
