@@ -27,6 +27,11 @@ import redisService from './redis.service.js';
 
 describe('RedisService', () => {
 
+    it('registriert einen error-Listener, damit ein Verbindungsfehler nicht den Prozess crasht', () => {
+        const mockClient = vi.mocked(createClient).mock.results[0].value;
+        expect(mockClient.on).toHaveBeenCalledWith('error', expect.any(Function));
+    });
+
     it('sollte sich verbinden, wenn nicht offen', async () => {
         const mockClient = vi.mocked(createClient).mock.results[0].value;
         mockClient.isOpen = false;

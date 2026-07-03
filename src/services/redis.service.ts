@@ -14,6 +14,14 @@ class RedisService {
         }
     });
 
+    constructor() {
+        // Ohne Error-Listener crasht ein unhandled 'error'-Event (z.B. bei einem
+        // fehlgeschlagenen automatischen Reconnect) den kompletten Bot-Prozess.
+        this.#client.on('error', (error) => {
+            console.error('❌ Redis-Verbindungsfehler:', error);
+        });
+    }
+
     async connect(): Promise<void> {
         if (!this.#client.isOpen) {
             await this.#client.connect();

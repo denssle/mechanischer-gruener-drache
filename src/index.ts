@@ -28,9 +28,13 @@ client.on(Events.MessageCreate, messageHandler.messageCreate);
 
 client.once(Events.ClientReady, async () => {
     console.log(`Eingeloggt als ${client.user?.tag} - Version ${pjson.version}`);
-    await redisService.connect();
-    await deployCommands();
-    await loadAllMembers();
+    try {
+        await redisService.connect();
+        await deployCommands();
+        await loadAllMembers();
+    } catch (error) {
+        console.error('Fehler beim Initialisieren nach dem Discord-Login:', error);
+    }
 });
 
 if (process.env.CI) {
