@@ -37,7 +37,7 @@ jobs:
           # Warten bis der Server bereit ist
           sleep 5
           # Webhook Test ausführen - Transpile-only um TS6059 zu vermeiden
-          npx ts-node --transpile-only scripts/test-twitch-webhook.ts notify
+          npx ts-node --esm --transpile-only scripts/test-twitch-webhook.ts notify
           # Bot beenden
           kill $!
         env:

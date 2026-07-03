@@ -10,7 +10,7 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "test": "vitest run",
-    "test:twitch": "npx ts-node --transpile-only scripts/run-integration-test.ts"
+    "test:twitch": "npx ts-node --esm --transpile-only scripts/run-integration-test.ts"
   },
   "type": "module",
   "private": true,

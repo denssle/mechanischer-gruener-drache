@@ -35,7 +35,7 @@ const startServerAndTest = async () => {
     try {
         console.log('Führe Webhook-Test (notify) aus...');
         await new Promise((resolve, reject) => {
-            const test = spawn('npx', ['ts-node', '--transpile-only', 'scripts/test-twitch-webhook.ts', 'notify'], { 
+            const test = spawn('npx', ['ts-node', '--esm', '--transpile-only', 'scripts/test-twitch-webhook.ts', 'notify'], {
                 shell: true, 
                 stdio: 'inherit' 
             });
