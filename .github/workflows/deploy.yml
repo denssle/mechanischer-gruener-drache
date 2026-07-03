@@ -30,14 +30,17 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Build test scripts
+        run: npm run build:scripts
+
       - name: Twitch Webhook Test
         run: |
           # Bot im Hintergrund starten
           node dist/index.js &
           # Warten bis der Server bereit ist
           sleep 5
-          # Webhook Test ausführen - Transpile-only um TS6059 zu vermeiden
-          npx ts-node --esm --transpile-only scripts/test-twitch-webhook.ts notify
+          # Webhook Test ausführen (kompiliertes JS, kein ts-node/ESM-Loader nötig)
+          node dist-scripts/test-twitch-webhook.js notify
           # Bot beenden
           kill $!
         env:

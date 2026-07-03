@@ -35,22 +35,22 @@ const startServerAndTest = async () => {
     try {
         console.log('Führe Webhook-Test (notify) aus...');
         await new Promise((resolve, reject) => {
-            const test = spawn('npx', ['ts-node', '--esm', '--transpile-only', 'scripts/test-twitch-webhook.ts', 'notify'], {
-                shell: true, 
-                stdio: 'inherit' 
+            const test = spawn('node', ['dist-scripts/test-twitch-webhook.js', 'notify'], {
+                shell: true,
+                stdio: 'inherit'
             });
             test.on('close', (code) => code === 0 ? resolve(null) : reject(new Error('Test fehlgeschlagen')));
         });
-        
+
         console.log('Integrationstest erfolgreich abgeschlossen!');
     } catch (error) {
-        console.error('Fehler beim Integrationstest:', error.message);
+        console.error('Fehler beim Integrationstest:', error instanceof Error ? error.message : error);
         process.exit(1);
     } finally {
         console.log('Beende Server...');
         server.kill();
         // In Windows muss man manchmal aggressiver killen wenn shell: true benutzt wurde
-        if (process.platform === 'win32') {
+        if (process.platform === 'win32' && server.pid) {
             spawn('taskkill', ['/pid', server.pid.toString(), '/f', '/t']);
         }
     }

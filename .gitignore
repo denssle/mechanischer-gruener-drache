@@ -1,6 +1,7 @@
 /node_modules/
 /.idea/
 /dist/
+/dist-scripts/
 config.json
 *.js.map
 *.d.ts
