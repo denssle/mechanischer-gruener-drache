@@ -1,5 +1,7 @@
 # Mechanischer Grüner Drache
 
+Discord-Bot für den Community-Server von [Legend of the Green Dragon (LotGD)](https://www.lotgd.de/), einem Browser-RPG. Hobby-Projekt für einen kleinen, privaten Server – Features wie Ping-Pong, Sport-Tracking und Twitch-Benachrichtigungen sind Community-Spielereien für diesen Server, nicht Teil des eigentlichen Spiels.
+
 ## Techstack
 
 - TypeScript, Node.js 20, discord.js v14, Redis (Unix Socket)
