@@ -58,6 +58,10 @@ class TwitchUserService {
         return redisService.get(KEYS.twitchToDiscord(twitchUserId));
     }
 
+    async getDiscordIdBySubscriptionId(subscriptionId: string): Promise<string | null> {
+        return redisService.get(KEYS.subscription(subscriptionId));
+    }
+
     async getAllLinks(): Promise<TwitchUserLink[]> {
         const discordUserIds = await redisService.getList(KEYS.allLinks);
         if (!discordUserIds?.length) return [];

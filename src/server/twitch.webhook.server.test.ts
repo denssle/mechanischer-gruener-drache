@@ -88,7 +88,7 @@ describe('TwitchWebhookServer', () => {
 
     it('sollte ungültige Signaturen ablehnen', async () => {
         const body = { test: 'data' };
-        
+
         const req = mockRequest({
             'twitch-eventsub-message-id': 'id',
             'twitch-eventsub-message-timestamp': 'ts',
@@ -101,5 +101,35 @@ describe('TwitchWebhookServer', () => {
         twitchWebhookServer.handleEventSub(req, res);
 
         expect(res.sendStatus).toHaveBeenCalledWith(403);
+    });
+
+    it('sollte eine Revocation verarbeiten und den Callback aufrufen', async () => {
+        const callback = vi.fn();
+        twitchWebhookServer.onRevocation(callback);
+
+        const subscription = {
+            id: 'sub-1',
+            status: 'authorization_revoked',
+            type: 'stream.online'
+        };
+        const body = { subscription };
+        const bodyString = JSON.stringify(body);
+        const messageId = 'msg-3';
+        const timestamp = new Date().toISOString();
+        const signature = getSignature(messageId, timestamp, bodyString);
+
+        const req = mockRequest({
+            'twitch-eventsub-message-id': messageId,
+            'twitch-eventsub-message-timestamp': timestamp,
+            'twitch-eventsub-message-signature': signature,
+            'twitch-eventsub-message-type': 'revocation'
+        }, body);
+
+        const res = mockResponse();
+
+        twitchWebhookServer.handleEventSub(req, res);
+
+        expect(res.sendStatus).toHaveBeenCalledWith(204);
+        expect(callback).toHaveBeenCalledWith('sub-1', 'authorization_revoked');
     });
 });

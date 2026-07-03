@@ -1,7 +1,7 @@
 import {ChatInputCommandInteraction, PermissionFlagsBits, TextChannel} from "discord.js";
 import twitchUserService from "../services/twitch.user.service.js";
 import twitchService from "../services/twitch.service.js";
-import {StreamOnlineEvent} from "../types/steamOnlineEvent.js";
+import {StreamOnlineEvent} from "../types/streamOnlineEvent.js";
 import client from "../client.js";
 import userService from "../services/user.service.js";
 
@@ -56,7 +56,10 @@ class TwitchHandler {
         }
 
         // EventSub-Subscription löschen
-        await twitchService.unsubscribeFromStreamOnline(link.subscriptionId);
+        const unsubscribed = await twitchService.unsubscribeFromStreamOnline(link.subscriptionId);
+        if (!unsubscribed) {
+            return interaction.editReply('❌ Fehler beim Entfernen der Twitch-Benachrichtigung. Versuch es später nochmal.');
+        }
 
         // Verknüpfung aus Redis entfernen
         await twitchUserService.unlinkUser(interaction.user.id);
@@ -141,6 +144,14 @@ class TwitchHandler {
             `📺 https://twitch.tv/${event.broadcaster_user_login}\n` +
             `⏰ Live seit ${startedAt} Uhr`
         );
+    }
+
+    async handleSubscriptionRevoked(subscriptionId: string, reason: string) {
+        const discordUserId = await twitchUserService.getDiscordIdBySubscriptionId(subscriptionId);
+        if (!discordUserId) return;
+
+        console.warn(`⚠️ Twitch-Subscription ${subscriptionId} widerrufen (${reason}) - entferne Verknüpfung für Discord-User ${discordUserId}`);
+        await twitchUserService.unlinkUser(discordUserId);
     }
 
     async handleNotificationRolle(interaction: ChatInputCommandInteraction) {

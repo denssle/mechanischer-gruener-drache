@@ -1,7 +1,7 @@
 import express, {Request, Response} from 'express';
 import {createHmac} from 'crypto';
 import config from '../../config.json' with {type: 'json'};
-import {StreamOnlineEvent} from "../types/steamOnlineEvent.js";
+import {StreamOnlineEvent} from "../types/streamOnlineEvent.js";
 
 const TWITCH_MESSAGE_ID = 'twitch-eventsub-message-id';
 const TWITCH_MESSAGE_TIMESTAMP = 'twitch-eventsub-message-timestamp';
@@ -13,10 +13,12 @@ const MESSAGE_TYPE_NOTIFICATION = 'notification';
 const MESSAGE_TYPE_REVOCATION = 'revocation';
 
 type NotificationCallback = (twitchUserId: string, streamData: StreamOnlineEvent) => void;
+type RevocationCallback = (subscriptionId: string, reason: string) => void;
 
 class TwitchWebhookServer {
     #app = express();
     #notificationCallback: NotificationCallback | null = null;
+    #revocationCallback: RevocationCallback | null = null;
 
     get app() {
         return this.#app;
@@ -31,6 +33,10 @@ class TwitchWebhookServer {
 
     onNotification(callback: NotificationCallback) {
         this.#notificationCallback = callback;
+    }
+
+    onRevocation(callback: RevocationCallback) {
+        this.#revocationCallback = callback;
     }
 
     handleEventSub(req: Request, res: Response) {
@@ -57,8 +63,11 @@ class TwitchWebhookServer {
                 break;
 
             case MESSAGE_TYPE_REVOCATION:
-                console.warn(`Subscription widerrufen: ${body.subscription.type}`);
+                console.warn(`Subscription widerrufen: ${body.subscription.type} (${body.subscription.status})`);
                 res.sendStatus(204);
+                if (this.#revocationCallback) {
+                    this.#revocationCallback(body.subscription.id, body.subscription.status);
+                }
                 break;
 
             default:

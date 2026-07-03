@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, SlashCommandBuilder} from "discord.js";
+import {ChannelType, ChatInputCommandInteraction, SlashCommandBuilder} from "discord.js";
 import twitchHandler from "../handlers/twitch.handler.js";
 
 
@@ -25,6 +25,7 @@ export default {
             .addChannelOption((option) => option
                 .setName('channel')
                 .setDescription('Discord-Channel für Notifications')
+                .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
                 .setRequired(true)))
         .addSubcommand(sub => sub
             .setName('hilfe')

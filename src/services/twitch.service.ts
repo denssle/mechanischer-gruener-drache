@@ -5,7 +5,9 @@ import {EventSubSubscription} from "../types/eventSubSubscription.js";
 
 const TWITCH_API_BASE = 'https://api.twitch.tv/helix';
 const TWITCH_AUTH_URL = 'https://id.twitch.tv/oauth2/token';
-const WEBHOOK_CALLBACK_URL = 'https://enzlor.uber.space/twitch/eventsub';
+const DEFAULT_WEBHOOK_CALLBACK_URL = 'https://enzlor.uber.space/twitch/eventsub';
+const WEBHOOK_CALLBACK_URL = (config as { TWITCH_WEBHOOK_CALLBACK_URL?: string }).TWITCH_WEBHOOK_CALLBACK_URL
+    ?? DEFAULT_WEBHOOK_CALLBACK_URL;
 
 class TwitchService {
     #accessToken: string | null = null;
@@ -92,6 +94,11 @@ class TwitchService {
         const response = await this.#twitchRequest(`/eventsub/subscriptions?id=${subscriptionId}`, {
             method: 'DELETE',
         });
+
+        if (response.status === 404) {
+            console.warn(`⚠️ EventSub-Subscription ${subscriptionId} war bei Twitch bereits nicht mehr vorhanden`);
+            return true;
+        }
 
         if (!response.ok) {
             console.error(`Fehler beim Löschen der EventSub-Subscription: ${response.statusText}`);

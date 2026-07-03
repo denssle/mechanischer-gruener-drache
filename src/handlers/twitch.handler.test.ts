@@ -7,6 +7,7 @@ vi.mock('../services/twitch.user.service.js', () => ({
         linkUser: vi.fn(),
         unlinkUser: vi.fn(),
         getDiscordIdByTwitchId: vi.fn(),
+        getDiscordIdBySubscriptionId: vi.fn(),
         getNotificationChannel: vi.fn(),
         setNotificationChannel: vi.fn(),
         getNotificationRole: vi.fn(),
@@ -136,6 +137,7 @@ describe('TwitchHandler', () => {
 
         it('entfernt die Verknüpfung und die Subscription bei Erfolg', async () => {
             vi.mocked(twitchUserService.getLinkByDiscordId).mockResolvedValue(mockLink());
+            vi.mocked(twitchService.unsubscribeFromStreamOnline).mockResolvedValue(true);
             const interaction = mockInteraction();
 
             await twitchHandler.handleRemove(interaction);
@@ -143,6 +145,17 @@ describe('TwitchHandler', () => {
             expect(twitchService.unsubscribeFromStreamOnline).toHaveBeenCalledWith('sub-1');
             expect(twitchUserService.unlinkUser).toHaveBeenCalledWith('discord-1');
             expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('TestStreamer'));
+        });
+
+        it('lässt die Verknüpfung bestehen wenn das Entfernen der Subscription fehlschlägt', async () => {
+            vi.mocked(twitchUserService.getLinkByDiscordId).mockResolvedValue(mockLink());
+            vi.mocked(twitchService.unsubscribeFromStreamOnline).mockResolvedValue(false);
+            const interaction = mockInteraction();
+
+            await twitchHandler.handleRemove(interaction);
+
+            expect(twitchUserService.unlinkUser).not.toHaveBeenCalled();
+            expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('Fehler'));
         });
     });
 
@@ -222,6 +235,24 @@ describe('TwitchHandler', () => {
 
             expect(twitchUserService.setNotificationRole).toHaveBeenCalledWith('role-1');
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('role-1'));
+        });
+    });
+
+    describe('handleSubscriptionRevoked', () => {
+        it('tut nichts wenn die Subscription keinem Discord-User zugeordnet ist', async () => {
+            vi.mocked(twitchUserService.getDiscordIdBySubscriptionId).mockResolvedValue(null);
+
+            await twitchHandler.handleSubscriptionRevoked('sub-1', 'authorization_revoked');
+
+            expect(twitchUserService.unlinkUser).not.toHaveBeenCalled();
+        });
+
+        it('entfernt die Verknüpfung des betroffenen Users', async () => {
+            vi.mocked(twitchUserService.getDiscordIdBySubscriptionId).mockResolvedValue('discord-1');
+
+            await twitchHandler.handleSubscriptionRevoked('sub-1', 'authorization_revoked');
+
+            expect(twitchUserService.unlinkUser).toHaveBeenCalledWith('discord-1');
         });
     });
 

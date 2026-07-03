@@ -5,7 +5,7 @@
 - TypeScript, Node.js 20, discord.js v14, Redis (Unix Socket)
 - Hosted on Uberspace, Supervisor für Prozessverwaltung
 
-## Struktur3
+## Struktur
 
 - src/commands/ – Slash Command Definitionen
 - src/handlers/ – Business Logik
@@ -29,8 +29,16 @@
 
 ## Bekannte Stolperfallen
 
-- Callbacks/Handler, die als `void`-Funktion registriert werden (z.B. `webhookServer.onNotification(...)` in `src/index.ts`) aber async sind, brauchen ein explizites `.catch()`. Ohne das killt eine unhandled promise rejection den kompletten Bot-Prozess (Node ≥15) – ist im Twitch-Notification-Pfad am 2026-07-03 live passiert (Redis war nicht verbunden, `handleStreamOnline` warf, Prozess crashte).
+- Callbacks/Handler, die als `void`-Funktion registriert werden (z.B. `webhookServer.onNotification(...)`/`onRevocation(...)` in `src/index.ts`) aber async sind, brauchen ein explizites `.catch()`. Ohne das killt eine unhandled promise rejection den kompletten Bot-Prozess (Node ≥15) – ist im Twitch-Notification-Pfad am 2026-07-03 live passiert (Redis war nicht verbunden, `handleStreamOnline` warf, Prozess crashte).
 - Type-only Imports (z.B. `import { Command } from './types/discord.js'`) werden von `vitest`/esbuild nicht auf Existenz geprüft, nur von `tsc`. Ein fehlendes Type-File fällt also nicht bei `npm test` auf, sondern erst bei `npm run build` – im CI-Workflow läuft `npm run build` *nach* `npm test`, checkt also vor dem eigentlichen Fehlerfall niemand.
+- Twitch-EventSub-Notifications werden nicht per Message-ID dedupliziert – retried Twitch eine Zustellung (z.B. bei Timeout), könnte theoretisch zweimal "ist live"-gepostet werden. Bewusst nicht gefixt (Hobby-Projekt, seltener Edge-Case), falls es doch mal stört: Redis-SET mit kurzer TTL über die Message-ID wäre der Ansatz.
+
+## Twitch-Feature (`/twitch`)
+
+- 1 Discord-User = 1 Twitch-Link (`handleSet` blockt bei bestehendem Link). Channel + Rolle für Notifications sind global vom Admin gesetzt (`TWITCH:NOTIFICATION_CHANNEL`/`_ROLE`), nicht pro User.
+- `twitchService.unsubscribeFromStreamOnline` behandelt ein 404 von Twitch (Subscription dort schon weg) als Erfolg – wichtig für Idempotenz bei `/twitch remove` und beim Revocation-Handling.
+- Twitch `revocation`-Webhooks (z.B. Auth entzogen) räumen automatisch den zugehörigen Redis-Link auf (`twitchHandler.handleSubscriptionRevoked`, verkabelt über `webhookServer.onRevocation` in `src/index.ts`) – der User müsste sich danach neu verknüpfen, es bleibt aber kein verwaister Link liegen.
+- `/twitch notification-channel` ist über `addChannelTypes` auf Text-/Announcement-Channels beschränkt, damit kein Voice-Channel o.ä. gewählt werden kann, an dem `channel.send()` sonst still scheitern würde.
 
 ## Links
 

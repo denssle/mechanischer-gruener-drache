@@ -16,6 +16,12 @@ webhookServer.onNotification((twitchUserId, streamData) => {
     });
 });
 
+webhookServer.onRevocation((subscriptionId, reason) => {
+    twitchHandler.handleSubscriptionRevoked(subscriptionId, reason).catch((error) => {
+        console.error('Fehler bei der Verarbeitung des Twitch-Subscription-Widerrufs:', error);
+    });
+});
+
 webhookServer.start(3000);
 
 client.on(Events.MessageCreate, messageHandler.messageCreate);
