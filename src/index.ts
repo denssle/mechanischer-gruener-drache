@@ -7,6 +7,7 @@ import memberHandler from "./handlers/member.handler.js";
 import messageHandler from "./handlers/message.handler.js";
 import "./handlers/interaction.handler.js";
 import loggingHandler from "./handlers/logging.handler.js";
+import reactionRoleHandler from "./handlers/reactionRole.handler.js";
 import config from "../config.json" with {type: "json"};
 import webhookServer from './server/twitch.webhook.server.js';
 import twitchHandler from "./handlers/twitch.handler.js";
@@ -30,6 +31,8 @@ client.on(Events.MessageDelete, (message) => loggingHandler.handleMessageDelete(
 client.on(Events.MessageUpdate, (oldMessage, newMessage) => loggingHandler.handleMessageUpdate(oldMessage, newMessage));
 client.on(Events.GuildMemberAdd, (member) => loggingHandler.handleGuildMemberAdd(member));
 client.on(Events.GuildMemberRemove, (member) => loggingHandler.handleGuildMemberRemove(member));
+client.on(Events.MessageReactionAdd, (reaction, user) => reactionRoleHandler.handleReactionAdd(reaction, user));
+client.on(Events.MessageReactionRemove, (reaction, user) => reactionRoleHandler.handleReactionRemove(reaction, user));
 
 client.once(Events.ClientReady, async () => {
     console.log(`Eingeloggt als ${client.user?.tag} - Version ${pjson.version}`);
