@@ -23,6 +23,7 @@
 
 ## Deployment
 
+- `console.log`/`console.error`-Ausgaben werden vom Hoster (Uberspace/Supervisor) tatsächlich mitgeschnitten und persistiert – bei Fehlern die nur geloggt werden (z.B. gescheiterte Notification-Zustellung), ist das also keine reine Diagnose-Attrappe, sondern real nachvollziehbar. Kein zusätzliches Alerting nötig, solange man bereit ist, ins Log zu schauen.
 - GitHub Actions (`.github/workflows/deploy.yml`) deployt bei jedem Push auf `main` **direkt in Produktion** auf Uberspace, kein Staging. `npm test` → `npm run build` → Twitch-Webhook-Integrationstest gegen den echten laufenden `dist/index.js` → `rsync` → `supervisorctl restart drache`. Ein rotes Gate verhindert das Deployment, ist also bewusst streng zu behandeln, nicht nur "CI grün bekommen".
 - Supervisor auf dem Uberspace-Host startet den Bot über `npm run start-server` (= `npm ci && npm run build && npm start`) – der Server baut sich also bei jedem Restart selbst nochmal aus dem gerade gerynchten Source neu, das per CI vorgebaute `dist/` aus dem Workflow wird dabei überschrieben. D.h. `npm run build` muss nicht nur in der CI, sondern auch mit dem Node/npm auf Uberspace funktionieren.
 - Skripte unter `scripts/*.ts` werden für CI/lokale Nutzung mit `tsconfig.scripts.json` zu `dist-scripts/` kompiliert und mit purem `node` ausgeführt (`npm run build:scripts`, `npm run test:twitch`). **Kein ts-node** – dessen ESM-Loader-Registrierung (`--esm`/`--transpile-only`) ist zwischen Node-Versionen/npx-Installationen unzuverlässig; hat lokal auf Node 24 funktioniert, in der Node-20-CI aber mit `ERR_UNKNOWN_FILE_EXTENSION` zuverlässig gecrasht.
@@ -39,6 +40,7 @@
 - `twitchService.unsubscribeFromStreamOnline` behandelt ein 404 von Twitch (Subscription dort schon weg) als Erfolg – wichtig für Idempotenz bei `/twitch remove` und beim Revocation-Handling.
 - Twitch `revocation`-Webhooks (z.B. Auth entzogen) räumen automatisch den zugehörigen Redis-Link auf (`twitchHandler.handleSubscriptionRevoked`, verkabelt über `webhookServer.onRevocation` in `src/index.ts`) – der User müsste sich danach neu verknüpfen, es bleibt aber kein verwaister Link liegen.
 - `/twitch notification-channel` ist über `addChannelTypes` auf Text-/Announcement-Channels beschränkt, damit kein Voice-Channel o.ä. gewählt werden kann, an dem `channel.send()` sonst still scheitern würde.
+- `twitch.command.test.ts` prüft zusätzlich, dass jeder im `SlashCommandBuilder` definierte Subcommand-Name auch im `switch` in `execute()` dispatcht wird (die Namen stehen doppelt im Code, das ist die einzige Absicherung gegen Drift zwischen beiden).
 
 ## Links
 
