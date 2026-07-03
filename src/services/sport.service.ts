@@ -71,21 +71,13 @@ class SportService {
         return entries.filter((e): e is SportEntry => e !== null);
     }
 
-    async getHighscore(): Promise<{ userId: string; kilometers: number }[]> {
-        const results = await redisService.getSortedSet(KEYS.highscore);
-        return results
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 10)
-            .map(item => ({userId: item.value, kilometers: item.score}));
-    }
-
     async setKilometer(userId: string, kilometers: number): Promise<void> {
         await redisService.setSortedSet(KEYS.highscore, userId, kilometers);
     }
 
     async getGesamtKilometer(): Promise<number> {
-        const highscore = await redisService.getSortedSet(KEYS.highscore);
-        return highscore.reduce((sum, item) => sum + item.score, 0);
+        const alle = await redisService.getSortedSetAll(KEYS.highscore);
+        return alle.reduce((sum, item) => sum + item.score, 0);
     }
 
     async addLegacyKilometer(kilometers: number): Promise<void> {

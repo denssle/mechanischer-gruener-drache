@@ -34,6 +34,7 @@
 - Type-only Imports (z.B. `import { Command } from './types/discord.js'`) werden von `vitest`/esbuild nicht auf Existenz geprüft, nur von `tsc`. Ein fehlendes Type-File fällt also nicht bei `npm test` auf, sondern erst bei `npm run build` – im CI-Workflow läuft `npm run build` *nach* `npm test`, checkt also vor dem eigentlichen Fehlerfall niemand.
 - Twitch-EventSub-Notifications werden nicht per Message-ID dedupliziert – retried Twitch eine Zustellung (z.B. bei Timeout), könnte theoretisch zweimal "ist live"-gepostet werden. Bewusst nicht gefixt (Hobby-Projekt, seltener Edge-Case), falls es doch mal stört: Redis-SET mit kurzer TTL über die Message-ID wäre der Ansatz.
 - Jeder node-redis-Client **muss** einen `.on('error', ...)`-Listener haben, sonst crasht ein unhandled `'error'`-Event (z.B. bei einem Verbindungsabbruch/gescheiterten Reconnect) sofort den kompletten Bot-Prozess – node-redis emittiert das aktiv, auch während der eingebauten automatischen Reconnect-Strategie. War in `redis.service.ts` bis 2026-07-03 nicht gesetzt; seitdem im Constructor registriert (nur Logging, kein Reconnect-Code nötig – node-redis regelt das selbst). Betraf potenziell den gesamten Bot, nicht nur Twitch.
+- `redisService.getSortedSet()` ist **hart auf die Top 10** begrenzt (`zRangeWithScores(key, 0, 9, {REV: true})`) – gedacht für Leaderboard-Anzeigen (Ping-Pong-Highscore), nicht zum Aufsummieren über alle Mitglieder. Für "alle Werte summieren" (z.B. Sport-Gesamtkilometer) `getSortedSetAll()` benutzen (ungekürzt, `0, -1`). War in `sportService.getGesamtKilometer` bis 2026-07-03 falsch (undercounted ab >10 Score-Haltern, inkl. dem Legacy-Dummy-User).
 
 ## Twitch-Feature (`/twitch`)
 
@@ -42,6 +43,12 @@
 - Twitch `revocation`-Webhooks (z.B. Auth entzogen) räumen automatisch den zugehörigen Redis-Link auf (`twitchHandler.handleSubscriptionRevoked`, verkabelt über `webhookServer.onRevocation` in `src/index.ts`) – der User müsste sich danach neu verknüpfen, es bleibt aber kein verwaister Link liegen.
 - `/twitch notification-channel` ist über `addChannelTypes` auf Text-/Announcement-Channels beschränkt, damit kein Voice-Channel o.ä. gewählt werden kann, an dem `channel.send()` sonst still scheitern würde.
 - `twitch.command.test.ts` prüft zusätzlich, dass jeder im `SlashCommandBuilder` definierte Subcommand-Name auch im `switch` in `execute()` dispatcht wird (die Namen stehen doppelt im Code, das ist die einzige Absicherung gegen Drift zwischen beiden).
+
+## Sport-Feature (`/sport`)
+
+- Bewusst **kooperativ, nicht kompetitiv**: alle tragen zu einer gemeinsamen Gesamt-Kilometerzahl bei (`/sport gesamt`), es gibt keine Rangliste. Ein früherer `/sport bestenliste`-Befehl (Top-10-Leaderboard) wurde deshalb wieder entfernt (samt `sportService.getHighscore`) – nicht versehentlich, das war eine bewusste Design-Entscheidung gegen Konkurrenzdenken auf dem Server.
+- `/sport setzen` (Admin, Kilometerstand eines Users direkt setzen) schreibt nur den Bestenlisten-Score, legt aber keinen `SportEntry` an. Der eigene `/sport statistik`-Wert (aus den individuellen Einträgen berechnet) kann danach vom `/sport gesamt`-Beitrag dieses Users abweichen – als Admin-Korrekturwerkzeug für Altdaten so gewollt, aber gut zu wissen falls das mal für Verwirrung sorgt.
+- `LEGACY_KILOMETERS` ist ein Dummy-User in der Bestenliste (`/sport legacy`, Admin) für Kilometer ohne zuordenbaren Discord-User – zählt zu `/sport gesamt` dazu, taucht aber nirgends als "Person" auf (seit Entfernung von `bestenliste` sowieso irrelevant, war vorher aber explizit rausgefiltert).
 
 ## Links
 

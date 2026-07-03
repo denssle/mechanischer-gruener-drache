@@ -48,6 +48,11 @@ class RedisService {
         });
     }
 
+    // Ungekürzt, für Summen über alle Mitglieder statt nur die Top 10 (z.B. Gesamtkilometer).
+    getSortedSetAll(key: string) {
+        return this.#client.zRangeWithScores(key, 0, -1);
+    }
+
     async delete(key: string): Promise<void> {
         await this.#client.del(key);
     }

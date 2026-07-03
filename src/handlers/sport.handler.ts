@@ -1,6 +1,5 @@
 import {ChatInputCommandInteraction, PermissionFlagsBits} from 'discord.js';
 import sportService from '../services/sport.service.js';
-import userService from '../services/user.service.js';
 import {SportActivities, SportActivity} from '../types/sport.js';
 
 class SportHandler {
@@ -46,33 +45,6 @@ class SportHandler {
         );
     }
 
-    async handleBestenliste(interaction: ChatInputCommandInteraction) {
-        const highscore = await sportService.getHighscore();
-
-        if (!highscore.length) {
-            return interaction.reply('Noch keine Einträge vorhanden.');
-        }
-
-        const users = await Promise.all(
-            highscore.map(item => userService.getUser(item.userId))
-        );
-
-        const gesamtKilometer = highscore.reduce((sum, item) => sum + item.kilometers, 0);
-
-        const liste = highscore
-            .filter(item => item.userId !== 'LEGACY_KILOMETERS')
-            .map((item, index) => {
-                const displayName = users[index]?.displayName ?? item.userId;
-                return `${index + 1}. **${displayName}** – ${item.kilometers} km`;
-            })
-            .join('\n');
-
-        return interaction.reply(
-            `🏆 **Bestenliste**\n\n${liste}\n\n` +
-            `📊 Gesamt: **${gesamtKilometer} km** von allen Sportlern`
-        );
-    }
-
     async handleStatistik(interaction: ChatInputCommandInteraction) {
         const entries = await sportService.getUserEntries(interaction.user.id);
 
@@ -105,7 +77,6 @@ class SportHandler {
             `**/sport hinzufuegen** – Neuen Sport-Eintrag hinzufügen\n` +
             `**/sport loeschen** – Eintrag anhand der ID löschen\n` +
             `**/sport bearbeiten** – Kilometeranzahl eines Eintrags korrigieren\n` +
-            // `**/sport bestenliste** – Top 10 der fleißigsten Sportler\n` +
             `**/sport gesamt** – Gesamtkilometer aller Sportler\n` +
             `**/sport statistik** – Deine persönliche Übersicht pro Aktivität\n` +
             `**/sport setzen** – Kilometerstand eines Users setzen (nur Admins)\n` +
