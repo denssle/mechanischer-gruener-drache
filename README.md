@@ -86,3 +86,4 @@ Um den Webhook-Server lokal manuell zu testen:
 - [ ] News aus dem Game anzeigen
 - [x] Sport: Summe der Kilometer bearbeitbar (`/sport bearbeiten` für eigene Einträge, `/sport setzen` als Admin-Korrektur)
 - [ ] Den Bot generalisieren für jeden Server
+- [ ] CI/Deploy-Workflow auf eine neuere Node-Version heben (Node 20 wird für GitHub Actions deprecated)
