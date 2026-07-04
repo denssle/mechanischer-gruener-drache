@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, GuildMember, Message, MessageFlags, PartialGuildMember, PartialMessage, PermissionFlagsBits, TextChannel} from 'discord.js';
+import {ChatInputCommandInteraction, GuildBan, GuildMember, GuildTextBasedChannel, Message, MessageFlags, PartialGuildMember, PartialMessage, PermissionFlagsBits, ReadonlyCollection, TextChannel} from 'discord.js';
 import client from '../client.js';
 import loggingService from '../services/logging.service.js';
 
@@ -91,29 +91,89 @@ class LoggingHandler {
 
     async handleGuildMemberUpdate(oldMember: GuildMember | PartialGuildMember, newMember: GuildMember) {
         try {
-            // Ohne gecachtes altes Mitglied kein Rollen-Diff möglich - dann lieber nichts
-            // loggen als falsche "Rolle erhalten"-Meldungen für alle bestehenden Rollen.
+            // Ohne gecachtes altes Mitglied kein Diff möglich - dann lieber nichts loggen
+            // als z.B. falsche "Rolle erhalten"-Meldungen für alle bestehenden Rollen.
             if (oldMember.partial) return;
 
+            const tag = newMember.user.tag;
+            const messages: string[] = [];
+
+            // Rollen
             const oldRoles = oldMember.roles.cache;
             const newRoles = newMember.roles.cache;
+            for (const role of newRoles.filter(role => !oldRoles.has(role.id)).values()) {
+                messages.push(`➕ **${tag}** hat die Rolle **${role.name}** erhalten.`);
+            }
+            for (const role of oldRoles.filter(role => !newRoles.has(role.id)).values()) {
+                messages.push(`➖ **${tag}** hat die Rolle **${role.name}** verloren.`);
+            }
 
-            const addedRoles = newRoles.filter(role => !oldRoles.has(role.id));
-            const removedRoles = oldRoles.filter(role => !newRoles.has(role.id));
+            // Nickname
+            if (oldMember.nickname !== newMember.nickname) {
+                if (!newMember.nickname) {
+                    messages.push(`🏷️ **${tag}** hat den Nickname **${oldMember.nickname}** entfernt.`);
+                } else if (!oldMember.nickname) {
+                    messages.push(`🏷️ **${tag}** hat sich den Nickname **${newMember.nickname}** gegeben.`);
+                } else {
+                    messages.push(`🏷️ **${tag}** hat den Nickname von **${oldMember.nickname}** zu **${newMember.nickname}** geändert.`);
+                }
+            }
 
-            if (!addedRoles.size && !removedRoles.size) return;
+            // Timeout / Mute
+            const oldTimeout = oldMember.communicationDisabledUntilTimestamp;
+            const newTimeout = newMember.communicationDisabledUntilTimestamp;
+            if (oldTimeout !== newTimeout) {
+                if (newTimeout && newTimeout > Date.now()) {
+                    messages.push(`🔇 **${tag}** wurde bis <t:${Math.floor(newTimeout / 1000)}:f> stummgeschaltet (Timeout).`);
+                } else if (oldTimeout && oldTimeout > Date.now()) {
+                    messages.push(`🔊 Der Timeout von **${tag}** wurde aufgehoben.`);
+                }
+            }
+
+            if (!messages.length) return;
 
             const logChannel = await this.getLogChannel();
             if (!logChannel) return;
 
-            for (const role of addedRoles.values()) {
-                await logChannel.send(`➕ **${newMember.user.tag}** hat die Rolle **${role.name}** erhalten.`);
-            }
-            for (const role of removedRoles.values()) {
-                await logChannel.send(`➖ **${newMember.user.tag}** hat die Rolle **${role.name}** verloren.`);
+            for (const message of messages) {
+                await logChannel.send(message);
             }
         } catch (error) {
-            console.error('Fehler beim Loggen der Rollenänderung:', error);
+            console.error('Fehler beim Loggen der Mitglieds-Änderung:', error);
+        }
+    }
+
+    async handleGuildBanAdd(ban: GuildBan) {
+        try {
+            const logChannel = await this.getLogChannel();
+            if (!logChannel) return;
+
+            const reason = ban.reason ? ` (Grund: ${ban.reason})` : '';
+            await logChannel.send(`🔨 **${ban.user.tag}** wurde gebannt.${reason}`);
+        } catch (error) {
+            console.error('Fehler beim Loggen des Banns:', error);
+        }
+    }
+
+    async handleGuildBanRemove(ban: GuildBan) {
+        try {
+            const logChannel = await this.getLogChannel();
+            if (!logChannel) return;
+
+            await logChannel.send(`♻️ Der Bann von **${ban.user.tag}** wurde aufgehoben.`);
+        } catch (error) {
+            console.error('Fehler beim Loggen der Bann-Aufhebung:', error);
+        }
+    }
+
+    async handleMessageBulkDelete(messages: ReadonlyCollection<string, Message | PartialMessage>, channel: GuildTextBasedChannel) {
+        try {
+            const logChannel = await this.getLogChannel();
+            if (!logChannel) return;
+
+            await logChannel.send(`🧹 **${messages.size}** Nachrichten wurden in <#${channel.id}> gelöscht (Massen-Löschung).`);
+        } catch (error) {
+            console.error('Fehler beim Loggen der Massen-Löschung:', error);
         }
     }
 

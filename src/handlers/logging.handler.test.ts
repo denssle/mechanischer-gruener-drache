@@ -318,5 +318,123 @@ describe('LoggingHandler', () => {
 
             await expect(loggingHandler.handleGuildMemberUpdate(oldMember, newMember)).resolves.not.toThrow();
         });
+
+        it('loggt eine Nickname-Änderung', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await loggingHandler.handleGuildMemberUpdate(
+                mockMember([], { nickname: 'Alt' }),
+                mockMember([], { nickname: 'Neu' })
+            );
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Alt'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Neu'));
+        });
+
+        it('loggt einen gesetzten Timeout', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await loggingHandler.handleGuildMemberUpdate(
+                mockMember([], { communicationDisabledUntilTimestamp: null }),
+                mockMember([], { communicationDisabledUntilTimestamp: Date.now() + 600000 })
+            );
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('stummgeschaltet'));
+        });
+
+        it('loggt einen aufgehobenen Timeout', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await loggingHandler.handleGuildMemberUpdate(
+                mockMember([], { communicationDisabledUntilTimestamp: Date.now() + 600000 }),
+                mockMember([], { communicationDisabledUntilTimestamp: null })
+            );
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('aufgehoben'));
+        });
+    });
+
+    describe('handleGuildBanAdd', () => {
+        const mockBan = (overrides = {}) => ({ user: { tag: 'Böser#0001' }, reason: null, ...overrides } as any);
+
+        it('tut nichts wenn kein Log-Channel konfiguriert ist', async () => {
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue(null);
+
+            await loggingHandler.handleGuildBanAdd(mockBan());
+
+            expect(client.channels.fetch).not.toHaveBeenCalled();
+        });
+
+        it('loggt den Bann inklusive Grund', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await loggingHandler.handleGuildBanAdd(mockBan({ reason: 'Spam' }));
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Böser#0001'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('gebannt'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Spam'));
+        });
+
+        it('fängt Fehler beim Loggen ab', async () => {
+            vi.mocked(loggingService.getLogChannel).mockRejectedValue(new Error('Redis kaputt'));
+
+            await expect(loggingHandler.handleGuildBanAdd(mockBan())).resolves.not.toThrow();
+        });
+    });
+
+    describe('handleGuildBanRemove', () => {
+        const mockBan = () => ({ user: { tag: 'Böser#0001' } } as any);
+
+        it('loggt die Bann-Aufhebung', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await loggingHandler.handleGuildBanRemove(mockBan());
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Böser#0001'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('aufgehoben'));
+        });
+    });
+
+    describe('handleMessageBulkDelete', () => {
+        const mockMessages = (count: number) => {
+            const c = new Collection<string, any>();
+            for (let i = 0; i < count; i++) c.set(String(i), {});
+            return c;
+        };
+
+        it('tut nichts wenn kein Log-Channel konfiguriert ist', async () => {
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue(null);
+
+            await loggingHandler.handleMessageBulkDelete(mockMessages(3), { id: 'src-channel' } as any);
+
+            expect(client.channels.fetch).not.toHaveBeenCalled();
+        });
+
+        it('loggt Anzahl und Channel der Massen-Löschung', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await loggingHandler.handleMessageBulkDelete(mockMessages(3), { id: 'src-channel' } as any);
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('3'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('<#src-channel>'));
+        });
+
+        it('fängt Fehler beim Loggen ab', async () => {
+            vi.mocked(loggingService.getLogChannel).mockRejectedValue(new Error('Redis kaputt'));
+
+            await expect(loggingHandler.handleMessageBulkDelete(mockMessages(1), { id: 'src-channel' } as any)).resolves.not.toThrow();
+        });
     });
 });

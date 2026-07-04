@@ -13,7 +13,8 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildModeration
     ],
     // Ohne Partials feuern MessageDelete/MessageUpdate für nicht (mehr) gecachte
     // Nachrichten gar nicht erst - wichtig fürs Nachrichten-Logging.

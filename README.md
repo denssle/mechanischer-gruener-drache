@@ -8,7 +8,7 @@ Ein Discord-Bot für den Discord-Server von [LotgD](http://www.lotgd.de/), gesch
 - **Twitch-Integration**: Sendet Benachrichtigungen, wenn ein Streamer online geht (via Webhooks).
 - **Sport-Tracking**: Verfolgung von sportlichen Aktivitäten (Summe der Kilometer).
 - **Automatisches Rollen-Management**: Aktualisiert User-Daten bei Namensänderungen oder Rollen-Updates.
-- **Nachrichten-Logging**: Postet bearbeitete/gelöschte Nachrichten, Server-Beitritte/-Austritte sowie Rollenänderungen (Rolle erhalten/verloren) in einen konfigurierbaren Log-Channel (`/protokoll`).
+- **Nachrichten-Logging**: Postet bearbeitete/gelöschte Nachrichten (inkl. Massen-Löschungen), Server-Beitritte/-Austritte, Rollen- und Nickname-Änderungen, Timeouts/Mutes sowie Bans/Unbans in einen konfigurierbaren Log-Channel (`/protokoll`).
 - **Rollen-Selbstvergabe**: Ein Admin postet mit `/rollenbutton` eine Nachricht mit einem Button; per Klick geben sich User selbst eine Rolle (nochmal klicken entfernt sie wieder), z.B. für die Regelakzeptanz oder Twitch-Benachrichtigungen. Der Bot braucht dafür "Rollen verwalten"-Rechte und muss in der Rollen-Hierarchie über der zu vergebenden Rolle stehen.
 
 ## 🛠 Architektur
