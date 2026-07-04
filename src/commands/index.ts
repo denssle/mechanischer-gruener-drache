@@ -5,6 +5,7 @@ import sport from "./sport.command.js";
 import twitch from "./twitch.command.js";
 import log from "./log.command.js";
 import rollenbutton from "./rollenbutton.command.js";
+import event from "./event.command.js";
 
 export default [
     ping,
@@ -13,5 +14,6 @@ export default [
     sport,
     twitch,
     log,
-    rollenbutton
+    rollenbutton,
+    event
 ];

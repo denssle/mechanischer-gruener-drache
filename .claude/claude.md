@@ -83,6 +83,14 @@ Discord-Bot für den Community-Server von [Legend of the Green Dragon (LotGD)](h
 - Einzige Handler-Datei, die (bis 2026-07-03) Logik direkt inline in `client.on(...)`-Callbacks statt als benannte Klassenmethoden hatte – deshalb ungetestet und beim Command-Block-Review leicht übersehen (kein Slash-Command). Jetzt wie die anderen Handler als `MemberHandler`-Klasse mit Methoden, `memberHandler` als Default-Export, `client.on(...)`-Verkabelung bleibt in der Datei selbst (nicht in `index.ts`, nur `loadAllMembers()` wird von dort aufgerufen).
 - `handleUserUpdate` nutzt `client.guilds.cache.get(config.GUILD_ID)` statt `.first()` – der Bot ist aktuell ohnehin fest auf eine Guild ausgelegt (siehe README-Todo "Bot generalisieren für jeden Server"), aber `.first()` war eine implizite Annahme statt einer expliziten Referenz auf die konfigurierte Guild.
 
+## Event-Feature (`/event`)
+
+- Zweck (seit 2026-07-04, war README-Todo „Tage bis zum Treffen"): Ein Admin setzt einen Termin für das Community-Event, alle User können per Countdown „wie lange noch?" fragen. `/event setzen datum:<TT.MM.JJJJ> [uhrzeit:<HH:MM>] [titel:<text>]` (Admin), `/event countdown` (alle), `/event entfernen` (Admin).
+- **Kein Datum-Objekt in Redis**, nur ein Unix-Timestamp (ms) + Titel als JSON unter `EVENT:NEXT` (`event.service.ts`). Genau **ein** Event gleichzeitig (Setzen überschreibt).
+- Datum-Parsing (`parseGermanDateTime`, exportiert + separat getestet): deutsches Format `TT.MM.JJJJ` + optional `HH:MM`, gebaut mit `new Date(year, month-1, day, …)` (lokale TZ des Hosts = Europe/Berlin). **Wichtig:** danach wird per Round-Trip-Vergleich (`date.getDate() === day` etc.) validiert, weil `new Date()` ungültige Werte wie `32.13.` still auf den nächsten gültigen Tag normalisiert – ohne den Check würde Quatsch klaglos akzeptiert. Vergangene Daten werden beim Setzen abgelehnt.
+- Anzeige nutzt **Discord-Timestamps** (`<t:unix:F>` absolut, `<t:unix:R>` relativ) – die lokalisieren sich pro Betrachter automatisch. Zusätzlich eine selbst ausgerechnete deutsche Restdauer (`formatRemaining`, exportiert + getestet): „X Tage und Y Stunden", Minuten nur wenn <1 Tag, mit korrektem Singular/Plural.
+- `event.handler.ts` importiert `client` **nicht** (arbeitet nur mit `interaction`), Verkabelung läuft über `interaction.handler.ts` wie bei allen Slash-Commands – zirkuläre-Import-Falle also kein Thema.
+
 ## Links
 
 - [GitHub](https://github.com/denssle/mechanischer-gruener-drache)
