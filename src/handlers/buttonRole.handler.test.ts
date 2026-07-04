@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MessageFlags } from 'discord.js';
 import buttonRoleHandler from './buttonRole.handler.js';
 
 // Bot-Mitglied: standardmäßig mit "Rollen verwalten" und über der Zielrolle in der Hierarchie.
@@ -96,7 +97,7 @@ describe('ButtonRoleHandler', () => {
             expect(button.label).toBe('Regeln akzeptieren');
             expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
                 content: expect.stringContaining('Einwohner'),
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             }));
         });
 
@@ -165,7 +166,7 @@ describe('ButtonRoleHandler', () => {
             expect(interaction._member.roles.add).toHaveBeenCalledWith('role-1');
             expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
                 content: expect.stringContaining('Einwohner'),
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             }));
         });
 

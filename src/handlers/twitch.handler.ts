@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, PermissionFlagsBits, TextChannel} from "discord.js";
+import {ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits, TextChannel} from "discord.js";
 import twitchUserService from "../services/twitch.user.service.js";
 import twitchService from "../services/twitch.service.js";
 import {StreamOnlineEvent} from "../types/streamOnlineEvent.js";
@@ -91,7 +91,7 @@ class TwitchHandler {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
                 content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
@@ -157,11 +157,11 @@ class TwitchHandler {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
                 content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const lines: string[] = ['🔍 **Twitch-Diagnose**\n'];
 
@@ -247,7 +247,7 @@ class TwitchHandler {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
                 content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 

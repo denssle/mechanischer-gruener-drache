@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, PermissionFlagsBits} from 'discord.js';
+import {ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits} from 'discord.js';
 import sportService from '../services/sport.service.js';
 import {SportActivities, SportActivity} from '../types/sport.js';
 
@@ -89,7 +89,7 @@ class SportHandler {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
                 content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
@@ -116,7 +116,7 @@ class SportHandler {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
                 content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 

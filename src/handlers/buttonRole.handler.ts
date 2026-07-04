@@ -5,6 +5,7 @@ import {
     ButtonStyle,
     ChatInputCommandInteraction,
     GuildMember,
+    MessageFlags,
     PermissionFlagsBits
 } from 'discord.js';
 
@@ -17,7 +18,7 @@ class ButtonRoleHandler {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
                 content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
@@ -27,7 +28,7 @@ class ButtonRoleHandler {
         const emoji = interaction.options.getString('emoji');
 
         if (!interaction.channel?.isTextBased() || !('send' in interaction.channel)) {
-            return interaction.reply({ content: '❌ In diesem Channel kann ich keine Nachricht posten.', ephemeral: true });
+            return interaction.reply({ content: '❌ In diesem Channel kann ich keine Nachricht posten.', flags: MessageFlags.Ephemeral });
         }
 
         // Direkt beim Erstellen prüfen, ob der Bot die Rolle überhaupt vergeben kann -
@@ -35,13 +36,13 @@ class ButtonRoleHandler {
         const guild = interaction.guild;
         const me = guild?.members.me;
         if (!guild || !me) {
-            return interaction.reply({ content: '❌ Dieser Befehl funktioniert nur auf einem Server.', ephemeral: true });
+            return interaction.reply({ content: '❌ Dieser Befehl funktioniert nur auf einem Server.', flags: MessageFlags.Ephemeral });
         }
 
         if (!me.permissions.has(PermissionFlagsBits.ManageRoles)) {
             return interaction.reply({
                 content: '❌ Mir fehlt die Berechtigung **Rollen verwalten**. Bitte gib sie mir in den Server-Einstellungen.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
@@ -50,7 +51,7 @@ class ButtonRoleHandler {
             return interaction.reply({
                 content: `❌ Die Rolle **${role.name}** steht in der Rollen-Hierarchie gleich hoch oder höher als meine höchste Rolle. `
                     + 'Ziehe meine Bot-Rolle in den Server-Einstellungen **über** diese Rolle.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
@@ -69,7 +70,7 @@ class ButtonRoleHandler {
 
         return interaction.reply({
             content: `✅ Button-Nachricht gepostet. Wer klickt, bekommt die Rolle **${role.name}** (nochmal klicken entfernt sie wieder).`,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     }
 
@@ -92,7 +93,7 @@ class ButtonRoleHandler {
             if (!me?.permissions.has(PermissionFlagsBits.ManageRoles)) {
                 return interaction.reply({
                     content: '❌ Mir fehlt die Berechtigung **Rollen verwalten**. Bitte melde dich bei einem Admin.',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
 
@@ -100,23 +101,23 @@ class ButtonRoleHandler {
                 return interaction.reply({
                     content: `❌ Ich kann die Rolle **${roleName}** nicht vergeben, weil sie in der Hierarchie über meiner Bot-Rolle steht. `
                         + 'Bitte melde dich bei einem Admin.',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
 
             if (member.roles.cache.has(roleId)) {
                 await member.roles.remove(roleId);
-                await interaction.reply({ content: `➖ Rolle **${roleName}** entfernt.`, ephemeral: true });
+                await interaction.reply({ content: `➖ Rolle **${roleName}** entfernt.`, flags: MessageFlags.Ephemeral });
             } else {
                 await member.roles.add(roleId);
-                await interaction.reply({ content: `✅ Du hast jetzt die Rolle **${roleName}**.`, ephemeral: true });
+                await interaction.reply({ content: `✅ Du hast jetzt die Rolle **${roleName}**.`, flags: MessageFlags.Ephemeral });
             }
         } catch (error) {
             console.error('Fehler beim Umschalten der Button-Rolle:', error);
             if (!interaction.replied) {
                 await interaction.reply({
                     content: '❌ Das hat nicht geklappt. Bitte melde dich bei einem Admin.',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 }).catch(() => {});
             }
         }

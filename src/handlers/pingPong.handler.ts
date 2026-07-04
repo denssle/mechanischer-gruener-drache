@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction} from "discord.js";
+import {ChatInputCommandInteraction, MessageFlags} from "discord.js";
 import redisService, {REDIS_KEYS} from "../services/redis.service.js";
 import userService from "../services/user.service.js";
 
@@ -22,7 +22,7 @@ class PingPongHandler {
             return interaction.reply("Das war leider nichts! Du bleibst bei " + score + " Punkten!");
         } catch (error) {
             console.error("Error handling ping pong:", error);
-            return interaction.reply({ content: "Es gab einen Fehler beim Ausführen des Befehls.", ephemeral: true });
+            return interaction.reply({ content: "Es gab einen Fehler beim Ausführen des Befehls.", flags: MessageFlags.Ephemeral });
         }
     }
 
@@ -76,7 +76,7 @@ class PingPongHandler {
             return interaction.reply(message);
         } catch (error) {
             console.error("Error handling ping pong highscore:", error);
-            return interaction.reply({ content: "Es gab einen Fehler beim Abrufen der Highscores.", ephemeral: true });
+            return interaction.reply({ content: "Es gab einen Fehler beim Abrufen der Highscores.", flags: MessageFlags.Ephemeral });
         }
     }
 }

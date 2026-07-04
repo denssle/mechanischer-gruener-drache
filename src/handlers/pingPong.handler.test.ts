@@ -1,4 +1,5 @@
 import {describe, it, expect, vi, beforeEach} from 'vitest';
+import {MessageFlags} from 'discord.js';
 
 vi.mock("../services/redis.service.js", () => ({
     default: {
@@ -72,7 +73,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPong(mockInteraction);
 
-            expect(mockInteraction.reply).toHaveBeenCalledWith(expect.objectContaining({ ephemeral: true }));
+            expect(mockInteraction.reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral }));
         });
     });
 
@@ -144,7 +145,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({ ephemeral: true }));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral }));
         });
     });
 });

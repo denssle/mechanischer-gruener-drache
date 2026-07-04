@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, GuildMember, Message, PartialGuildMember, PartialMessage, PermissionFlagsBits, TextChannel} from 'discord.js';
+import {ChatInputCommandInteraction, GuildMember, Message, MessageFlags, PartialGuildMember, PartialMessage, PermissionFlagsBits, TextChannel} from 'discord.js';
 import client from '../client.js';
 import loggingService from '../services/logging.service.js';
 
@@ -7,7 +7,7 @@ class LoggingHandler {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
                 content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
