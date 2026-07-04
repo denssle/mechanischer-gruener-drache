@@ -90,6 +90,18 @@ class TwitchService {
         return subscriptionId;
     }
 
+    async listStreamOnlineSubscriptions(): Promise<EventSubSubscription[]> {
+        const response = await this.#twitchRequest('/eventsub/subscriptions?type=stream.online');
+
+        if (!response.ok) {
+            console.error(`Fehler beim Abrufen der EventSub-Subscriptions: ${response.statusText}`);
+            return [];
+        }
+
+        const data = await response.json() as { data: EventSubSubscription[] };
+        return data.data ?? [];
+    }
+
     async unsubscribeFromStreamOnline(subscriptionId: string): Promise<boolean> {
         const response = await this.#twitchRequest(`/eventsub/subscriptions?id=${subscriptionId}`, {
             method: 'DELETE',

@@ -12,6 +12,7 @@ vi.mock('../services/twitch.user.service.js', () => ({
         setNotificationChannel: vi.fn(),
         getNotificationRole: vi.fn(),
         setNotificationRole: vi.fn(),
+        getAllLinks: vi.fn(),
     }
 }));
 
@@ -20,6 +21,7 @@ vi.mock('../services/twitch.service.js', () => ({
         getUserByLogin: vi.fn(),
         subscribeToStreamOnline: vi.fn(),
         unsubscribeFromStreamOnline: vi.fn(),
+        listStreamOnlineSubscriptions: vi.fn(),
     }
 }));
 
@@ -235,6 +237,71 @@ describe('TwitchHandler', () => {
 
             expect(twitchUserService.setNotificationRole).toHaveBeenCalledWith('role-1');
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('role-1'));
+        });
+    });
+
+    describe('handleDiagnose', () => {
+        const mockInteraction = (isAdmin = true) => ({
+            memberPermissions: { has: vi.fn().mockReturnValue(isAdmin) },
+            reply: vi.fn(),
+            deferReply: vi.fn().mockResolvedValue(undefined),
+            editReply: vi.fn(),
+        } as any);
+
+        it('lehnt ohne Administrator-Rechte ab', async () => {
+            const interaction = mockInteraction(false);
+
+            await twitchHandler.handleDiagnose(interaction);
+
+            expect(interaction.deferReply).not.toHaveBeenCalled();
+            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
+                content: expect.stringContaining('Administrator-Rechte')
+            }));
+        });
+
+        it('meldet fehlenden Kanal und postet keine Testnachricht', async () => {
+            vi.mocked(twitchUserService.getNotificationChannel).mockResolvedValue(null);
+            vi.mocked(twitchUserService.getNotificationRole).mockResolvedValue(null);
+            vi.mocked(twitchUserService.getAllLinks).mockResolvedValue([]);
+            vi.mocked(twitchService.listStreamOnlineSubscriptions).mockResolvedValue([]);
+            const interaction = mockInteraction();
+
+            await twitchHandler.handleDiagnose(interaction);
+
+            expect(client.channels.fetch).not.toHaveBeenCalled();
+            expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('Kein Benachrichtigungskanal gesetzt'));
+        });
+
+        it('postet eine Testnachricht und meldet alles ok', async () => {
+            const send = vi.fn().mockResolvedValue(undefined);
+            vi.mocked(twitchUserService.getNotificationChannel).mockResolvedValue('channel-1');
+            vi.mocked(twitchUserService.getNotificationRole).mockResolvedValue('role-1');
+            vi.mocked(twitchUserService.getAllLinks).mockResolvedValue([mockLink() as any]);
+            vi.mocked(twitchService.listStreamOnlineSubscriptions).mockResolvedValue([{ id: 'sub-1', status: 'enabled', type: 'stream.online' }]);
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+            const interaction = mockInteraction();
+
+            await twitchHandler.handleDiagnose(interaction);
+
+            expect(send).toHaveBeenCalledTimes(1);
+            const report = interaction.editReply.mock.calls[0][0];
+            expect(report).toContain('<#channel-1>');
+            expect(report).toContain('Testnachricht');
+        });
+
+        it('warnt wenn Subscriptions nicht enabled sind', async () => {
+            vi.mocked(twitchUserService.getNotificationChannel).mockResolvedValue('channel-1');
+            vi.mocked(twitchUserService.getNotificationRole).mockResolvedValue(null);
+            vi.mocked(twitchUserService.getAllLinks).mockResolvedValue([mockLink() as any]);
+            vi.mocked(twitchService.listStreamOnlineSubscriptions).mockResolvedValue([
+                { id: 'sub-1', status: 'webhook_callback_verification_pending', type: 'stream.online' }
+            ]);
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send: vi.fn().mockResolvedValue(undefined) } as any);
+            const interaction = mockInteraction();
+
+            await twitchHandler.handleDiagnose(interaction);
+
+            expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('Nicht alle Subscriptions sind'));
         });
     });
 

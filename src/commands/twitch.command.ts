@@ -36,7 +36,10 @@ export default {
             .addRoleOption(option => option
                 .setName('rolle')
                 .setDescription('Zu pingende Rolle')
-                .setRequired(true))),
+                .setRequired(true)))
+        .addSubcommand(sub => sub
+            .setName('diagnose')
+            .setDescription('Prüft Kanal, Rolle und Subscriptions und postet eine Testnachricht (nur Admins)')),
 
     async execute(interaction: ChatInputCommandInteraction) {
         const subcommand = interaction.options.getSubcommand();
@@ -54,6 +57,8 @@ export default {
                 return twitchHandler.handleHilfe(interaction);
             case 'benachrichtigungsrolle':
                 return twitchHandler.handleBenachrichtigungsrolle(interaction);
+            case 'diagnose':
+                return twitchHandler.handleDiagnose(interaction);
         }
     }
 };

@@ -111,22 +111,29 @@ class TwitchHandler {
             `**/twitch status** – Deine aktuelle Verknüpfung anzeigen\n` +
             `**/twitch benachrichtigungskanal** – Benachrichtigungs-Kanal festlegen (nur Admins)\n` +
             `**/twitch benachrichtigungsrolle** – Rolle für Benachrichtigungen festlegen (nur Admins)\n` +
+            `**/twitch diagnose** – Kanal, Rolle & Subscriptions prüfen + Testnachricht (nur Admins)\n` +
             `**/twitch hilfe** – Zeigt diese Übersicht`
         );
     }
 
     async handleStreamOnline(twitchUserId: string, event: StreamOnlineEvent) {
         const discordUserId = await twitchUserService.getDiscordIdByTwitchId(twitchUserId);
-        if (!discordUserId) return;
+        if (!discordUserId) {
+            console.warn(`⚠️ Twitch-Live-Event für unbekannten Broadcaster ${twitchUserId} (${event.broadcaster_user_login}) - keine Verknüpfung gefunden, ignoriere.`);
+            return;
+        }
 
         const channelId = await twitchUserService.getNotificationChannel();
         if (!channelId) {
-            console.warn('⚠️ Kein Notification-Channel konfiguriert');
+            console.warn('⚠️ Kein Notification-Channel konfiguriert - Live-Meldung wird verworfen.');
             return;
         }
 
         const channel = await client.channels.fetch(channelId) as TextChannel | null;
-        if (!channel) return;
+        if (!channel) {
+            console.warn(`⚠️ Notification-Channel ${channelId} konnte nicht abgerufen werden - Live-Meldung wird verworfen.`);
+            return;
+        }
 
         const storedUser = await userService.getUser(discordUserId);
         const displayName = storedUser?.displayName ?? event.broadcaster_user_name;
@@ -144,6 +151,72 @@ class TwitchHandler {
             `📺 https://twitch.tv/${event.broadcaster_user_login}\n` +
             `⏰ Live seit ${startedAt} Uhr`
         );
+    }
+
+    async handleDiagnose(interaction: ChatInputCommandInteraction) {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({
+                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                ephemeral: true
+            });
+        }
+
+        await interaction.deferReply({ ephemeral: true });
+
+        const lines: string[] = ['🔍 **Twitch-Diagnose**\n'];
+
+        // Benachrichtigungskanal prüfen und auflösen
+        const channelId = await twitchUserService.getNotificationChannel();
+        let channel: TextChannel | null = null;
+        if (!channelId) {
+            lines.push('❌ Kein Benachrichtigungskanal gesetzt – nutze `/twitch benachrichtigungskanal`.');
+        } else {
+            try {
+                channel = await client.channels.fetch(channelId) as TextChannel | null;
+            } catch {
+                channel = null;
+            }
+            lines.push(channel
+                ? `✅ Benachrichtigungskanal: <#${channelId}>`
+                : `⚠️ Benachrichtigungskanal gesetzt (\`${channelId}\`), aber nicht abrufbar (gelöscht oder kein Zugriff?).`);
+        }
+
+        // Rolle prüfen (optional)
+        const roleId = await twitchUserService.getNotificationRole();
+        lines.push(roleId
+            ? `✅ Benachrichtigungsrolle: <@&${roleId}>`
+            : 'ℹ️ Keine Benachrichtigungsrolle gesetzt (optional).');
+
+        // EventSub-Subscriptions bei Twitch abfragen
+        const links = await twitchUserService.getAllLinks();
+        const subscriptions = await twitchService.listStreamOnlineSubscriptions();
+        lines.push(`\n**Verknüpfte User:** ${links.length}`);
+        if (!subscriptions.length) {
+            lines.push('❌ Twitch meldet **keine** `stream.online`-Subscriptions – es kann gar keine Live-Meldung ankommen.');
+        } else {
+            const byStatus = subscriptions.reduce((acc, s) => {
+                acc[s.status] = (acc[s.status] ?? 0) + 1;
+                return acc;
+            }, {} as Record<string, number>);
+            const statusLine = Object.entries(byStatus).map(([status, count]) => `${count}× \`${status}\``).join(', ');
+            lines.push(`**EventSub-Subscriptions:** ${subscriptions.length} (${statusLine})`);
+            if ((byStatus['enabled'] ?? 0) < subscriptions.length) {
+                lines.push('⚠️ Nicht alle Subscriptions sind `enabled`. Nur `enabled` stellt Live-Meldungen zu – `webhook_callback_verification_pending` bedeutet, dass Twitch den Webhook nie verifizieren konnte (Endpoint nicht erreichbar oder `TWITCH_WEBHOOK_SECRET` falsch).');
+            }
+        }
+
+        // End-to-End: Testnachricht in den Kanal posten
+        if (channel) {
+            try {
+                await channel.send('🔔 **Test:** Twitch-Live-Benachrichtigungen landen in diesem Kanal. (ausgelöst durch `/twitch diagnose`)');
+                lines.push('\n✅ Testnachricht in den Kanal gepostet.');
+            } catch (error) {
+                console.error('Fehler beim Senden der Twitch-Diagnose-Testnachricht:', error);
+                lines.push('\n❌ Testnachricht konnte **nicht** gepostet werden – dem Bot fehlen vermutlich die Schreibrechte in dem Kanal.');
+            }
+        }
+
+        return interaction.editReply(lines.join('\n'));
     }
 
     async handleSubscriptionRevoked(subscriptionId: string, reason: string) {
