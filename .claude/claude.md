@@ -92,6 +92,14 @@ Discord-Bot für den Community-Server von [Legend of the Green Dragon (LotGD)](h
 - Der `titel` ist **optional** und wird nur gespeichert, wenn angegeben (kein Default-String mehr). Der Countdown-Satz ist bewusst „**Noch {dauer}** bis zum nächsten Event{ – **titel**}!" formuliert: der Titel steht nach einem Gedankenstrich, **nicht** in einer Präposition – so entfallen Artikel-/Genus-Probleme (`bis zum {titel}` würde bei „die LAN-Party" o.ä. falsch), und die „Noch X"-Konstruktion umgeht das ist/sind-Agreement bei Singular vs. Plural der Restdauer.
 - `event.handler.ts` importiert `client` **nicht** (arbeitet nur mit `interaction`), Verkabelung läuft über `interaction.handler.ts` wie bei allen Slash-Commands – zirkuläre-Import-Falle also kein Thema.
 
+## News-Feature (`/news`)
+
+- Zweck (seit 2026-07-04, war README-Todo): `/news` (alle) holt die neueste Spiel-News von `https://www.lotgd.de/news.php` **live per Scraping** und postet sie als einfachen Text (Titel, Datum, gekürzter Fließtext, Link zum Weiterlesen). Bewusst nur auf Abruf, kein automatisches Posten/Polling und kein State (die einfachste Variante war explizit gewünscht).
+- **Es gibt keinen Feed/keine API** – nur HTML, und das ist **ISO-8859-1** kodiert. `news.service.ts` holt daher `arrayBuffer()` und dekodiert explizit mit `new TextDecoder('iso-8859-1')`, sonst kommen kaputte Umlaute raus.
+- Parsing ohne zusätzliche Dependency (`parseLatestNews`/`htmlToText`, exportiert + getestet): Jeder News-Eintrag ist als `<a name='motdJJJJMMTTHHMMSS'> … <hr></p>` eingefasst. Der `motd`-Anker liefert das Datum direkt (kein Locale-Parsing), das `</p>` ist die Ende-Grenze. Titel = erstes `<b>…</b>`, Body = alles hinter dem `colLtCyan`-Datums-Span bis zum `<hr>`. `<br>`→Zeilenumbruch, restliche Tags (v.a. LotGDs `<span class='colXXX'>`-Farbsoup) raus, gängige HTML-Entities dekodiert.
+- **Fragil by design** (Scraping): ändert lotgd.de sein HTML/seine CSS-Klassen, liefert `parseLatestNews` `null` → Handler meldet „konnte nicht abrufen", crasht aber nicht. `getLatestNews` fängt zusätzlich Netzwerk-/Parse-Fehler ab und gibt `null` zurück. `handleNews` nutzt `deferReply()` (Netz-Call) und kürzt den Text auf 1500 Zeichen (Discord-2000-Limit).
+- `news.handler.ts`/`news.service.ts` importieren `client` nicht – zirkuläre-Import-Falle kein Thema.
+
 ## Links
 
 - [GitHub](https://github.com/denssle/mechanischer-gruener-drache)

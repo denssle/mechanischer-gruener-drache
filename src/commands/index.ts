@@ -6,6 +6,7 @@ import twitch from "./twitch.command.js";
 import log from "./log.command.js";
 import rollenbutton from "./rollenbutton.command.js";
 import event from "./event.command.js";
+import news from "./news.command.js";
 
 export default [
     ping,
@@ -15,5 +16,6 @@ export default [
     twitch,
     log,
     rollenbutton,
-    event
+    event,
+    news
 ];

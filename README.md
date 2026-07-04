@@ -11,6 +11,7 @@ Ein Discord-Bot für den Discord-Server von [LotgD](http://www.lotgd.de/), gesch
 - **Nachrichten-Logging**: Postet bearbeitete/gelöschte Nachrichten (inkl. Massen-Löschungen), Server-Beitritte/-Austritte, Rollen- und Nickname-Änderungen, Timeouts/Mutes sowie Bans/Unbans in einen konfigurierbaren Log-Channel (`/protokoll`).
 - **Rollen-Selbstvergabe**: Ein Admin postet mit `/rollenbutton` eine Nachricht mit einem Button; per Klick geben sich User selbst eine Rolle (nochmal klicken entfernt sie wieder), z.B. für die Regelakzeptanz oder Twitch-Benachrichtigungen. Der Bot braucht dafür "Rollen verwalten"-Rechte und muss in der Rollen-Hierarchie über der zu vergebenden Rolle stehen.
 - **Event-Countdown**: Ein Admin legt den Termin des nächsten Community-Events fest (`/event setzen`); alle können per `/event countdown` fragen, wie lange es noch dauert.
+- **Spiel-News**: `/news` holt die neueste News von [lotgd.de](https://www.lotgd.de/news.php) live ab und postet sie im Chat.
 
 ## 💬 Befehle
 
@@ -34,6 +35,7 @@ Alle Befehle, Subcommands und Optionen sind deutsch benannt. Umlaute in den Name
 | `/protokoll` | Kanal fürs Nachrichten-/Audit-Logging festlegen (Admin) |
 | `/event setzen` · `/event entfernen` | Termin des Community-Events festlegen/entfernen (Admin) |
 | `/event countdown` | Zeigt, wie lange es noch bis zum Event dauert |
+| `/news` | Holt die neueste Spiel-News von lotgd.de und postet sie |
 | `/version` | Zeigt die aktuelle Bot-Version |
 
 `/sport` und `/twitch` haben zusätzlich je einen `hilfe`-Subcommand, der alle zugehörigen Befehle auflistet.
@@ -114,6 +116,6 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] Sport: Summe der Kilometer bearbeitbar (`/sport bearbeiten` für eigene Einträge, `/sport setzen` als Admin-Korrektur)
 - [x] Sport: Bestandskilometer korrigier-/entfernbar (`/sport altkilometer-setzen`, `0` = entfernen)
 - [x] Countdown bis zum Community-Event (`/event setzen` / `/event countdown`)
-- [ ] News aus dem Game anzeigen (https://www.lotgd.de/news.php)
+- [x] News aus dem Game anzeigen (`/news`, live von https://www.lotgd.de/news.php)
 - [ ] Den Bot generalisieren für jeden Server
 - [ ] CI/Deploy-Workflow auf eine neuere Node-Version heben (Node 20 wird für GitHub Actions deprecated)
