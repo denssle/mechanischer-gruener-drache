@@ -1,8 +1,6 @@
 import {ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits} from 'discord.js';
 import eventService from '../services/event.service.js';
 
-const DEFAULT_TITLE = 'das Community-Event';
-
 // Parst "TT.MM.JJJJ" (+ optional "HH:MM") in einen Unix-Timestamp in ms. Gibt null bei
 // ungültiger Eingabe zurück - inkl. Kalender-Validierung (z.B. 32.13. wird abgelehnt),
 // weil new Date() sonst still auf den nächsten gültigen Tag normalisieren würde.
@@ -61,7 +59,7 @@ class EventHandler {
 
         const datum = interaction.options.getString('datum', true);
         const uhrzeit = interaction.options.getString('uhrzeit');
-        const titel = interaction.options.getString('titel') ?? DEFAULT_TITLE;
+        const titel = interaction.options.getString('titel') ?? undefined;
 
         const timestamp = parseGermanDateTime(datum, uhrzeit);
         if (timestamp === null) {
@@ -81,7 +79,8 @@ class EventHandler {
         await eventService.setEvent(timestamp, titel);
 
         const unix = Math.floor(timestamp / 1000);
-        return interaction.reply(`✅ **${titel}** wurde auf <t:${unix}:F> gesetzt (<t:${unix}:R>).`);
+        const was = titel ? `**${titel}**` : 'Das nächste Event';
+        return interaction.reply(`✅ ${was} wurde auf <t:${unix}:F> gesetzt (<t:${unix}:R>).`);
     }
 
     async handleCountdown(interaction: ChatInputCommandInteraction) {
@@ -92,13 +91,19 @@ class EventHandler {
 
         const unix = Math.floor(event.timestamp / 1000);
         const diffMs = event.timestamp - Date.now();
+        // Titel steht bewusst nicht in einer Präposition ("bis zum {titel}"), sondern nach
+        // einem Gedankenstrich - so umgeht man Artikel/Genus-Probleme (z.B. "die LAN-Party").
+        const titelTeil = event.title ? ` – **${event.title}**` : '';
 
         if (diffMs <= 0) {
-            return interaction.reply(`🎉 **${event.title}** ist da – es ist so weit! (Termin war <t:${unix}:F>)`);
+            const text = event.title
+                ? `🎉 **${event.title}** ist da – es ist so weit!`
+                : '🎉 Es ist so weit – das Event ist da!';
+            return interaction.reply(`${text} (Termin war <t:${unix}:F>)`);
         }
 
         return interaction.reply(
-            `⏳ Bis **${event.title}** ist es noch **${formatRemaining(diffMs)}**!\n` +
+            `⏳ Noch **${formatRemaining(diffMs)}** bis zum nächsten Event${titelTeil}!\n` +
             `📅 Termin: <t:${unix}:F> (<t:${unix}:R>)`
         );
     }

@@ -1,4 +1,4 @@
 export interface CommunityEvent {
     timestamp: number;
-    title: string;
+    title?: string;
 }

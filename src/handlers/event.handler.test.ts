@@ -109,13 +109,22 @@ describe('EventHandler', () => {
             }));
         });
 
-        it('speichert ein gültiges zukünftiges Event', async () => {
+        it('speichert ein gültiges zukünftiges Event mit Titel', async () => {
             const interaction = mockInteraction({ titel: 'LAN-Party' });
 
             await eventHandler.handleSetzen(interaction);
 
             expect(eventService.setEvent).toHaveBeenCalledWith(expect.any(Number), 'LAN-Party');
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('LAN-Party'));
+        });
+
+        it('speichert ein Event ohne Titel (undefined) und bestätigt neutral', async () => {
+            const interaction = mockInteraction();
+
+            await eventHandler.handleSetzen(interaction);
+
+            expect(eventService.setEvent).toHaveBeenCalledWith(expect.any(Number), undefined);
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('Das nächste Event'));
         });
     });
 
@@ -129,14 +138,25 @@ describe('EventHandler', () => {
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('kein Event'));
         });
 
-        it('zeigt den Countdown für ein zukünftiges Event', async () => {
+        it('zeigt den Countdown für ein zukünftiges Event mit Titel', async () => {
             vi.mocked(eventService.getEvent).mockResolvedValue({ timestamp: Date.now() + 3 * 86400000, title: 'LAN-Party' });
             const interaction = mockInteraction();
 
             await eventHandler.handleCountdown(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('noch'));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('bis zum nächsten Event'));
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('LAN-Party'));
+        });
+
+        it('zeigt den Countdown ohne Titel neutral (ohne Gedankenstrich-Teil)', async () => {
+            vi.mocked(eventService.getEvent).mockResolvedValue({ timestamp: Date.now() + 3 * 86400000 });
+            const interaction = mockInteraction();
+
+            await eventHandler.handleCountdown(interaction);
+
+            const reply = interaction.reply.mock.calls[0][0];
+            expect(reply).toContain('bis zum nächsten Event!');
+            expect(reply).not.toContain('–');
         });
 
         it('meldet wenn das Event schon da/vorbei ist', async () => {

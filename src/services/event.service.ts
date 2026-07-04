@@ -6,8 +6,9 @@ const KEYS = {
 };
 
 class EventService {
-    async setEvent(timestamp: number, title: string): Promise<void> {
-        const event: CommunityEvent = {timestamp, title};
+    async setEvent(timestamp: number, title?: string): Promise<void> {
+        const event: CommunityEvent = {timestamp};
+        if (title) event.title = title;
         await redisService.set(KEYS.event, JSON.stringify(event));
     }
 

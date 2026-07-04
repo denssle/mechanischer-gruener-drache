@@ -16,12 +16,21 @@ describe('EventService', () => {
         vi.clearAllMocks();
     });
 
-    it('speichert ein Event als JSON unter EVENT:NEXT', async () => {
+    it('speichert ein Event mit Titel als JSON unter EVENT:NEXT', async () => {
         await eventService.setEvent(1700000000000, 'LAN-Party');
 
         expect(redisService.set).toHaveBeenCalledWith(
             'EVENT:NEXT',
             JSON.stringify({ timestamp: 1700000000000, title: 'LAN-Party' })
+        );
+    });
+
+    it('speichert ein Event ohne Titel ohne title-Feld', async () => {
+        await eventService.setEvent(1700000000000);
+
+        expect(redisService.set).toHaveBeenCalledWith(
+            'EVENT:NEXT',
+            JSON.stringify({ timestamp: 1700000000000 })
         );
     });
 
