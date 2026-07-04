@@ -30,6 +30,7 @@ client.on(Events.MessageDelete, (message) => loggingHandler.handleMessageDelete(
 client.on(Events.MessageUpdate, (oldMessage, newMessage) => loggingHandler.handleMessageUpdate(oldMessage, newMessage));
 client.on(Events.GuildMemberAdd, (member) => loggingHandler.handleGuildMemberAdd(member));
 client.on(Events.GuildMemberRemove, (member) => loggingHandler.handleGuildMemberRemove(member));
+client.on(Events.GuildMemberUpdate, (oldMember, newMember) => loggingHandler.handleGuildMemberUpdate(oldMember, newMember));
 
 client.once(Events.ClientReady, async () => {
     console.log(`Eingeloggt als ${client.user?.tag} - Version ${pjson.version}`);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PermissionFlagsBits } from 'discord.js';
+import { Collection, PermissionFlagsBits } from 'discord.js';
 
 vi.mock('../services/logging.service.js', () => ({
     default: {
@@ -240,6 +240,83 @@ describe('LoggingHandler', () => {
             vi.mocked(loggingService.getLogChannel).mockRejectedValue(new Error('Redis kaputt'));
 
             await expect(loggingHandler.handleGuildMemberRemove(mockMember())).resolves.not.toThrow();
+        });
+    });
+
+    describe('handleGuildMemberUpdate', () => {
+        const roleCache = (roles: { id: string; name: string }[]) => {
+            const cache = new Collection<string, { id: string; name: string }>();
+            for (const role of roles) cache.set(role.id, role);
+            return cache;
+        };
+        const mockMember = (roles: { id: string; name: string }[], overrides = {}) => ({
+            partial: false,
+            user: { tag: 'User#0001' },
+            roles: { cache: roleCache(roles) },
+            ...overrides,
+        } as any);
+
+        it('überspringt nicht gecachte (partial) alte Mitglieder', async () => {
+            const oldMember = mockMember([], { partial: true });
+            const newMember = mockMember([{ id: 'r1', name: 'Einwohner' }]);
+
+            await loggingHandler.handleGuildMemberUpdate(oldMember, newMember);
+
+            expect(loggingService.getLogChannel).not.toHaveBeenCalled();
+        });
+
+        it('tut nichts wenn sich die Rollen nicht geändert haben', async () => {
+            const roles = [{ id: 'r1', name: 'Einwohner' }];
+
+            await loggingHandler.handleGuildMemberUpdate(mockMember(roles), mockMember(roles));
+
+            expect(loggingService.getLogChannel).not.toHaveBeenCalled();
+        });
+
+        it('tut nichts wenn kein Log-Channel konfiguriert ist', async () => {
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue(null);
+            const oldMember = mockMember([]);
+            const newMember = mockMember([{ id: 'r1', name: 'Einwohner' }]);
+
+            await loggingHandler.handleGuildMemberUpdate(oldMember, newMember);
+
+            expect(client.channels.fetch).not.toHaveBeenCalled();
+        });
+
+        it('loggt eine erhaltene Rolle', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+            const oldMember = mockMember([{ id: 'r1', name: 'Basis' }]);
+            const newMember = mockMember([{ id: 'r1', name: 'Basis' }, { id: 'r2', name: 'Einwohner' }]);
+
+            await loggingHandler.handleGuildMemberUpdate(oldMember, newMember);
+
+            expect(send).toHaveBeenCalledTimes(1);
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Einwohner'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('erhalten'));
+        });
+
+        it('loggt eine verlorene Rolle', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+            const oldMember = mockMember([{ id: 'r1', name: 'Basis' }, { id: 'r2', name: 'Twitch' }]);
+            const newMember = mockMember([{ id: 'r1', name: 'Basis' }]);
+
+            await loggingHandler.handleGuildMemberUpdate(oldMember, newMember);
+
+            expect(send).toHaveBeenCalledTimes(1);
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Twitch'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('verloren'));
+        });
+
+        it('fängt Fehler beim Loggen ab', async () => {
+            vi.mocked(loggingService.getLogChannel).mockRejectedValue(new Error('Redis kaputt'));
+            const oldMember = mockMember([]);
+            const newMember = mockMember([{ id: 'r1', name: 'Einwohner' }]);
+
+            await expect(loggingHandler.handleGuildMemberUpdate(oldMember, newMember)).resolves.not.toThrow();
         });
     });
 });

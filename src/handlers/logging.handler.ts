@@ -89,6 +89,34 @@ class LoggingHandler {
         }
     }
 
+    async handleGuildMemberUpdate(oldMember: GuildMember | PartialGuildMember, newMember: GuildMember) {
+        try {
+            // Ohne gecachtes altes Mitglied kein Rollen-Diff möglich - dann lieber nichts
+            // loggen als falsche "Rolle erhalten"-Meldungen für alle bestehenden Rollen.
+            if (oldMember.partial) return;
+
+            const oldRoles = oldMember.roles.cache;
+            const newRoles = newMember.roles.cache;
+
+            const addedRoles = newRoles.filter(role => !oldRoles.has(role.id));
+            const removedRoles = oldRoles.filter(role => !newRoles.has(role.id));
+
+            if (!addedRoles.size && !removedRoles.size) return;
+
+            const logChannel = await this.getLogChannel();
+            if (!logChannel) return;
+
+            for (const role of addedRoles.values()) {
+                await logChannel.send(`➕ **${newMember.user.tag}** hat die Rolle **${role.name}** erhalten.`);
+            }
+            for (const role of removedRoles.values()) {
+                await logChannel.send(`➖ **${newMember.user.tag}** hat die Rolle **${role.name}** verloren.`);
+            }
+        } catch (error) {
+            console.error('Fehler beim Loggen der Rollenänderung:', error);
+        }
+    }
+
     private async getLogChannel(): Promise<TextChannel | null> {
         const channelId = await loggingService.getLogChannel();
         if (!channelId) return null;
