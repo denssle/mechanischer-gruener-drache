@@ -72,6 +72,10 @@ class RedisService {
     async incrementSortedSet(key: string, value: string, increment: number): Promise<void> {
         await this.#client.zIncrBy(key, increment, value);
     }
+
+    async removeFromSortedSet(key: string, value: string): Promise<void> {
+        await this.#client.zRem(key, value);
+    }
 }
 
 export default new RedisService();

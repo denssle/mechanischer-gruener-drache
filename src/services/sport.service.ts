@@ -83,6 +83,21 @@ class SportService {
     async addLegacyKilometer(kilometers: number): Promise<void> {
         await redisService.incrementSortedSet(KEYS.highscore, DUMMY_USER_ID, kilometers);
     }
+
+    async getLegacyKilometer(): Promise<number> {
+        const alle = await redisService.getSortedSetAll(KEYS.highscore);
+        return alle.find(item => item.value === DUMMY_USER_ID)?.score ?? 0;
+    }
+
+    // Setzt die Bestandskilometer direkt (statt zu addieren). 0 (oder weniger) entfernt
+    // den Legacy-Eintrag ganz aus der Bestenliste, statt einen 0-Eintrag zu hinterlassen.
+    async setLegacyKilometer(kilometers: number): Promise<void> {
+        if (kilometers <= 0) {
+            await redisService.removeFromSortedSet(KEYS.highscore, DUMMY_USER_ID);
+        } else {
+            await redisService.setSortedSet(KEYS.highscore, DUMMY_USER_ID, kilometers);
+        }
+    }
 }
 
 export default new SportService();

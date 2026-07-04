@@ -71,6 +71,14 @@ export default {
                 .setName('kilometer')
                 .setDescription('Anzahl der Kilometer')
                 .setRequired(true)
+                .setMinValue(0)))
+        .addSubcommand(sub => sub
+            .setName('altkilometer-setzen')
+            .setDescription('Bestandskilometer auf einen Wert setzen; 0 entfernt sie (nur Admins)')
+            .addNumberOption(option => option
+                .setName('kilometer')
+                .setDescription('Neuer Bestandskilometer-Wert (0 = entfernen)')
+                .setRequired(true)
                 .setMinValue(0))),
 
     async execute(interaction: ChatInputCommandInteraction) {
@@ -93,6 +101,8 @@ export default {
                 return sportHandler.handleGesamt(interaction);
             case 'altkilometer':
                 return sportHandler.handleAltkilometer(interaction);
+            case 'altkilometer-setzen':
+                return sportHandler.handleAltkilometerSetzen(interaction);
         }
     }
 };

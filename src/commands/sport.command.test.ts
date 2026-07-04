@@ -10,6 +10,7 @@ vi.mock('../handlers/sport.handler.js', () => ({
         handleSetzen: vi.fn(),
         handleGesamt: vi.fn(),
         handleAltkilometer: vi.fn(),
+        handleAltkilometerSetzen: vi.fn(),
     }
 }));
 
@@ -34,6 +35,7 @@ describe('sport.command', () => {
         ['setzen', 'handleSetzen'],
         ['gesamt', 'handleGesamt'],
         ['altkilometer', 'handleAltkilometer'],
+        ['altkilometer-setzen', 'handleAltkilometerSetzen'],
     ] as const)('leitet Subcommand "%s" an sportHandler.%s weiter', async (subcommand, handlerMethod) => {
         const interaction = mockInteraction(subcommand);
 
@@ -56,7 +58,7 @@ describe('sport.command', () => {
         const definedSubcommands = sportCommand.data.options.map((option) => option.toJSON().name);
         const dispatchedSubcommands = [
             'eintragen', 'loeschen', 'bearbeiten', 'statistik',
-            'hilfe', 'setzen', 'gesamt', 'altkilometer',
+            'hilfe', 'setzen', 'gesamt', 'altkilometer', 'altkilometer-setzen',
         ];
 
         expect(definedSubcommands.sort()).toEqual(dispatchedSubcommands.sort());

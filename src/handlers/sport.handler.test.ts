@@ -9,6 +9,8 @@ vi.mock('../services/sport.service.js', () => ({
         setKilometer: vi.fn(),
         getGesamtKilometer: vi.fn(),
         addLegacyKilometer: vi.fn(),
+        getLegacyKilometer: vi.fn(),
+        setLegacyKilometer: vi.fn(),
     }
 }));
 
@@ -201,6 +203,43 @@ describe('SportHandler', () => {
 
             expect(sportService.addLegacyKilometer).toHaveBeenCalledWith(50);
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('50 km'));
+        });
+    });
+
+    describe('handleAltkilometerSetzen', () => {
+        const mockInteraction = (isAdmin: boolean, kilometer = 200) => ({
+            memberPermissions: { has: vi.fn().mockReturnValue(isAdmin) },
+            options: { getNumber: vi.fn().mockReturnValue(kilometer) },
+            reply: vi.fn(),
+        } as any);
+
+        it('lehnt ohne Administrator-Rechte ab', async () => {
+            const interaction = mockInteraction(false);
+
+            await sportHandler.handleAltkilometerSetzen(interaction);
+
+            expect(sportService.setLegacyKilometer).not.toHaveBeenCalled();
+        });
+
+        it('setzt die Bestandskilometer und nennt den vorherigen Wert', async () => {
+            vi.mocked(sportService.getLegacyKilometer).mockResolvedValue(120);
+            const interaction = mockInteraction(true, 200);
+
+            await sportHandler.handleAltkilometerSetzen(interaction);
+
+            expect(sportService.setLegacyKilometer).toHaveBeenCalledWith(200);
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('200 km'));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('120 km'));
+        });
+
+        it('meldet das Entfernen wenn auf 0 gesetzt wird', async () => {
+            vi.mocked(sportService.getLegacyKilometer).mockResolvedValue(80);
+            const interaction = mockInteraction(true, 0);
+
+            await sportHandler.handleAltkilometerSetzen(interaction);
+
+            expect(sportService.setLegacyKilometer).toHaveBeenCalledWith(0);
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('entfernt'));
         });
     });
 });

@@ -9,6 +9,7 @@ vi.mock('../services/redis.service.js', () => ({
         removeFromList: vi.fn(),
         getList: vi.fn(),
         incrementSortedSet: vi.fn(),
+        removeFromSortedSet: vi.fn(),
         getSortedSet: vi.fn(),
         getSortedSetAll: vi.fn(),
         setSortedSet: vi.fn(),
@@ -149,6 +150,41 @@ describe('SportService', () => {
             await sportService.addLegacyKilometer(100);
 
             expect(redisService.incrementSortedSet).toHaveBeenCalledWith('SPORT:HIGHSCORE', 'LEGACY_KILOMETERS', 100);
+        });
+    });
+
+    describe('getLegacyKilometer', () => {
+        it('liest den aktuellen Bestandskilometer-Wert aus der Bestenliste', async () => {
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([
+                { value: 'user-1', score: 30 },
+                { value: 'LEGACY_KILOMETERS', score: 250 },
+            ] as any);
+
+            const wert = await sportService.getLegacyKilometer();
+
+            expect(wert).toBe(250);
+        });
+
+        it('gibt 0 zurück wenn kein Legacy-Eintrag existiert', async () => {
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{ value: 'user-1', score: 30 }] as any);
+
+            expect(await sportService.getLegacyKilometer()).toBe(0);
+        });
+    });
+
+    describe('setLegacyKilometer', () => {
+        it('setzt den Bestandskilometer-Wert direkt', async () => {
+            await sportService.setLegacyKilometer(500);
+
+            expect(redisService.setSortedSet).toHaveBeenCalledWith('SPORT:HIGHSCORE', 'LEGACY_KILOMETERS', 500);
+            expect(redisService.removeFromSortedSet).not.toHaveBeenCalled();
+        });
+
+        it('entfernt den Legacy-Eintrag ganz wenn auf 0 gesetzt wird', async () => {
+            await sportService.setLegacyKilometer(0);
+
+            expect(redisService.removeFromSortedSet).toHaveBeenCalledWith('SPORT:HIGHSCORE', 'LEGACY_KILOMETERS');
+            expect(redisService.setSortedSet).not.toHaveBeenCalled();
         });
     });
 

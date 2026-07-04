@@ -81,6 +81,7 @@ class SportHandler {
             `**/sport statistik** – Deine persönliche Übersicht pro Aktivität\n` +
             `**/sport setzen** – Kilometerstand eines Mitglieds setzen (nur Admins)\n` +
             `**/sport altkilometer** – Altkilometer ohne zugeordnetes Mitglied einspeisen (nur Admins)\n` +
+            `**/sport altkilometer-setzen** – Bestandskilometer setzen/entfernen (0 = weg) (nur Admins)\n` +
             `**/sport hilfe** – Zeigt diese Übersicht`
         );
     }
@@ -125,6 +126,29 @@ class SportHandler {
 
         return interaction.reply(
             `✅ **${kilometer} km** wurden als Altdaten eingespeist.`
+        );
+    }
+
+    async handleAltkilometerSetzen(interaction: ChatInputCommandInteraction) {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({
+                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const kilometer = interaction.options.getNumber('kilometer', true);
+        const vorher = await sportService.getLegacyKilometer();
+        await sportService.setLegacyKilometer(kilometer);
+
+        if (kilometer <= 0) {
+            return interaction.reply(
+                `✅ Bestandskilometer entfernt (vorher **${vorher} km**).`
+            );
+        }
+
+        return interaction.reply(
+            `✅ Bestandskilometer auf **${kilometer} km** gesetzt (vorher **${vorher} km**).`
         );
     }
 }
