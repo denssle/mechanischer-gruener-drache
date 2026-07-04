@@ -76,9 +76,21 @@ class TwitchWebhookServer {
     }
 
     start(port: number = 3000) {
-        this.#app.listen(port, () => {
+        const server = this.#app.listen(port, () => {
             console.log(`Webhook-Server läuft auf Port ${port}`);
         });
+        // Ohne diesen Handler verschwindet ein fehlgeschlagenes Bind (z.B. EADDRINUSE,
+        // wenn ein alter Prozess den Port noch hält) lautlos: der Bot läuft weiter,
+        // aber Twitch-Callbacks kommen nie an und Live-Meldungen brechen still weg.
+        server.on('error', (error) => this.handleServerError(port, error));
+        return server;
+    }
+
+    handleServerError(port: number, error: Error) {
+        console.error(
+            `❌ Webhook-Server konnte Port ${port} nicht binden - Twitch-Callbacks werden NICHT ankommen, Live-Meldungen brechen still weg:`,
+            error
+        );
     }
 
     #verifySignature(req: Request): boolean {

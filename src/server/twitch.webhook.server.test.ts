@@ -103,6 +103,16 @@ describe('TwitchWebhookServer', () => {
         expect(res.sendStatus).toHaveBeenCalledWith(403);
     });
 
+    it('sollte einen fehlgeschlagenen Port-Bind laut loggen statt still zu scheitern', () => {
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const error = new Error('listen EADDRINUSE: address already in use :::3000');
+
+        twitchWebhookServer.handleServerError(3000, error);
+
+        expect(spy).toHaveBeenCalledWith(expect.stringContaining('nicht binden'), error);
+        spy.mockRestore();
+    });
+
     it('sollte eine Revocation verarbeiten und den Callback aufrufen', async () => {
         const callback = vi.fn();
         twitchWebhookServer.onRevocation(callback);

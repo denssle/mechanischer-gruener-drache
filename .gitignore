@@ -5,3 +5,4 @@
 config.json
 *.js.map
 *.d.ts
+*.log
