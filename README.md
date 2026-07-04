@@ -4,12 +4,36 @@ Ein Discord-Bot für den Discord-Server von [LotgD](http://www.lotgd.de/), gesch
 
 ## 🚀 Features
 
-- **Ping-Pong Spiel**: Ein einfaches Spiel mit Highscore-System (gespeichert in Redis).
-- **Twitch-Integration**: Sendet Benachrichtigungen, wenn ein Streamer online geht (via Webhooks).
-- **Sport-Tracking**: Verfolgung von sportlichen Aktivitäten (Summe der Kilometer).
-- **Automatisches Rollen-Management**: Aktualisiert User-Daten bei Namensänderungen oder Rollen-Updates.
+- **Ping-Pong-Spiel**: Ein einfaches Spiel (`/pingpong`) mit Bestenliste (`/pingbestenliste`), gespeichert in Redis.
+- **Twitch-Integration**: User verknüpfen ihren eigenen Twitch-Kanal (`/twitch verknuepfen`); der Bot meldet per Webhook, wenn sie live gehen. Admin-Diagnose via `/twitch diagnose`.
+- **Sport-Tracking**: Bewusst kooperativ – alle tragen ihre Kilometer zu einer gemeinsamen Gesamtsumme bei (`/sport gesamt`), keine Rangliste.
+- **User-Daten-Tracking**: Hält intern Namen und Rollen der Mitglieder aktuell (z.B. damit Live-Meldungen den richtigen Namen zeigen).
 - **Nachrichten-Logging**: Postet bearbeitete/gelöschte Nachrichten (inkl. Massen-Löschungen), Server-Beitritte/-Austritte, Rollen- und Nickname-Änderungen, Timeouts/Mutes sowie Bans/Unbans in einen konfigurierbaren Log-Channel (`/protokoll`).
 - **Rollen-Selbstvergabe**: Ein Admin postet mit `/rollenbutton` eine Nachricht mit einem Button; per Klick geben sich User selbst eine Rolle (nochmal klicken entfernt sie wieder), z.B. für die Regelakzeptanz oder Twitch-Benachrichtigungen. Der Bot braucht dafür "Rollen verwalten"-Rechte und muss in der Rollen-Hierarchie über der zu vergebenden Rolle stehen.
+
+## 💬 Befehle
+
+Alle Befehle, Subcommands und Optionen sind deutsch benannt. Umlaute in den Namen sind bewusst als `ae/oe/ue` geschrieben (Discord erlaubt keine Umlaute in Command-Namen).
+
+| Befehl | Beschreibung |
+|---|---|
+| `/pingpong` | Spielt eine Runde Ping-Pong |
+| `/pingbestenliste` | Zeigt die Ping-Pong-Bestenliste |
+| `/sport eintragen` | Sportliche Aktivität mit Kilometern eintragen |
+| `/sport statistik` | Eigene Statistik pro Aktivität |
+| `/sport gesamt` | Gemeinsame Gesamtkilometer aller Mitglieder |
+| `/sport bearbeiten` · `/sport loeschen` | Eigenen Eintrag korrigieren bzw. löschen |
+| `/sport setzen` | Kilometerstand eines Mitglieds direkt setzen (Admin) |
+| `/sport altkilometer` | Bestandskilometer ohne zugeordnetes Mitglied addieren (Admin) |
+| `/sport altkilometer-setzen` | Bestandskilometer auf einen Wert setzen; `0` entfernt sie (Admin) |
+| `/twitch verknuepfen` · `/twitch entfernen` · `/twitch status` | Eigenen Twitch-Kanal verknüpfen, entfernen, anzeigen |
+| `/twitch benachrichtigungskanal` · `/twitch benachrichtigungsrolle` | Ziel-Kanal & Ping-Rolle für Live-Meldungen (Admin) |
+| `/twitch diagnose` | Kanal, Rolle & EventSub-Subscriptions prüfen + Testnachricht (Admin) |
+| `/rollenbutton` | Nachricht mit Button posten, über den User sich selbst eine Rolle geben (Admin) |
+| `/protokoll` | Kanal fürs Nachrichten-/Audit-Logging festlegen (Admin) |
+| `/version` | Zeigt die aktuelle Bot-Version |
+
+`/sport` und `/twitch` haben zusätzlich je einen `hilfe`-Subcommand, der alle zugehörigen Befehle auflistet.
 
 ## 🛠 Architektur
 
@@ -82,11 +106,12 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] Redis-Anbindung (stabilisiert)
 - [x] Twitch-Integration & Webhook-Server
 - [x] Umfangreiche Testabdeckung
-- [x] Logging (bearbeitete/gelöschte Nachrichten via `/protokoll kanal:<#channel>`)
+- [x] Logging (`/protokoll`): Nachrichten-Edits/-Deletes inkl. Massen-Löschungen, Beitritt/Austritt, Rollen-, Nickname- & Timeout-Änderungen, Bans/Unbans
 - [x] Rollen-Selbstvergabe (Button-Rollen via `/rollenbutton`)
-- [ ] Gesamtkilometerzähler zurücksetzen
+- [x] Sport: Summe der Kilometer bearbeitbar (`/sport bearbeiten` für eigene Einträge, `/sport setzen` als Admin-Korrektur)
+- [x] Sport: Bestandskilometer korrigier-/entfernbar (`/sport altkilometer-setzen`, `0` = entfernen)
+- [ ] Gesamtkilometerzähler komplett zurücksetzen (alle Mitglieder)
 - [ ] Tage bis zum Treffen
 - [ ] News aus dem Game anzeigen (https://www.lotgd.de/news.php)
-- [x] Sport: Summe der Kilometer bearbeitbar (`/sport bearbeiten` für eigene Einträge, `/sport setzen` als Admin-Korrektur)
 - [ ] Den Bot generalisieren für jeden Server
 - [ ] CI/Deploy-Workflow auf eine neuere Node-Version heben (Node 20 wird für GitHub Actions deprecated)
