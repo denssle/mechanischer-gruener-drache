@@ -4,7 +4,7 @@ import pingHighscore from "./pingHighscore.command.js";
 import sport from "./sport.command.js";
 import twitch from "./twitch.command.js";
 import log from "./log.command.js";
-import rolle from "./rolle.command.js";
+import rollenbutton from "./rollenbutton.command.js";
 
 export default [
     ping,
@@ -13,5 +13,5 @@ export default [
     sport,
     twitch,
     log,
-    rolle
+    rollenbutton
 ];

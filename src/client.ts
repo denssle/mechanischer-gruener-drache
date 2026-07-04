@@ -13,14 +13,11 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessageReactions
+        GatewayIntentBits.GuildMembers
     ],
-    // Ohne Partials feuern MessageDelete/MessageUpdate/MessageReactionAdd/-Remove für
-    // nicht (mehr) gecachte Nachrichten/Reactions gar nicht erst - wichtig fürs
-    // Nachrichten-Logging und die Reaction-Roles (die sollen ja auch nach einem
-    // Bot-Neustart noch auf alte Nachrichten reagieren können).
-    partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User]
+    // Ohne Partials feuern MessageDelete/MessageUpdate für nicht (mehr) gecachte
+    // Nachrichten gar nicht erst - wichtig fürs Nachrichten-Logging.
+    partials: [Partials.Message, Partials.Channel]
 });
 
 client.commands = new Collection();

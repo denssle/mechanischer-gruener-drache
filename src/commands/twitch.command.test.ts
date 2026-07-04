@@ -36,7 +36,7 @@ describe('twitch.command', () => {
         await twitchCommand.execute(interaction);
 
         expect(twitchHandler[handlerMethod]).toHaveBeenCalledWith(interaction);
-        for (const [otherName, otherMethod] of Object.entries({
+        for (const [otherName] of Object.entries({
             handleSet: 'set', handleRemove: 'remove', handleInfo: 'info',
             handleNotificationChannel: 'notification-channel', handleHilfe: 'hilfe',
             handleNotificationRolle: 'notification-rolle',

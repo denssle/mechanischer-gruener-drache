@@ -9,7 +9,7 @@ Ein Discord-Bot für den Discord-Server von [LotgD](http://www.lotgd.de/), gesch
 - **Sport-Tracking**: Verfolgung von sportlichen Aktivitäten (Summe der Kilometer).
 - **Automatisches Rollen-Management**: Aktualisiert User-Daten bei Namensänderungen oder Rollen-Updates.
 - **Nachrichten-Logging**: Postet bearbeitete/gelöschte Nachrichten sowie Server-Beitritte/-Austritte in einen konfigurierbaren Log-Channel (`/log`).
-- **Reaction-Roles**: Reaktion mit einem Emoji auf eine Nachricht vergibt automatisch eine Rolle, z.B. für die Regelakzeptanz (`/rolle`). Der Bot braucht dafür "Rollen verwalten"-Rechte und muss in der Rollen-Hierarchie über der zu vergebenden Rolle stehen.
+- **Rollen-Selbstvergabe**: Ein Admin postet mit `/rollenbutton` eine Nachricht mit einem Button; per Klick geben sich User selbst eine Rolle (nochmal klicken entfernt sie wieder), z.B. für die Regelakzeptanz oder Twitch-Benachrichtigungen. Der Bot braucht dafür "Rollen verwalten"-Rechte und muss in der Rollen-Hierarchie über der zu vergebenden Rolle stehen.
 
 ## 🛠 Architektur
 
@@ -83,7 +83,7 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] Twitch-Integration & Webhook-Server
 - [x] Umfangreiche Testabdeckung
 - [x] Logging (bearbeitete/gelöschte Nachrichten via `/log channel:<#channel>`)
-- [x] Rollenvergabe (Reaction-Roles via `/rolle hinzufuegen`/`entfernen`)
+- [x] Rollen-Selbstvergabe (Button-Rollen via `/rollenbutton`)
 - [ ] Tage bis zum Treffen
 - [ ] News aus dem Game anzeigen
 - [x] Sport: Summe der Kilometer bearbeitbar (`/sport bearbeiten` für eigene Einträge, `/sport setzen` als Admin-Korrektur)

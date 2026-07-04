@@ -1,6 +1,7 @@
 import {Events, Interaction, Collection} from "discord.js";
 import client from "../client.js";
 import { Command } from "../types/discord.js";
+import buttonRoleHandler from "./buttonRole.handler.js";
 
 declare module 'discord.js' {
     interface Client {
@@ -9,6 +10,11 @@ declare module 'discord.js' {
 }
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
+    if (interaction.isButton()) {
+        await buttonRoleHandler.handleButton(interaction);
+        return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     const command = client.commands.get(interaction.commandName);
