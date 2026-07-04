@@ -84,8 +84,9 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] Umfangreiche Testabdeckung
 - [x] Logging (bearbeitete/gelöschte Nachrichten via `/protokoll kanal:<#channel>`)
 - [x] Rollen-Selbstvergabe (Button-Rollen via `/rollenbutton`)
+- [ ] Gesamtkilometerzähler zurücksetzen
 - [ ] Tage bis zum Treffen
-- [ ] News aus dem Game anzeigen
+- [ ] News aus dem Game anzeigen (https://www.lotgd.de/news.php)
 - [x] Sport: Summe der Kilometer bearbeitbar (`/sport bearbeiten` für eigene Einträge, `/sport setzen` als Admin-Korrektur)
 - [ ] Den Bot generalisieren für jeden Server
 - [ ] CI/Deploy-Workflow auf eine neuere Node-Version heben (Node 20 wird für GitHub Actions deprecated)

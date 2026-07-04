@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import buttonRoleHandler from './buttonRole.handler.js';
 
+// Bot-Mitglied: standardmäßig mit "Rollen verwalten" und über der Zielrolle in der Hierarchie.
+const mockMe = (canManage = true, aboveTarget = true) => ({
+    permissions: { has: vi.fn().mockReturnValue(canManage) },
+    roles: { highest: { comparePositionTo: vi.fn().mockReturnValue(aboveTarget ? 1 : 0) } },
+});
+
 describe('ButtonRoleHandler', () => {
     beforeEach(() => {
         vi.resetAllMocks();
@@ -21,6 +27,10 @@ describe('ButtonRoleHandler', () => {
             channel: {
                 isTextBased: () => true,
                 send: vi.fn().mockResolvedValue({}),
+            },
+            guild: {
+                members: { me: mockMe() },
+                roles: { cache: new Map([['role-1', { id: 'role-1', name: 'Einwohner' }]]) },
             },
             reply: vi.fn(),
             ...overrides,
@@ -44,6 +54,32 @@ describe('ButtonRoleHandler', () => {
 
             expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
                 content: expect.stringContaining('keine Nachricht posten')
+            }));
+        });
+
+        it('lehnt ab wenn dem Bot "Rollen verwalten" fehlt', async () => {
+            const interaction = mockInteraction({
+                guild: { members: { me: mockMe(false) }, roles: { cache: new Map([['role-1', { id: 'role-1', name: 'Einwohner' }]]) } }
+            });
+
+            await buttonRoleHandler.handleCreate(interaction);
+
+            expect(interaction.channel.send).not.toHaveBeenCalled();
+            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
+                content: expect.stringContaining('Rollen verwalten')
+            }));
+        });
+
+        it('lehnt ab wenn die Zielrolle über der Bot-Rolle steht', async () => {
+            const interaction = mockInteraction({
+                guild: { members: { me: mockMe(true, false) }, roles: { cache: new Map([['role-1', { id: 'role-1', name: 'Einwohner' }]]) } }
+            });
+
+            await buttonRoleHandler.handleCreate(interaction);
+
+            expect(interaction.channel.send).not.toHaveBeenCalled();
+            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
+                content: expect.stringContaining('Hierarchie')
             }));
         });
 
@@ -97,13 +133,14 @@ describe('ButtonRoleHandler', () => {
 
         const mockInteraction = (overrides: any = {}) => {
             const member = overrides.member ?? mockMember();
+            const me = overrides.me ?? mockMe();
             return {
                 customId: 'role-toggle:role-1',
                 member: {},
                 user: { id: 'user-1' },
                 guild: {
-                    roles: { cache: new Map([['role-1', { name: 'Einwohner' }]]) },
-                    members: { fetch: vi.fn().mockResolvedValue(member) },
+                    roles: { cache: new Map([['role-1', { id: 'role-1', name: 'Einwohner' }]]) },
+                    members: { fetch: vi.fn().mockResolvedValue(member), me },
                 },
                 reply: vi.fn().mockResolvedValue(undefined),
                 replied: false,
@@ -140,6 +177,28 @@ describe('ButtonRoleHandler', () => {
 
             expect(member.roles.remove).toHaveBeenCalledWith('role-1');
             expect(member.roles.add).not.toHaveBeenCalled();
+        });
+
+        it('lehnt ab wenn dem Bot "Rollen verwalten" fehlt', async () => {
+            const interaction = mockInteraction({ me: mockMe(false) });
+
+            await buttonRoleHandler.handleButton(interaction);
+
+            expect(interaction._member.roles.add).not.toHaveBeenCalled();
+            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
+                content: expect.stringContaining('Rollen verwalten')
+            }));
+        });
+
+        it('lehnt ab wenn die Rolle über der Bot-Rolle steht', async () => {
+            const interaction = mockInteraction({ me: mockMe(true, false) });
+
+            await buttonRoleHandler.handleButton(interaction);
+
+            expect(interaction._member.roles.add).not.toHaveBeenCalled();
+            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
+                content: expect.stringContaining('Hierarchie')
+            }));
         });
 
         it('fängt Fehler ab und antwortet dem User', async () => {

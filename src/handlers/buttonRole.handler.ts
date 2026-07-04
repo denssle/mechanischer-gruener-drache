@@ -30,6 +30,30 @@ class ButtonRoleHandler {
             return interaction.reply({ content: '❌ In diesem Channel kann ich keine Nachricht posten.', ephemeral: true });
         }
 
+        // Direkt beim Erstellen prüfen, ob der Bot die Rolle überhaupt vergeben kann -
+        // sonst klickt später jemand und bekommt nur "Missing Permissions".
+        const guild = interaction.guild;
+        const me = guild?.members.me;
+        if (!guild || !me) {
+            return interaction.reply({ content: '❌ Dieser Befehl funktioniert nur auf einem Server.', ephemeral: true });
+        }
+
+        if (!me.permissions.has(PermissionFlagsBits.ManageRoles)) {
+            return interaction.reply({
+                content: '❌ Mir fehlt die Berechtigung **Rollen verwalten**. Bitte gib sie mir in den Server-Einstellungen.',
+                ephemeral: true
+            });
+        }
+
+        const targetRole = guild.roles.cache.get(role.id);
+        if (targetRole && me.roles.highest.comparePositionTo(targetRole) <= 0) {
+            return interaction.reply({
+                content: `❌ Die Rolle **${role.name}** steht in der Rollen-Hierarchie gleich hoch oder höher als meine höchste Rolle. `
+                    + 'Ziehe meine Bot-Rolle in den Server-Einstellungen **über** diese Rolle.',
+                ephemeral: true
+            });
+        }
+
         const button = new ButtonBuilder()
             .setCustomId(`${CUSTOM_ID_PREFIX}${role.id}`)
             .setLabel(label)
@@ -61,7 +85,24 @@ class ButtonRoleHandler {
                 ? interaction.member
                 : await guild.members.fetch(interaction.user.id);
 
-            const roleName = guild.roles.cache.get(roleId)?.name ?? 'Rolle';
+            const role = guild.roles.cache.get(roleId);
+            const roleName = role?.name ?? 'Rolle';
+
+            const me = guild.members.me;
+            if (!me?.permissions.has(PermissionFlagsBits.ManageRoles)) {
+                return interaction.reply({
+                    content: '❌ Mir fehlt die Berechtigung **Rollen verwalten**. Bitte melde dich bei einem Admin.',
+                    ephemeral: true
+                });
+            }
+
+            if (role && me.roles.highest.comparePositionTo(role) <= 0) {
+                return interaction.reply({
+                    content: `❌ Ich kann die Rolle **${roleName}** nicht vergeben, weil sie in der Hierarchie über meiner Bot-Rolle steht. `
+                        + 'Bitte melde dich bei einem Admin.',
+                    ephemeral: true
+                });
+            }
 
             if (member.roles.cache.has(roleId)) {
                 await member.roles.remove(roleId);
