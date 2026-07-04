@@ -22,6 +22,7 @@ Discord-Bot für den Community-Server von [Legend of the Green Dragon (LotGD)](h
 - Command-Definitionen sind untypisierte Objektliteralle (`export default { data, execute }`), keine `satisfies Command` o.ä. Der `Command`-Typ (`src/types/discord.ts`) existiert nur für `client.commands`/`interaction.handler.ts`.
 - Redis-Keys immer als KEYS-Objekt im Service
 - deferReply() bei API-Calls die länger dauern können
+- Ephemere Antworten über `flags: MessageFlags.Ephemeral`, **nicht** das seit discord.js v14 deprecatete `ephemeral: true` (schrieb bei jeder Nutzung eine Deprecation-Warnung ins persistierte Log; am 2026-07-04 projektweit umgestellt).
 - Tests mit Vitest, Redis wird pro Testdatei inline mit `vi.mock('../services/redis.service.js', () => ({ default: { ... } }))` gemockt (kein zentrales Mock-File, `src/mocks/` existiert nicht)
 
 ## Deployment
