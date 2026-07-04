@@ -272,12 +272,14 @@ describe('TwitchHandler', () => {
             expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('Kein Benachrichtigungskanal gesetzt'));
         });
 
-        it('postet eine Testnachricht und meldet alles ok', async () => {
+        it('postet eine Testnachricht und meldet alles ok, inkl. User pro Subscription', async () => {
             const send = vi.fn().mockResolvedValue(undefined);
             vi.mocked(twitchUserService.getNotificationChannel).mockResolvedValue('channel-1');
             vi.mocked(twitchUserService.getNotificationRole).mockResolvedValue('role-1');
             vi.mocked(twitchUserService.getAllLinks).mockResolvedValue([mockLink() as any]);
-            vi.mocked(twitchService.listStreamOnlineSubscriptions).mockResolvedValue([{ id: 'sub-1', status: 'enabled', type: 'stream.online' }]);
+            vi.mocked(twitchService.listStreamOnlineSubscriptions).mockResolvedValue([
+                { id: 'sub-1', status: 'enabled', type: 'stream.online', condition: { broadcaster_user_id: 'twitch-1' } }
+            ]);
             vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
             const interaction = mockInteraction();
 
@@ -287,21 +289,44 @@ describe('TwitchHandler', () => {
             const report = interaction.editReply.mock.calls[0][0];
             expect(report).toContain('<#channel-1>');
             expect(report).toContain('Testnachricht');
+            // Broadcaster wird dem verknüpften Discord-User zugeordnet
+            expect(report).toContain('TestStreamer');
+            expect(report).toContain('<@discord-1>');
         });
 
-        it('warnt wenn Subscriptions nicht enabled sind', async () => {
+        it('warnt wenn Subscriptions nicht enabled sind und nennt den betroffenen User', async () => {
             vi.mocked(twitchUserService.getNotificationChannel).mockResolvedValue('channel-1');
             vi.mocked(twitchUserService.getNotificationRole).mockResolvedValue(null);
             vi.mocked(twitchUserService.getAllLinks).mockResolvedValue([mockLink() as any]);
             vi.mocked(twitchService.listStreamOnlineSubscriptions).mockResolvedValue([
-                { id: 'sub-1', status: 'webhook_callback_verification_pending', type: 'stream.online' }
+                { id: 'sub-1', status: 'webhook_callback_verification_pending', type: 'stream.online', condition: { broadcaster_user_id: 'twitch-1' } }
             ]);
             vi.mocked(client.channels.fetch).mockResolvedValue({ send: vi.fn().mockResolvedValue(undefined) } as any);
             const interaction = mockInteraction();
 
             await twitchHandler.handleDiagnose(interaction);
 
-            expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('Nicht alle Subscriptions sind'));
+            const report = interaction.editReply.mock.calls[0][0];
+            expect(report).toContain('Nicht alle Subscriptions sind');
+            expect(report).toContain('TestStreamer');
+            expect(report).toContain('webhook_callback_verification_pending');
+        });
+
+        it('markiert Subscriptions ohne passende Verknüpfung als verwaist', async () => {
+            vi.mocked(twitchUserService.getNotificationChannel).mockResolvedValue('channel-1');
+            vi.mocked(twitchUserService.getNotificationRole).mockResolvedValue(null);
+            vi.mocked(twitchUserService.getAllLinks).mockResolvedValue([]);
+            vi.mocked(twitchService.listStreamOnlineSubscriptions).mockResolvedValue([
+                { id: 'sub-1', status: 'enabled', type: 'stream.online', condition: { broadcaster_user_id: 'fremd-99' } }
+            ]);
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send: vi.fn().mockResolvedValue(undefined) } as any);
+            const interaction = mockInteraction();
+
+            await twitchHandler.handleDiagnose(interaction);
+
+            const report = interaction.editReply.mock.calls[0][0];
+            expect(report).toContain('keine Verknüpfung im Bot');
+            expect(report).toContain('fremd-99');
         });
     });
 

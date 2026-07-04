@@ -189,6 +189,7 @@ class TwitchHandler {
 
         // EventSub-Subscriptions bei Twitch abfragen
         const links = await twitchUserService.getAllLinks();
+        const linkByTwitchId = new Map(links.map(link => [link.twitchUserId, link]));
         const subscriptions = await twitchService.listStreamOnlineSubscriptions();
         lines.push(`\n**Verknüpfte User:** ${links.length}`);
         if (!subscriptions.length) {
@@ -200,8 +201,23 @@ class TwitchHandler {
             }, {} as Record<string, number>);
             const statusLine = Object.entries(byStatus).map(([status, count]) => `${count}× \`${status}\``).join(', ');
             lines.push(`**EventSub-Subscriptions:** ${subscriptions.length} (${statusLine})`);
+
+            // Pro Subscription: welcher Broadcaster / Discord-User, welcher Status
+            for (const sub of subscriptions.slice(0, 25)) {
+                const broadcasterId = sub.condition?.broadcaster_user_id;
+                const link = broadcasterId ? linkByTwitchId.get(broadcasterId) : undefined;
+                const wer = link
+                    ? `**${link.twitchDisplayName}** (<@${link.discordUserId}>)`
+                    : `Broadcaster \`${broadcasterId ?? '?'}\` (keine Verknüpfung im Bot)`;
+                const emoji = sub.status === 'enabled' ? '✅' : '⚠️';
+                lines.push(`${emoji} ${wer} – \`${sub.status}\``);
+            }
+            if (subscriptions.length > 25) {
+                lines.push(`… und ${subscriptions.length - 25} weitere.`);
+            }
+
             if ((byStatus['enabled'] ?? 0) < subscriptions.length) {
-                lines.push('⚠️ Nicht alle Subscriptions sind `enabled`. Nur `enabled` stellt Live-Meldungen zu – `webhook_callback_verification_pending` bedeutet, dass Twitch den Webhook nie verifizieren konnte (Endpoint nicht erreichbar oder `TWITCH_WEBHOOK_SECRET` falsch).');
+                lines.push('⚠️ Nicht alle Subscriptions sind `enabled`. Nur `enabled` stellt Live-Meldungen zu – `webhook_callback_verification_pending` bedeutet, dass Twitch den Webhook nie verifizieren konnte (Endpoint nicht erreichbar oder `TWITCH_WEBHOOK_SECRET` falsch). Der betroffene User muss `/twitch entfernen` → `/twitch verknuepfen` neu ausführen.');
             }
         }
 
