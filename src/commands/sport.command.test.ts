@@ -2,14 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../handlers/sport.handler.js', () => ({
     default: {
-        handleHinzufuegen: vi.fn(),
+        handleEintragen: vi.fn(),
         handleLoeschen: vi.fn(),
         handleBearbeiten: vi.fn(),
         handleStatistik: vi.fn(),
         handleHilfe: vi.fn(),
         handleSetzen: vi.fn(),
         handleGesamt: vi.fn(),
-        handleLegacy: vi.fn(),
+        handleAltkilometer: vi.fn(),
     }
 }));
 
@@ -26,14 +26,14 @@ describe('sport.command', () => {
     });
 
     it.each([
-        ['hinzufuegen', 'handleHinzufuegen'],
+        ['eintragen', 'handleEintragen'],
         ['loeschen', 'handleLoeschen'],
         ['bearbeiten', 'handleBearbeiten'],
         ['statistik', 'handleStatistik'],
         ['hilfe', 'handleHilfe'],
         ['setzen', 'handleSetzen'],
         ['gesamt', 'handleGesamt'],
-        ['legacy', 'handleLegacy'],
+        ['altkilometer', 'handleAltkilometer'],
     ] as const)('leitet Subcommand "%s" an sportHandler.%s weiter', async (subcommand, handlerMethod) => {
         const interaction = mockInteraction(subcommand);
 
@@ -55,8 +55,8 @@ describe('sport.command', () => {
     it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
         const definedSubcommands = sportCommand.data.options.map((option) => option.toJSON().name);
         const dispatchedSubcommands = [
-            'hinzufuegen', 'loeschen', 'bearbeiten', 'statistik',
-            'hilfe', 'setzen', 'gesamt', 'legacy',
+            'eintragen', 'loeschen', 'bearbeiten', 'statistik',
+            'hilfe', 'setzen', 'gesamt', 'altkilometer',
         ];
 
         expect(definedSubcommands.sort()).toEqual(dispatchedSubcommands.sort());

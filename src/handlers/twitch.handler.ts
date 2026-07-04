@@ -6,8 +6,8 @@ import client from "../client.js";
 import userService from "../services/user.service.js";
 
 class TwitchHandler {
-    async handleSet(interaction: ChatInputCommandInteraction) {
-        const twitchLogin = interaction.options.getString('channel', true).toLowerCase();
+    async handleVerknuepfen(interaction: ChatInputCommandInteraction) {
+        const twitchLogin = interaction.options.getString('benutzername', true).toLowerCase();
 
         await interaction.deferReply();
 
@@ -16,7 +16,7 @@ class TwitchHandler {
         if (existingLink) {
             return interaction.editReply(
                 `Du hast bereits **${existingLink.twitchDisplayName}** verknüpft. ` +
-                `Nutze \`/twitch remove\` um die Verknüpfung zuerst zu entfernen.`
+                `Nutze \`/twitch entfernen\` um die Verknüpfung zuerst zu entfernen.`
             );
         }
 
@@ -47,7 +47,7 @@ class TwitchHandler {
         );
     }
 
-    async handleRemove(interaction: ChatInputCommandInteraction) {
+    async handleEntfernen(interaction: ChatInputCommandInteraction) {
         await interaction.deferReply();
 
         const link = await twitchUserService.getLinkByDiscordId(interaction.user.id);
@@ -69,12 +69,12 @@ class TwitchHandler {
         );
     }
 
-    async handleInfo(interaction: ChatInputCommandInteraction) {
+    async handleStatus(interaction: ChatInputCommandInteraction) {
         const link = await twitchUserService.getLinkByDiscordId(interaction.user.id);
         if (!link) {
             return interaction.reply(
-                '❌ Du hast keinen Twitch-Channel verknüpft.\n' +
-                'Nutze `/twitch set <channel>` um einen zu hinterlegen.'
+                '❌ Du hast keinen Twitch-Kanal verknüpft.\n' +
+                'Nutze `/twitch verknuepfen <benutzername>` um einen zu hinterlegen.'
             );
         }
 
@@ -87,7 +87,7 @@ class TwitchHandler {
         );
     }
 
-    async handleNotificationChannel(interaction: ChatInputCommandInteraction) {
+    async handleBenachrichtigungskanal(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
                 content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
@@ -95,7 +95,7 @@ class TwitchHandler {
             });
         }
 
-        const channel = interaction.options.getChannel('channel', true);
+        const channel = interaction.options.getChannel('kanal', true);
         await twitchUserService.setNotificationChannel(channel.id);
 
         return interaction.reply(
@@ -106,11 +106,11 @@ class TwitchHandler {
     async handleHilfe(interaction: ChatInputCommandInteraction) {
         return interaction.reply(
             `📖 **Twitch-Befehle**\n\n` +
-            `**/twitch set** – Deinen Twitch-Channel hinterlegen\n` +
-            `**/twitch remove** – Deine Twitch-Verknüpfung entfernen\n` +
-            `**/twitch info** – Deine aktuelle Verknüpfung anzeigen\n` +
-            `**/twitch notification-channel** – Notification-Channel festlegen (nur Admins)\n` +
-            `**/twitch notification-rolle** – Rolle für Notifications festlegen (nur Admins)\n` +
+            `**/twitch verknuepfen** – Deinen Twitch-Kanal hinterlegen\n` +
+            `**/twitch entfernen** – Deine Twitch-Verknüpfung entfernen\n` +
+            `**/twitch status** – Deine aktuelle Verknüpfung anzeigen\n` +
+            `**/twitch benachrichtigungskanal** – Benachrichtigungs-Kanal festlegen (nur Admins)\n` +
+            `**/twitch benachrichtigungsrolle** – Rolle für Benachrichtigungen festlegen (nur Admins)\n` +
             `**/twitch hilfe** – Zeigt diese Übersicht`
         );
     }
@@ -154,7 +154,7 @@ class TwitchHandler {
         await twitchUserService.unlinkUser(discordUserId);
     }
 
-    async handleNotificationRolle(interaction: ChatInputCommandInteraction) {
+    async handleBenachrichtigungsrolle(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
                 content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',

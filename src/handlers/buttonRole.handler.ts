@@ -23,7 +23,7 @@ class ButtonRoleHandler {
 
         const text = interaction.options.getString('text', true);
         const role = interaction.options.getRole('rolle', true);
-        const label = interaction.options.getString('label', true);
+        const label = interaction.options.getString('beschriftung', true);
         const emoji = interaction.options.getString('emoji');
 
         if (!interaction.channel?.isTextBased() || !('send' in interaction.channel)) {

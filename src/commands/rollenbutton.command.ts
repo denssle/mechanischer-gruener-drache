@@ -14,7 +14,7 @@ export default {
             .setDescription('Rolle, die der Button vergibt')
             .setRequired(true))
         .addStringOption(option => option
-            .setName('label')
+            .setName('beschriftung')
             .setDescription('Beschriftung des Buttons')
             .setRequired(true))
         .addStringOption(option => option

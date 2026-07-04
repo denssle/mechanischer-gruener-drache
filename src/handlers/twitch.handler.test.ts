@@ -58,7 +58,7 @@ describe('TwitchHandler', () => {
         vi.clearAllMocks();
     });
 
-    describe('handleSet', () => {
+    describe('handleVerknuepfen', () => {
         const mockInteraction = (channel = 'teststreamer') => ({
             user: { id: 'discord-1' },
             options: { getString: vi.fn().mockReturnValue(channel) },
@@ -70,7 +70,7 @@ describe('TwitchHandler', () => {
             vi.mocked(twitchUserService.getLinkByDiscordId).mockResolvedValue(mockLink());
             const interaction = mockInteraction();
 
-            await twitchHandler.handleSet(interaction);
+            await twitchHandler.handleVerknuepfen(interaction);
 
             expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('TestStreamer'));
             expect(twitchService.getUserByLogin).not.toHaveBeenCalled();
@@ -81,7 +81,7 @@ describe('TwitchHandler', () => {
             vi.mocked(twitchService.getUserByLogin).mockResolvedValue(null);
             const interaction = mockInteraction('unbekannt');
 
-            await twitchHandler.handleSet(interaction);
+            await twitchHandler.handleVerknuepfen(interaction);
 
             expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('nicht gefunden'));
             expect(twitchUserService.linkUser).not.toHaveBeenCalled();
@@ -95,7 +95,7 @@ describe('TwitchHandler', () => {
             vi.mocked(twitchService.subscribeToStreamOnline).mockResolvedValue(null);
             const interaction = mockInteraction();
 
-            await twitchHandler.handleSet(interaction);
+            await twitchHandler.handleVerknuepfen(interaction);
 
             expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('Fehler'));
             expect(twitchUserService.linkUser).not.toHaveBeenCalled();
@@ -109,7 +109,7 @@ describe('TwitchHandler', () => {
             vi.mocked(twitchService.subscribeToStreamOnline).mockResolvedValue('sub-1');
             const interaction = mockInteraction();
 
-            await twitchHandler.handleSet(interaction);
+            await twitchHandler.handleVerknuepfen(interaction);
 
             expect(twitchUserService.linkUser).toHaveBeenCalledWith(
                 'discord-1', 'twitch-1', 'teststreamer', 'TestStreamer', 'sub-1'
@@ -118,7 +118,7 @@ describe('TwitchHandler', () => {
         });
     });
 
-    describe('handleRemove', () => {
+    describe('handleEntfernen', () => {
         const mockInteraction = () => ({
             user: { id: 'discord-1' },
             deferReply: vi.fn(),
@@ -129,7 +129,7 @@ describe('TwitchHandler', () => {
             vi.mocked(twitchUserService.getLinkByDiscordId).mockResolvedValue(null);
             const interaction = mockInteraction();
 
-            await twitchHandler.handleRemove(interaction);
+            await twitchHandler.handleEntfernen(interaction);
 
             expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('keinen Twitch-Channel'));
             expect(twitchService.unsubscribeFromStreamOnline).not.toHaveBeenCalled();
@@ -140,7 +140,7 @@ describe('TwitchHandler', () => {
             vi.mocked(twitchService.unsubscribeFromStreamOnline).mockResolvedValue(true);
             const interaction = mockInteraction();
 
-            await twitchHandler.handleRemove(interaction);
+            await twitchHandler.handleEntfernen(interaction);
 
             expect(twitchService.unsubscribeFromStreamOnline).toHaveBeenCalledWith('sub-1');
             expect(twitchUserService.unlinkUser).toHaveBeenCalledWith('discord-1');
@@ -152,14 +152,14 @@ describe('TwitchHandler', () => {
             vi.mocked(twitchService.unsubscribeFromStreamOnline).mockResolvedValue(false);
             const interaction = mockInteraction();
 
-            await twitchHandler.handleRemove(interaction);
+            await twitchHandler.handleEntfernen(interaction);
 
             expect(twitchUserService.unlinkUser).not.toHaveBeenCalled();
             expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('Fehler'));
         });
     });
 
-    describe('handleInfo', () => {
+    describe('handleStatus', () => {
         const mockInteraction = () => ({
             user: { id: 'discord-1' },
             reply: vi.fn(),
@@ -169,22 +169,22 @@ describe('TwitchHandler', () => {
             vi.mocked(twitchUserService.getLinkByDiscordId).mockResolvedValue(null);
             const interaction = mockInteraction();
 
-            await twitchHandler.handleInfo(interaction);
+            await twitchHandler.handleStatus(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('keinen Twitch-Channel'));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('keinen Twitch-Kanal'));
         });
 
         it('zeigt die bestehende Verknüpfung an', async () => {
             vi.mocked(twitchUserService.getLinkByDiscordId).mockResolvedValue(mockLink());
             const interaction = mockInteraction();
 
-            await twitchHandler.handleInfo(interaction);
+            await twitchHandler.handleStatus(interaction);
 
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('TestStreamer'));
         });
     });
 
-    describe('handleNotificationChannel', () => {
+    describe('handleBenachrichtigungskanal', () => {
         const mockInteraction = (isAdmin: boolean) => ({
             memberPermissions: { has: vi.fn().mockReturnValue(isAdmin) },
             options: { getChannel: vi.fn().mockReturnValue({ id: 'channel-1' }) },
@@ -194,7 +194,7 @@ describe('TwitchHandler', () => {
         it('lehnt ohne Administrator-Rechte ab', async () => {
             const interaction = mockInteraction(false);
 
-            await twitchHandler.handleNotificationChannel(interaction);
+            await twitchHandler.handleBenachrichtigungskanal(interaction);
 
             expect(twitchUserService.setNotificationChannel).not.toHaveBeenCalled();
             expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
@@ -205,7 +205,7 @@ describe('TwitchHandler', () => {
         it('setzt den Notification-Channel mit Administrator-Rechten', async () => {
             const interaction = mockInteraction(true);
 
-            await twitchHandler.handleNotificationChannel(interaction);
+            await twitchHandler.handleBenachrichtigungskanal(interaction);
 
             expect(interaction.memberPermissions.has).toHaveBeenCalledWith(PermissionFlagsBits.Administrator);
             expect(twitchUserService.setNotificationChannel).toHaveBeenCalledWith('channel-1');
@@ -213,7 +213,7 @@ describe('TwitchHandler', () => {
         });
     });
 
-    describe('handleNotificationRolle', () => {
+    describe('handleBenachrichtigungsrolle', () => {
         const mockInteraction = (isAdmin: boolean) => ({
             memberPermissions: { has: vi.fn().mockReturnValue(isAdmin) },
             options: { getRole: vi.fn().mockReturnValue({ id: 'role-1' }) },
@@ -223,7 +223,7 @@ describe('TwitchHandler', () => {
         it('lehnt ohne Administrator-Rechte ab', async () => {
             const interaction = mockInteraction(false);
 
-            await twitchHandler.handleNotificationRolle(interaction);
+            await twitchHandler.handleBenachrichtigungsrolle(interaction);
 
             expect(twitchUserService.setNotificationRole).not.toHaveBeenCalled();
         });
@@ -231,7 +231,7 @@ describe('TwitchHandler', () => {
         it('setzt die Notification-Rolle mit Administrator-Rechten', async () => {
             const interaction = mockInteraction(true);
 
-            await twitchHandler.handleNotificationRolle(interaction);
+            await twitchHandler.handleBenachrichtigungsrolle(interaction);
 
             expect(twitchUserService.setNotificationRole).toHaveBeenCalledWith('role-1');
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('role-1'));

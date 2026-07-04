@@ -4,10 +4,10 @@ import sportHandler from '../handlers/sport.handler.js';
 export default {
     data: new SlashCommandBuilder()
         .setName('sport')
-        .setDescription('Sport Tracking')
+        .setDescription('Sportliche Aktivitäten tracken')
         .addSubcommand(sub => sub
-            .setName('hinzufuegen')
-            .setDescription('Sport Eintrag hinzufügen')
+            .setName('eintragen')
+            .setDescription('Neue sportliche Aktivität eintragen')
             .addStringOption(option => option
                 .setName('aktivitaet')
                 .setDescription('Art der Aktivität')
@@ -51,10 +51,10 @@ export default {
             .setDescription('Zeigt alle verfügbaren Sport-Befehle'))
         .addSubcommand(sub => sub
             .setName('setzen')
-            .setDescription('Kilometer eines Users manuell setzen (nur Admins)')
+            .setDescription('Kilometer eines Mitglieds manuell setzen (nur Admins)')
             .addUserOption(option => option
-                .setName('user')
-                .setDescription('Discord-User')
+                .setName('mitglied')
+                .setDescription('Discord-Mitglied')
                 .setRequired(true))
             .addNumberOption(option => option
                 .setName('kilometer')
@@ -65,8 +65,8 @@ export default {
             .setName('gesamt')
             .setDescription('Gesamtkilometer aller Sportler'))
         .addSubcommand(sub => sub
-            .setName('legacy')
-            .setDescription('Altkilometer ohne User einspeisen (nur Admins)')
+            .setName('altkilometer')
+            .setDescription('Altkilometer ohne zugeordnetes Mitglied einspeisen (nur Admins)')
             .addNumberOption(option => option
                 .setName('kilometer')
                 .setDescription('Anzahl der Kilometer')
@@ -77,8 +77,8 @@ export default {
         const subcommand = interaction.options.getSubcommand();
 
         switch (subcommand) {
-            case 'hinzufuegen':
-                return sportHandler.handleHinzufuegen(interaction);
+            case 'eintragen':
+                return sportHandler.handleEintragen(interaction);
             case 'loeschen':
                 return sportHandler.handleLoeschen(interaction);
             case 'bearbeiten':
@@ -87,12 +87,12 @@ export default {
                 return sportHandler.handleStatistik(interaction);
             case 'hilfe':
                 return sportHandler.handleHilfe(interaction);
-            case "setzen":
+            case 'setzen':
                 return sportHandler.handleSetzen(interaction);
             case 'gesamt':
                 return sportHandler.handleGesamt(interaction);
-            case 'legacy':
-                return sportHandler.handleLegacy(interaction);
+            case 'altkilometer':
+                return sportHandler.handleAltkilometer(interaction);
         }
     }
 };

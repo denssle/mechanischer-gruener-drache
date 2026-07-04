@@ -3,8 +3,8 @@ import pingPongHandler from "../handlers/pingPong.handler.js";
 
 export default {
     data: new SlashCommandBuilder()
-        .setName('pinghighscore')
-        .setDescription('Zeigt die Ping Pong Highscore'),
+        .setName('pingbestenliste')
+        .setDescription('Zeigt die Ping-Pong-Bestenliste'),
 
     async execute(interaction: ChatInputCommandInteraction) {
         await pingPongHandler.handlePingPongHighscore(interaction);

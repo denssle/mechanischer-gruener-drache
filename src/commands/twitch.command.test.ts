@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../handlers/twitch.handler.js', () => ({
     default: {
-        handleSet: vi.fn(),
-        handleRemove: vi.fn(),
-        handleInfo: vi.fn(),
-        handleNotificationChannel: vi.fn(),
+        handleVerknuepfen: vi.fn(),
+        handleEntfernen: vi.fn(),
+        handleStatus: vi.fn(),
+        handleBenachrichtigungskanal: vi.fn(),
         handleHilfe: vi.fn(),
-        handleNotificationRolle: vi.fn(),
+        handleBenachrichtigungsrolle: vi.fn(),
     }
 }));
 
@@ -24,12 +24,12 @@ describe('twitch.command', () => {
     });
 
     it.each([
-        ['set', 'handleSet'],
-        ['remove', 'handleRemove'],
-        ['info', 'handleInfo'],
-        ['notification-channel', 'handleNotificationChannel'],
+        ['verknuepfen', 'handleVerknuepfen'],
+        ['entfernen', 'handleEntfernen'],
+        ['status', 'handleStatus'],
+        ['benachrichtigungskanal', 'handleBenachrichtigungskanal'],
         ['hilfe', 'handleHilfe'],
-        ['notification-rolle', 'handleNotificationRolle'],
+        ['benachrichtigungsrolle', 'handleBenachrichtigungsrolle'],
     ] as const)('leitet Subcommand "%s" an twitchHandler.%s weiter', async (subcommand, handlerMethod) => {
         const interaction = mockInteraction(subcommand);
 
@@ -37,9 +37,9 @@ describe('twitch.command', () => {
 
         expect(twitchHandler[handlerMethod]).toHaveBeenCalledWith(interaction);
         for (const [otherName] of Object.entries({
-            handleSet: 'set', handleRemove: 'remove', handleInfo: 'info',
-            handleNotificationChannel: 'notification-channel', handleHilfe: 'hilfe',
-            handleNotificationRolle: 'notification-rolle',
+            handleVerknuepfen: 'verknuepfen', handleEntfernen: 'entfernen', handleStatus: 'status',
+            handleBenachrichtigungskanal: 'benachrichtigungskanal', handleHilfe: 'hilfe',
+            handleBenachrichtigungsrolle: 'benachrichtigungsrolle',
         })) {
             if (otherName !== handlerMethod) {
                 expect(twitchHandler[otherName as keyof typeof twitchHandler]).not.toHaveBeenCalled();
@@ -52,17 +52,17 @@ describe('twitch.command', () => {
 
         await twitchCommand.execute(interaction);
 
-        expect(twitchHandler.handleSet).not.toHaveBeenCalled();
-        expect(twitchHandler.handleRemove).not.toHaveBeenCalled();
-        expect(twitchHandler.handleInfo).not.toHaveBeenCalled();
-        expect(twitchHandler.handleNotificationChannel).not.toHaveBeenCalled();
+        expect(twitchHandler.handleVerknuepfen).not.toHaveBeenCalled();
+        expect(twitchHandler.handleEntfernen).not.toHaveBeenCalled();
+        expect(twitchHandler.handleStatus).not.toHaveBeenCalled();
+        expect(twitchHandler.handleBenachrichtigungskanal).not.toHaveBeenCalled();
         expect(twitchHandler.handleHilfe).not.toHaveBeenCalled();
-        expect(twitchHandler.handleNotificationRolle).not.toHaveBeenCalled();
+        expect(twitchHandler.handleBenachrichtigungsrolle).not.toHaveBeenCalled();
     });
 
     it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
         const definedSubcommands = twitchCommand.data.options.map((option) => option.toJSON().name);
-        const dispatchedSubcommands = ['set', 'remove', 'info', 'notification-channel', 'hilfe', 'notification-rolle'];
+        const dispatchedSubcommands = ['verknuepfen', 'entfernen', 'status', 'benachrichtigungskanal', 'hilfe', 'benachrichtigungsrolle'];
 
         expect(definedSubcommands.sort()).toEqual(dispatchedSubcommands.sort());
     });

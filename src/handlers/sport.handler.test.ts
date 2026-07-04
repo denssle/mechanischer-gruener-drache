@@ -29,7 +29,7 @@ describe('SportHandler', () => {
         vi.clearAllMocks();
     });
 
-    describe('handleHinzufuegen', () => {
+    describe('handleEintragen', () => {
         it('speichert den Eintrag und bestätigt ihn', async () => {
             vi.mocked(sportService.addEntry).mockResolvedValue(mockEntry());
             const interaction = {
@@ -41,7 +41,7 @@ describe('SportHandler', () => {
                 reply: vi.fn(),
             } as any;
 
-            await sportHandler.handleHinzufuegen(interaction);
+            await sportHandler.handleEintragen(interaction);
 
             expect(sportService.addEntry).toHaveBeenCalledWith('user-123', 'laufen', 10);
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('10 km'));
@@ -179,7 +179,7 @@ describe('SportHandler', () => {
         });
     });
 
-    describe('handleLegacy', () => {
+    describe('handleAltkilometer', () => {
         const mockInteraction = (isAdmin: boolean) => ({
             memberPermissions: { has: vi.fn().mockReturnValue(isAdmin) },
             options: { getNumber: vi.fn().mockReturnValue(50) },
@@ -189,7 +189,7 @@ describe('SportHandler', () => {
         it('lehnt ohne Administrator-Rechte ab', async () => {
             const interaction = mockInteraction(false);
 
-            await sportHandler.handleLegacy(interaction);
+            await sportHandler.handleAltkilometer(interaction);
 
             expect(sportService.addLegacyKilometer).not.toHaveBeenCalled();
         });
@@ -197,7 +197,7 @@ describe('SportHandler', () => {
         it('speist die Altdaten mit Administrator-Rechten ein', async () => {
             const interaction = mockInteraction(true);
 
-            await sportHandler.handleLegacy(interaction);
+            await sportHandler.handleAltkilometer(interaction);
 
             expect(sportService.addLegacyKilometer).toHaveBeenCalledWith(50);
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('50 km'));

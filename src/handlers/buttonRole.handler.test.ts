@@ -12,7 +12,7 @@ describe('ButtonRoleHandler', () => {
             options: {
                 getString: vi.fn((name: string) => {
                     if (name === 'text') return 'Klick mich';
-                    if (name === 'label') return 'Regeln akzeptieren';
+                    if (name === 'beschriftung') return 'Regeln akzeptieren';
                     if (name === 'emoji') return null;
                     return null;
                 }),
@@ -69,7 +69,7 @@ describe('ButtonRoleHandler', () => {
                 options: {
                     getString: vi.fn((name: string) => {
                         if (name === 'text') return 'Klick mich';
-                        if (name === 'label') return 'Regeln akzeptieren';
+                        if (name === 'beschriftung') return 'Regeln akzeptieren';
                         if (name === 'emoji') return '✅';
                         return null;
                     }),

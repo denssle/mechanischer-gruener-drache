@@ -7,32 +7,32 @@ export default {
         .setName('twitch')
         .setDescription('Twitch-Verknüpfung verwalten')
         .addSubcommand(sub => sub
-            .setName('set')
-            .setDescription('Deinen Twitch-Channel hinterlegen')
+            .setName('verknuepfen')
+            .setDescription('Deinen Twitch-Kanal hinterlegen')
             .addStringOption(option => option
-                .setName('channel')
+                .setName('benutzername')
                 .setDescription('Dein Twitch-Benutzername')
                 .setRequired(true)))
         .addSubcommand(sub => sub
-            .setName('remove')
+            .setName('entfernen')
             .setDescription('Deine Twitch-Verknüpfung entfernen'))
         .addSubcommand(sub => sub
-            .setName('info')
+            .setName('status')
             .setDescription('Deine aktuelle Twitch-Verknüpfung anzeigen'))
         .addSubcommand(sub => sub
-            .setName('notification-channel')
-            .setDescription('Discord-Channel für Twitch-Notifications festlegen (nur Admins)')
+            .setName('benachrichtigungskanal')
+            .setDescription('Discord-Kanal für Twitch-Benachrichtigungen festlegen (nur Admins)')
             .addChannelOption((option) => option
-                .setName('channel')
-                .setDescription('Discord-Channel für Notifications')
+                .setName('kanal')
+                .setDescription('Discord-Kanal für Benachrichtigungen')
                 .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
                 .setRequired(true)))
         .addSubcommand(sub => sub
             .setName('hilfe')
             .setDescription('Zeigt alle verfügbaren Twitch-Befehle'))
         .addSubcommand(sub => sub
-            .setName('notification-rolle')
-            .setDescription('Rolle die bei Twitch-Notifications gepingt wird (nur Admins)')
+            .setName('benachrichtigungsrolle')
+            .setDescription('Rolle die bei Twitch-Benachrichtigungen gepingt wird (nur Admins)')
             .addRoleOption(option => option
                 .setName('rolle')
                 .setDescription('Zu pingende Rolle')
@@ -42,18 +42,18 @@ export default {
         const subcommand = interaction.options.getSubcommand();
 
         switch (subcommand) {
-            case 'set':
-                return twitchHandler.handleSet(interaction);
-            case 'remove':
-                return twitchHandler.handleRemove(interaction);
-            case 'info':
-                return twitchHandler.handleInfo(interaction);
-            case 'notification-channel':
-                return twitchHandler.handleNotificationChannel(interaction);
+            case 'verknuepfen':
+                return twitchHandler.handleVerknuepfen(interaction);
+            case 'entfernen':
+                return twitchHandler.handleEntfernen(interaction);
+            case 'status':
+                return twitchHandler.handleStatus(interaction);
+            case 'benachrichtigungskanal':
+                return twitchHandler.handleBenachrichtigungskanal(interaction);
             case 'hilfe':
                 return twitchHandler.handleHilfe(interaction);
-            case 'notification-rolle':
-                return twitchHandler.handleNotificationRolle(interaction);
+            case 'benachrichtigungsrolle':
+                return twitchHandler.handleBenachrichtigungsrolle(interaction);
         }
     }
 };

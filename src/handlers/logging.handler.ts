@@ -11,7 +11,7 @@ class LoggingHandler {
             });
         }
 
-        const channel = interaction.options.getChannel('channel', true);
+        const channel = interaction.options.getChannel('kanal', true);
         await loggingService.setLogChannel(channel.id);
 
         return interaction.reply(

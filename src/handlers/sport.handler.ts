@@ -3,7 +3,7 @@ import sportService from '../services/sport.service.js';
 import {SportActivities, SportActivity} from '../types/sport.js';
 
 class SportHandler {
-    async handleHinzufuegen(interaction: ChatInputCommandInteraction) {
+    async handleEintragen(interaction: ChatInputCommandInteraction) {
         const aktivitaet = interaction.options.getString('aktivitaet', true) as SportActivity;
         const kilometer = interaction.options.getNumber('kilometer', true);
 
@@ -49,7 +49,7 @@ class SportHandler {
         const entries = await sportService.getUserEntries(interaction.user.id);
 
         if (!entries.length) {
-            return interaction.reply('Du hast noch keine Einträge. Los geht\'s mit `/sport hinzufuegen`!');
+            return interaction.reply('Du hast noch keine Einträge. Los geht\'s mit `/sport eintragen`!');
         }
 
         const gesamtKilometer = entries.reduce((sum, e) => sum + e.kilometers, 0);
@@ -74,13 +74,13 @@ class SportHandler {
     async handleHilfe(interaction: ChatInputCommandInteraction) {
         return interaction.reply(
             `📖 **Sport-Befehle**\n\n` +
-            `**/sport hinzufuegen** – Neuen Sport-Eintrag hinzufügen\n` +
+            `**/sport eintragen** – Neue sportliche Aktivität eintragen\n` +
             `**/sport loeschen** – Eintrag anhand der ID löschen\n` +
             `**/sport bearbeiten** – Kilometeranzahl eines Eintrags korrigieren\n` +
             `**/sport gesamt** – Gesamtkilometer aller Sportler\n` +
             `**/sport statistik** – Deine persönliche Übersicht pro Aktivität\n` +
-            `**/sport setzen** – Kilometerstand eines Users setzen (nur Admins)\n` +
-            `**/sport legacy** – Altkilometer ohne User einspeisen (nur Admins)\n` +
+            `**/sport setzen** – Kilometerstand eines Mitglieds setzen (nur Admins)\n` +
+            `**/sport altkilometer** – Altkilometer ohne zugeordnetes Mitglied einspeisen (nur Admins)\n` +
             `**/sport hilfe** – Zeigt diese Übersicht`
         );
     }
@@ -93,7 +93,7 @@ class SportHandler {
             });
         }
 
-        const user = interaction.options.getUser('user', true);
+        const user = interaction.options.getUser('mitglied', true);
         const kilometer = interaction.options.getNumber('kilometer', true);
 
         await sportService.setKilometer(user.id, kilometer);
@@ -112,7 +112,7 @@ class SportHandler {
         );
     }
 
-    async handleLegacy(interaction: ChatInputCommandInteraction) {
+    async handleAltkilometer(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
                 content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',

@@ -18,6 +18,7 @@ Discord-Bot für den Community-Server von [Legend of the Green Dragon (LotGD)](h
 ## Konventionen
 
 - Deutsche Bot-Antworten
+- **Command-, Subcommand- und Options-Namen sind deutsch und sprechend** (z.B. `/twitch verknuepfen`, `/sport eintragen`, Option `benutzername`/`kanal`/`beschriftung`). Umlaute in den Namen selbst vermeiden – als `ae/oe/ue` schreiben (Discord mag keine Umlaute in Command-Namen); in den `setDescription`-Texten sind Umlaute normal. Am 2026-07-04 wurde der komplette Command-Bestand von gemischt englisch/deutsch auf durchgehend deutsch umgestellt (u.a. `ping`→`pingpong`, `pinghighscore`→`pingbestenliste`, `log`→`protokoll`, `twitch set/remove/info/notification-*`→`verknuepfen/entfernen/status/benachrichtigungs*`, `sport hinzufuegen/legacy`→`eintragen/altkilometer`). `version` blieb bewusst. Die Handler-Methodennamen wurden mitgezogen (z.B. `handleSet`→`handleVerknuepfen`), damit Dispatch und Namen konsistent bleiben.
 - Command-Definitionen sind untypisierte Objektliteralle (`export default { data, execute }`), keine `satisfies Command` o.ä. Der `Command`-Typ (`src/types/discord.ts`) existiert nur für `client.commands`/`interaction.handler.ts`.
 - Redis-Keys immer als KEYS-Objekt im Service
 - deferReply() bei API-Calls die länger dauern können
@@ -42,20 +43,20 @@ Discord-Bot für den Community-Server von [Legend of the Green Dragon (LotGD)](h
 ## Twitch-Feature (`/twitch`)
 
 - 1 Discord-User = 1 Twitch-Link (`handleSet` blockt bei bestehendem Link). Channel + Rolle für Notifications sind global vom Admin gesetzt (`TWITCH:NOTIFICATION_CHANNEL`/`_ROLE`), nicht pro User.
-- `twitchService.unsubscribeFromStreamOnline` behandelt ein 404 von Twitch (Subscription dort schon weg) als Erfolg – wichtig für Idempotenz bei `/twitch remove` und beim Revocation-Handling.
+- `twitchService.unsubscribeFromStreamOnline` behandelt ein 404 von Twitch (Subscription dort schon weg) als Erfolg – wichtig für Idempotenz bei `/twitch entfernen` und beim Revocation-Handling.
 - Twitch `revocation`-Webhooks (z.B. Auth entzogen) räumen automatisch den zugehörigen Redis-Link auf (`twitchHandler.handleSubscriptionRevoked`, verkabelt über `webhookServer.onRevocation` in `src/index.ts`) – der User müsste sich danach neu verknüpfen, es bleibt aber kein verwaister Link liegen.
-- `/twitch notification-channel` ist über `addChannelTypes` auf Text-/Announcement-Channels beschränkt, damit kein Voice-Channel o.ä. gewählt werden kann, an dem `channel.send()` sonst still scheitern würde.
+- `/twitch benachrichtigungskanal` ist über `addChannelTypes` auf Text-/Announcement-Channels beschränkt, damit kein Voice-Channel o.ä. gewählt werden kann, an dem `channel.send()` sonst still scheitern würde.
 - `twitch.command.test.ts` prüft zusätzlich, dass jeder im `SlashCommandBuilder` definierte Subcommand-Name auch im `switch` in `execute()` dispatcht wird (die Namen stehen doppelt im Code, das ist die einzige Absicherung gegen Drift zwischen beiden).
 
 ## Sport-Feature (`/sport`)
 
 - Bewusst **kooperativ, nicht kompetitiv**: alle tragen zu einer gemeinsamen Gesamt-Kilometerzahl bei (`/sport gesamt`), es gibt keine Rangliste. Ein früherer `/sport bestenliste`-Befehl (Top-10-Leaderboard) wurde deshalb wieder entfernt (samt `sportService.getHighscore`) – nicht versehentlich, das war eine bewusste Design-Entscheidung gegen Konkurrenzdenken auf dem Server.
 - `/sport setzen` (Admin, Kilometerstand eines Users direkt setzen) schreibt nur den Bestenlisten-Score, legt aber keinen `SportEntry` an. Der eigene `/sport statistik`-Wert (aus den individuellen Einträgen berechnet) kann danach vom `/sport gesamt`-Beitrag dieses Users abweichen – als Admin-Korrekturwerkzeug für Altdaten so gewollt, aber gut zu wissen falls das mal für Verwirrung sorgt.
-- `LEGACY_KILOMETERS` ist ein Dummy-User in der Bestenliste (`/sport legacy`, Admin) für Kilometer ohne zuordenbaren Discord-User – zählt zu `/sport gesamt` dazu, taucht aber nirgends als "Person" auf (seit Entfernung von `bestenliste` sowieso irrelevant, war vorher aber explizit rausgefiltert).
+- `LEGACY_KILOMETERS` ist ein Dummy-User in der Bestenliste (`/sport altkilometer`, Admin) für Kilometer ohne zuordenbaren Discord-User – zählt zu `/sport gesamt` dazu, taucht aber nirgends als "Person" auf (seit Entfernung von `bestenliste` sowieso irrelevant, war vorher aber explizit rausgefiltert).
 
-## Logging-Feature (`/log`)
+## Logging-Feature (`/protokoll`)
 
-- `/log channel:<#channel>` (Admin) setzt den Ziel-Channel für Nachrichten-Logs, gespeichert in Redis (`LOGGING:CHANNEL`, `logging.service.ts`). Flacher Command ohne Subcommands (wie `/version`), da aktuell nur diese eine Aktion existiert.
+- `/protokoll kanal:<#channel>` (Admin) setzt den Ziel-Channel für Nachrichten-Logs, gespeichert in Redis (`LOGGING:CHANNEL`, `logging.service.ts`). Flacher Command ohne Subcommands (wie `/version`), da aktuell nur diese eine Aktion existiert. (Command am 2026-07-04 von `/log`/Option `channel` auf `/protokoll`/`kanal` eingedeutscht.)
 - `client.ts` braucht `partials: [Partials.Message, Partials.Channel]`, sonst feuern `MessageDelete`/`MessageUpdate` für nicht (mehr) gecachte Nachrichten gar nicht erst – ohne das würde das Feature den Großteil der Deletes/Edits einfach verpassen.
 - Alter Inhalt ist bei nicht gecachten Nachrichten grundsätzlich nicht rekonstruierbar (Discord-API-Grenze, kein Bug) – zeigt dann `*nicht verfügbar*` statt zu crashen oder leer zu bleiben.
 - Bot-Nachrichten werden ignoriert (sonst loggt der Bot ständig seine eigenen Antworten). `MessageUpdate` ohne echte Content-Änderung wird ebenfalls ignoriert (Discord feuert das Event z.B. auch beim Nachladen von Link-Embeds, nicht nur bei echten Edits).
@@ -64,7 +65,7 @@ Discord-Bot für den Community-Server von [Legend of the Green Dragon (LotGD)](h
 ## Rollen-Selbstvergabe / Button-Rollen (`/rollenbutton`)
 
 - Zweck: User geben sich **selbst** Rollen (z.B. "Einwohner" als Regel-Akzeptanz beim Server-Beitritt, oder die Twitch-Benachrichtigungs-Rolle zum Selbst-An/Abmelden). Am 2026-07-04 von einer Reaction-basierten Variante (`/rolle`, User reagiert mit Emoji) auf **Buttons** umgestellt – Buttons sind der modernere, sauberere discord.js-v14-Weg: kein Zumüllen der Nachricht mit Fremd-Reactions, klares ephemeres Feedback, selbsterklärendes Toggle. Die alte Reaction-Variante (`reactionRole.handler.ts`/`.service.ts`/`rolle.command.ts` + `REACTIONROLE:`-Redis-Keys) wurde dabei komplett entfernt, nicht parallel behalten.
-- `/rollenbutton text:<text> rolle:<@Rolle> label:<label> [emoji:<emoji>]` (Admin) lässt den **Bot eine neue Nachricht posten** mit dem Text und einem Button darunter. Bot postet via `interaction.channel.send(...)`, quittiert dem Admin nur ephemer – die Button-Nachricht selbst ist also eine Bot-Nachricht (nötig, weil Discord Buttons nur an Bot-eigene Nachrichten erlaubt).
+- `/rollenbutton text:<text> rolle:<@Rolle> beschriftung:<beschriftung> [emoji:<emoji>]` (Admin) lässt den **Bot eine neue Nachricht posten** mit dem Text und einem Button darunter. Bot postet via `interaction.channel.send(...)`, quittiert dem Admin nur ephemer – die Button-Nachricht selbst ist also eine Bot-Nachricht (nötig, weil Discord Buttons nur an Bot-eigene Nachrichten erlaubt).
 - **Kein Redis, kein State:** Die Rolle steckt direkt in der Button-`customId` (`role-toggle:{roleId}`). Beim Klick liest `buttonRoleHandler.handleButton` die Rolle da raus und **toggelt** sie (User hat sie → entfernen, sonst → vergeben), ephemere Rückmeldung jeweils. Dadurch überlebt die Bindung jeden Bot-Neustart automatisch, ohne dass irgendwo etwas gespeichert werden muss. `reactionRole.service.ts` ist damit ersatzlos weggefallen.
 - Verkabelung: Buttons sind **Interactions**, keine Reactions. `interaction.handler.ts` routet `interaction.isButton()` an `buttonRoleHandler.handleButton`. Dadurch fielen `GatewayIntentBits.GuildMessageReactions` + `Partials.Reaction`/`Partials.User` (`client.ts`) und die beiden `MessageReactionAdd`/`-Remove`-`client.on`-Zeilen in `index.ts` wieder weg – Buttons brauchen davon nichts.
 - Setzt voraus, dass der Bot "Rollen verwalten"-Rechte hat **und** seine eigene Rolle in der Server-Hierarchie über der zu vergebenden Rolle steht – sonst schlägt `member.roles.add/remove` mit einem Discord-API-Fehler fehl. Wird im `handleButton`-catch geloggt und dem User ephemer als "hat nicht geklappt" gemeldet (crasht nicht). Reine Server-Konfiguration, kein Code-Fix möglich.
