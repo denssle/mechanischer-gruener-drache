@@ -110,6 +110,13 @@ Discord-Bot für den Community-Server von [Legend of the Green Dragon (LotGD)](h
 - `HELP_TEXT` ist ein exportierter Konstanten-String (getestet: <2000 Zeichen fürs Discord-Limit, verweist für Gruppen auf `/sport|twitch|event hilfe`). Antworten sind **öffentlich** (konsistent mit den bestehenden `/sport hilfe`/`/twitch hilfe`), nicht ephemer.
 - `hilfe.handler.ts` importiert `client` nicht – zirkuläre-Import-Falle kein Thema.
 
+## Ping-Pong-Feature (`/pingpong` + `/pingbestenliste`)
+
+- Simples Glücksspiel: `/pingpong` ist ein 50/50 (`Math.random() < 0.5`), Treffer → +1 Punkt (kumulativ, wächst ewig), Niederlage → nichts. `/pingbestenliste` zeigt die Top 10 nach Gesamtpunkten. Score-Key ist aus Legacy-Gründen `userId + REDIS_KEYS.PING_PONG` (Format bewusst nicht geändert, sonst verwaisen alle bestehenden Scores).
+- Seit 2026-07-05: **Flavor-Text** – statt zwei fixer Sätze eine zufällige Zeile aus `WIN_FLAVORS`/`LOSS_FLAVORS` (exportiert + getestet, wie der Event-Fallback), die eigentliche Punkte-Info wird angehängt.
+- Seit 2026-07-05: **Anti-Spam-Cooldown** – pro User ein Redis-Key mit TTL (`PING_PONG:COOLDOWN:{userId}`, `COOLDOWN_SECONDS = 30`, leicht anpassbar). Vor dem Spielen prüft `handlePingPong` `redisService.getTimeToLive(...)`; ist noch Zeit übrig, kommt eine ephemere „warte noch Xs"-Meldung und es wird **nicht** gespielt. Neue Redis-Helper dafür: `setWithExpiry` (`SET ... EX`) und `getTimeToLive` (`TTL`, liefert -2/-1 = kein Cooldown aktiv).
+- **Bekannte Design-Schwäche** (bewusst offen): Scores sind rein additiv → die Bestenliste belohnt eher *viel spielen* als *gut spielen*. Der Cooldown dämpft das nur. Die geplante **PvP-Herausforderung** (`/pingpong herausfordern @user`, README-Todo) soll echte Interaktion/Skill bringen.
+
 ## Links
 
 - [GitHub](https://github.com/denssle/mechanischer-gruener-drache)

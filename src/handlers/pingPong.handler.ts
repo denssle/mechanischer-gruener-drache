@@ -5,21 +5,65 @@ import userService from "../services/user.service.js";
 // Key-Strings bewusst identisch zum bisherigen Verhalten gehalten (nur die Struktur
 // folgt jetzt der KEYS-Objekt-Konvention) - eine Änderung des Formats würde alle
 // bereits in Redis gespeicherten Ping-Pong-Scores verwaisen lassen.
+// Nach jedem Spiel darf man erst nach Ablauf dieser Zeit wieder spielen - verhindert
+// stumpfes Spammen des Befehls (die Bestenliste soll nicht reine Klick-Menge belohnen).
+const COOLDOWN_SECONDS = 30;
+
 const KEYS = {
     score: (userId: string) => userId + REDIS_KEYS.PING_PONG,
     highscore: REDIS_KEYS.PING_PONG,
+    cooldown: (userId: string) => `PING_PONG:COOLDOWN:${userId}`,
 };
+
+// Zufällige Flavor-Zeilen für Sieg/Niederlage - die eigentliche Punkte-Info hängt der Handler
+// danach an. Exportiert + getestet, damit die Auswahl abgesichert ist.
+export const WIN_FLAVORS = [
+    '🏓 Ass! Der Ball zischt an der Kante vorbei.',
+    '🏓 Sauberer Schmetterball – nicht zu halten!',
+    '🏓 Netzroller! Frech, aber der zählt.',
+    '🏓 Volltreffer, der Gegner guckt nur zu.',
+    '🏓 Perfekter Return – Punkt für dich!',
+    '🏓 Der Aufschlag sitzt!',
+];
+
+export const LOSS_FLAVORS = [
+    '🏓 Ball ins Aus – knapp daneben. 😬',
+    '🏓 Ins Netz gesetzt. Ärgerlich!',
+    '🏓 Der Return war eine Nummer zu groß für dich.',
+    '🏓 Aufschlag verpatzt.',
+    '🏓 Am Tisch vorbei – das war nichts.',
+    '🏓 Der Gegner kontert, du kommst nicht ran.',
+];
+
+export function randomWinFlavor(): string {
+    return WIN_FLAVORS[Math.floor(Math.random() * WIN_FLAVORS.length)];
+}
+
+export function randomLossFlavor(): string {
+    return LOSS_FLAVORS[Math.floor(Math.random() * LOSS_FLAVORS.length)];
+}
 
 class PingPongHandler {
 
     async handlePingPong(interaction: ChatInputCommandInteraction) {
         try {
+            const userId = interaction.user.id;
+
+            const remaining = await redisService.getTimeToLive(KEYS.cooldown(userId));
+            if (remaining > 0) {
+                return interaction.reply({
+                    content: `🏓 Kurz durchatmen – du kannst in **${remaining}s** wieder aufschlagen.`,
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+            await redisService.setWithExpiry(KEYS.cooldown(userId), '1', COOLDOWN_SECONDS);
+
             const score: number = await this.getScore(interaction);
             if (Math.random() < 0.5) {
-                const updatedScore = await this.updateScore(interaction.user.id, score + 1);
-                return interaction.reply("Du hast einen Punkt gemacht! Du hast aktuell " + updatedScore + " Punkte!");
+                const updatedScore = await this.updateScore(userId, score + 1);
+                return interaction.reply(`${randomWinFlavor()}\nDu hast jetzt **${updatedScore}** Punkte!`);
             }
-            return interaction.reply("Das war leider nichts! Du bleibst bei " + score + " Punkten!");
+            return interaction.reply(`${randomLossFlavor()}\nDu bleibst bei **${score}** Punkten!`);
         } catch (error) {
             console.error("Error handling ping pong:", error);
             return interaction.reply({ content: "Es gab einen Fehler beim Ausführen des Befehls.", flags: MessageFlags.Ephemeral });

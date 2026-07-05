@@ -76,6 +76,17 @@ class RedisService {
     async removeFromSortedSet(key: string, value: string): Promise<void> {
         await this.#client.zRem(key, value);
     }
+
+    // Setzt einen Key mit Ablaufzeit (Sekunden) - u.a. für Cooldowns genutzt.
+    async setWithExpiry(key: string, value: string, seconds: number): Promise<void> {
+        await this.#client.set(key, value, {EX: seconds});
+    }
+
+    // Verbleibende Lebensdauer eines Keys in Sekunden. Redis liefert -2 (Key existiert nicht)
+    // bzw. -1 (kein Ablauf gesetzt); für Cooldown-Zwecke sind beide "kein Cooldown aktiv".
+    async getTimeToLive(key: string): Promise<number> {
+        return this.#client.ttl(key);
+    }
 }
 
 export default new RedisService();

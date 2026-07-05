@@ -7,6 +7,8 @@ vi.mock("../services/redis.service.js", () => ({
         set: vi.fn(),
         getSortedSet: vi.fn(),
         setSortedSet: vi.fn(),
+        getTimeToLive: vi.fn(),
+        setWithExpiry: vi.fn(),
     },
     REDIS_KEYS: {
         PING_PONG: "PING_PONG"
@@ -21,11 +23,13 @@ vi.mock("../services/user.service.js", () => ({
 
 import redisService from "../services/redis.service.js";
 import userService from "../services/user.service.js";
-import pingPongHandler from "./pingPong.handler.js";
+import pingPongHandler, { WIN_FLAVORS, LOSS_FLAVORS, randomWinFlavor, randomLossFlavor } from "./pingPong.handler.js";
 
 describe('PingPongHandler', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // Standard: kein aktiver Cooldown (Redis liefert -2 wenn der Key nicht existiert).
+        vi.mocked(redisService.getTimeToLive).mockResolvedValue(-2);
     });
 
     describe('handlePingPong', () => {
@@ -41,8 +45,8 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPong(mockInteraction);
 
-            expect(mockInteraction.reply).toHaveBeenCalledWith(expect.stringContaining('einen Punkt gemacht'));
-            expect(mockInteraction.reply).toHaveBeenCalledWith(expect.stringContaining('11 Punkte'));
+            expect(mockInteraction.reply).toHaveBeenCalledWith(expect.stringContaining('11'));
+            expect(mockInteraction.reply).toHaveBeenCalledWith(expect.stringContaining('Punkte'));
             expect(redisService.get).toHaveBeenCalledWith('user-123PING_PONG');
             expect(redisService.set).toHaveBeenCalledWith('user-123PING_PONG', '11');
             expect(redisService.setSortedSet).toHaveBeenCalledWith('PING_PONG', 'user-123', 11);
@@ -59,13 +63,46 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPong(mockInteraction);
 
-            expect(mockInteraction.reply).toHaveBeenCalledWith(expect.stringContaining('leider nichts'));
-            expect(mockInteraction.reply).toHaveBeenCalledWith(expect.stringContaining('10 Punkten'));
+            expect(mockInteraction.reply).toHaveBeenCalledWith(expect.stringContaining('10'));
+            expect(mockInteraction.reply).toHaveBeenCalledWith(expect.stringContaining('Punkten'));
+        });
+
+        it('setzt nach dem Spielen einen Cooldown', async () => {
+            vi.spyOn(Math, 'random').mockReturnValue(0.6);
+            vi.mocked(redisService.get).mockResolvedValue('10');
+
+            const mockInteraction = {
+                user: { id: 'user-123' },
+                reply: vi.fn(),
+            } as any;
+
+            await pingPongHandler.handlePingPong(mockInteraction);
+
+            expect(redisService.setWithExpiry).toHaveBeenCalledWith('PING_PONG:COOLDOWN:user-123', '1', 30);
+        });
+
+        it('blockt während eines aktiven Cooldowns ephemer und spielt nicht', async () => {
+            vi.mocked(redisService.getTimeToLive).mockResolvedValue(12);
+
+            const mockInteraction = {
+                user: { id: 'user-123' },
+                reply: vi.fn(),
+            } as any;
+
+            await pingPongHandler.handlePingPong(mockInteraction);
+
+            expect(mockInteraction.reply).toHaveBeenCalledWith(expect.objectContaining({
+                content: expect.stringContaining('12s'),
+                flags: MessageFlags.Ephemeral,
+            }));
+            expect(redisService.setWithExpiry).not.toHaveBeenCalled();
+            expect(redisService.set).not.toHaveBeenCalled();
+            expect(redisService.setSortedSet).not.toHaveBeenCalled();
         });
 
         it('sollte Fehler abfangen', async () => {
             vi.mocked(redisService.get).mockRejectedValue(new Error('Redis kaputt'));
-            
+
             const mockInteraction = {
                 user: { id: 'user-123' },
                 reply: vi.fn(),
@@ -74,6 +111,20 @@ describe('PingPongHandler', () => {
             await pingPongHandler.handlePingPong(mockInteraction);
 
             expect(mockInteraction.reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral }));
+        });
+    });
+
+    describe('Flavor-Text', () => {
+        it('randomWinFlavor liefert immer eine Zeile aus WIN_FLAVORS', () => {
+            for (let i = 0; i < 50; i++) {
+                expect(WIN_FLAVORS).toContain(randomWinFlavor());
+            }
+        });
+
+        it('randomLossFlavor liefert immer eine Zeile aus LOSS_FLAVORS', () => {
+            for (let i = 0; i < 50; i++) {
+                expect(LOSS_FLAVORS).toContain(randomLossFlavor());
+            }
         });
     });
 

@@ -4,7 +4,7 @@ Ein Discord-Bot für den Discord-Server von [LotgD](http://www.lotgd.de/), gesch
 
 ## 🚀 Features
 
-- **Ping-Pong-Spiel**: Ein einfaches Spiel (`/pingpong`) mit Bestenliste (`/pingbestenliste`), gespeichert in Redis.
+- **Ping-Pong-Spiel**: Ein einfaches Spiel (`/pingpong`) mit zufälligem Flavor-Text und Anti-Spam-Cooldown, plus Bestenliste (`/pingbestenliste`), gespeichert in Redis.
 - **Twitch-Integration**: User verknüpfen ihren eigenen Twitch-Kanal (`/twitch verknuepfen`); der Bot meldet per Webhook, wenn sie live gehen. Admin-Diagnose via `/twitch diagnose`.
 - **Sport-Tracking**: Bewusst kooperativ – alle tragen ihre Kilometer zu einer gemeinsamen Gesamtsumme bei (`/sport gesamt`), keine Rangliste.
 - **User-Daten-Tracking**: Hält intern Namen und Rollen der Mitglieder aktuell (z.B. damit Live-Meldungen den richtigen Namen zeigen).
@@ -119,6 +119,7 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] Countdown bis zum Community-Event (`/event setzen` / `/event countdown`)
 - [x] News aus dem Game anzeigen (`/news`, live von https://www.lotgd.de/news.php)
 - [x] Hilfetexte ausbauen: jeder Gruppen-Command hat ein eigenes `hilfe` (`/sport`, `/twitch`, `/event`), plus eine allgemeine Gesamt-Hilfe `/hilfe` über alle Befehle
+- [ ] Ping-Pong: PvP-Herausforderung (`/pingpong herausfordern @user`) – Match gegen eine andere Person per Buttons
 - [ ] Den Bot generalisieren für jeden Server (Multi-Guild-Plan: `docs/multi-guild-plan.md`)
 - [ ] Mit dem eigentlichen Spiel interagieren (Machbarkeitsnotiz: `docs/spiel-interaktion-idee.md`)
 - [ ] CI/Deploy-Workflow auf eine neuere Node-Version heben (Node 20 wird für GitHub Actions deprecated)
