@@ -9,7 +9,7 @@ vi.mock('../services/event.service.js', () => ({
 }));
 
 import eventService from '../services/event.service.js';
-import eventHandler, { parseGermanDateTime, formatRemaining } from './event.handler.js';
+import eventHandler, { parseGermanDateTime, formatRemaining, randomNoEventReply, NO_EVENT_REPLIES } from './event.handler.js';
 
 describe('parseGermanDateTime', () => {
     it('parst ein gültiges Datum ohne Uhrzeit', () => {
@@ -52,6 +52,14 @@ describe('formatRemaining', () => {
 
     it('fällt auf "weniger als eine Minute" zurück', () => {
         expect(formatRemaining(30000)).toBe('weniger als eine Minute');
+    });
+});
+
+describe('randomNoEventReply', () => {
+    it('liefert immer eine Variante aus NO_EVENT_REPLIES', () => {
+        for (let i = 0; i < 50; i++) {
+            expect(NO_EVENT_REPLIES).toContain(randomNoEventReply());
+        }
     });
 });
 
@@ -129,13 +137,14 @@ describe('EventHandler', () => {
     });
 
     describe('handleCountdown', () => {
-        it('meldet wenn kein Event gesetzt ist', async () => {
+        it('antwortet mit einem spielerischen Fallback wenn kein Event gesetzt ist', async () => {
             vi.mocked(eventService.getEvent).mockResolvedValue(null);
             const interaction = mockInteraction();
 
             await eventHandler.handleCountdown(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('kein Event'));
+            expect(interaction.reply).toHaveBeenCalledTimes(1);
+            expect(NO_EVENT_REPLIES).toContain(interaction.reply.mock.calls[0][0]);
         });
 
         it('zeigt den Countdown für ein zukünftiges Event mit Titel', async () => {

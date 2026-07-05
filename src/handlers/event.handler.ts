@@ -48,6 +48,23 @@ export function formatRemaining(diffMs: number): string {
     return parts.slice(0, -1).join(', ') + ' und ' + parts[parts.length - 1];
 }
 
+// Spielerischer Fallback, wenn kein Event gesetzt ist - eine zufällige Variation von
+// "noch viel zu lange", passend zur "Noch X"-Formulierung des echten Countdowns.
+export const NO_EVENT_REPLIES = [
+    '⏳ Noch **viel zu lange**.',
+    '⏳ Noch **ewig** – am Horizont ist kein Termin in Sicht.',
+    '🔮 Noch **unbestimmt lange** – die Sterne schweigen.',
+    '🕰️ Noch **gefühlt eine halbe Ewigkeit**.',
+    '⏳ Noch **so lange, dass es sich nicht in Tagen messen lässt**.',
+    '🐉 Noch **viel zu lange**. Geduld, junger Drache.',
+    '⏳ Noch **viel zu lange** … und ehrlich gesagt danach noch etwas länger.',
+    '🌌 Noch **eine kleine Unendlichkeit**.',
+];
+
+export function randomNoEventReply(): string {
+    return NO_EVENT_REPLIES[Math.floor(Math.random() * NO_EVENT_REPLIES.length)];
+}
+
 class EventHandler {
     async handleSetzen(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
@@ -86,7 +103,7 @@ class EventHandler {
     async handleCountdown(interaction: ChatInputCommandInteraction) {
         const event = await eventService.getEvent();
         if (!event) {
-            return interaction.reply('📅 Aktuell ist kein Event angesetzt. Ein Admin kann eins mit `/event setzen` eintragen.');
+            return interaction.reply(randomNoEventReply());
         }
 
         const unix = Math.floor(event.timestamp / 1000);
