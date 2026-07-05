@@ -7,6 +7,7 @@ import log from "./log.command.js";
 import rollenbutton from "./rollenbutton.command.js";
 import event from "./event.command.js";
 import news from "./news.command.js";
+import hilfe from "./hilfe.command.js";
 
 export default [
     ping,
@@ -17,5 +18,6 @@ export default [
     log,
     rollenbutton,
     event,
-    news
+    news,
+    hilfe
 ];

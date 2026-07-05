@@ -5,6 +5,7 @@ vi.mock('../handlers/event.handler.js', () => ({
         handleSetzen: vi.fn(),
         handleCountdown: vi.fn(),
         handleEntfernen: vi.fn(),
+        handleHilfe: vi.fn(),
     }
 }));
 
@@ -24,6 +25,7 @@ describe('event.command', () => {
         ['setzen', 'handleSetzen'],
         ['countdown', 'handleCountdown'],
         ['entfernen', 'handleEntfernen'],
+        ['hilfe', 'handleHilfe'],
     ] as const)('leitet Subcommand "%s" an eventHandler.%s weiter', async (subcommand, method) => {
         const interaction = mockInteraction(subcommand);
 
@@ -40,11 +42,12 @@ describe('event.command', () => {
         expect(eventHandler.handleSetzen).not.toHaveBeenCalled();
         expect(eventHandler.handleCountdown).not.toHaveBeenCalled();
         expect(eventHandler.handleEntfernen).not.toHaveBeenCalled();
+        expect(eventHandler.handleHilfe).not.toHaveBeenCalled();
     });
 
     it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
         const definedSubcommands = eventCommand.data.options.map((option) => option.toJSON().name);
 
-        expect(definedSubcommands.sort()).toEqual(['countdown', 'entfernen', 'setzen']);
+        expect(definedSubcommands.sort()).toEqual(['countdown', 'entfernen', 'hilfe', 'setzen']);
     });
 });

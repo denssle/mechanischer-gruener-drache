@@ -125,6 +125,16 @@ class EventHandler {
         );
     }
 
+    async handleHilfe(interaction: ChatInputCommandInteraction) {
+        return interaction.reply(
+            `📖 **Event-Befehle**\n\n` +
+            `**/event countdown** – Zeigt, wie lange es noch bis zum nächsten Event dauert\n` +
+            `**/event setzen** – Termin des Community-Events festlegen (nur Admins)\n` +
+            `**/event entfernen** – Das gesetzte Event wieder entfernen (nur Admins)\n` +
+            `**/event hilfe** – Zeigt diese Übersicht`
+        );
+    }
+
     async handleEntfernen(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({

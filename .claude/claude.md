@@ -103,6 +103,13 @@ Discord-Bot für den Community-Server von [Legend of the Green Dragon (LotGD)](h
 - **Fragil by design** (Scraping): ändert lotgd.de sein HTML/seine CSS-Klassen, liefert `parseLatestNews` `null` → Handler meldet „konnte nicht abrufen", crasht aber nicht. `getLatestNews` fängt zusätzlich Netzwerk-/Parse-Fehler ab und gibt `null` zurück. `handleNews` nutzt `deferReply()` (Netz-Call) und kürzt den Text auf 1500 Zeichen (Discord-2000-Limit).
 - `news.handler.ts`/`news.service.ts` importieren `client` nicht – zirkuläre-Import-Falle kein Thema.
 
+## Hilfe-Feature (`/hilfe` + `hilfe`-Subcommands)
+
+- Zweck (seit 2026-07-05, war README-Todo): Nutzer sollen ohne Vorwissen die Befehle finden. Zwei Ebenen: **Gruppen-Befehle** (`/sport`, `/twitch`, `/event`) haben je ein `hilfe`-Subcommand mit ihren eigenen Befehlen; **`/hilfe`** ist die neue **Gesamtübersicht** über alle Bereiche (flache Command-Datei `hilfe.command.ts` → `hilfe.handler.ts`, wie `/news`/`/version`).
+- **Bewusste Design-Entscheidung:** flache Einzelbefehle (`/pingpong`, `/pingbestenliste`, `/rollenbutton`, `/protokoll`, `/news`, `/version`) bekommen **kein** eigenes `hilfe` – sobald ein Command *einen* Subcommand hat, verlangt Discord *immer* einen (das blanke `/news` würde wegfallen). Sie werden deshalb **nur** in `/hilfe` erklärt. `hilfe.handler.test.ts` sichert per `it.each` ab, dass jeder dieser flachen Befehle im `HELP_TEXT` auftaucht (sonst wären sie nirgends dokumentiert).
+- `HELP_TEXT` ist ein exportierter Konstanten-String (getestet: <2000 Zeichen fürs Discord-Limit, verweist für Gruppen auf `/sport|twitch|event hilfe`). Antworten sind **öffentlich** (konsistent mit den bestehenden `/sport hilfe`/`/twitch hilfe`), nicht ephemer.
+- `hilfe.handler.ts` importiert `client` nicht – zirkuläre-Import-Falle kein Thema.
+
 ## Links
 
 - [GitHub](https://github.com/denssle/mechanischer-gruener-drache)

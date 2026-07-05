@@ -178,6 +178,19 @@ describe('EventHandler', () => {
         });
     });
 
+    describe('handleHilfe', () => {
+        it('listet die Event-Befehle auf', async () => {
+            const interaction = mockInteraction();
+
+            await eventHandler.handleHilfe(interaction);
+
+            const reply = interaction.reply.mock.calls[0][0];
+            expect(reply).toContain('/event countdown');
+            expect(reply).toContain('/event setzen');
+            expect(reply).toContain('/event entfernen');
+        });
+    });
+
     describe('handleEntfernen', () => {
         it('lehnt ohne Administrator-Rechte ab', async () => {
             vi.mocked(eventService.getEvent).mockResolvedValue({ timestamp: Date.now() + 1000, title: 'X' });

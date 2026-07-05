@@ -25,7 +25,10 @@ export default {
             .setDescription('Zeigt, wie lange es noch bis zum Event dauert'))
         .addSubcommand(sub => sub
             .setName('entfernen')
-            .setDescription('Das gesetzte Event wieder entfernen (nur Admins)')),
+            .setDescription('Das gesetzte Event wieder entfernen (nur Admins)'))
+        .addSubcommand(sub => sub
+            .setName('hilfe')
+            .setDescription('Zeigt alle verfügbaren Event-Befehle')),
 
     async execute(interaction: ChatInputCommandInteraction) {
         const subcommand = interaction.options.getSubcommand();
@@ -37,6 +40,8 @@ export default {
                 return eventHandler.handleCountdown(interaction);
             case 'entfernen':
                 return eventHandler.handleEntfernen(interaction);
+            case 'hilfe':
+                return eventHandler.handleHilfe(interaction);
         }
     }
 };

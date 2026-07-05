@@ -36,9 +36,10 @@ Alle Befehle, Subcommands und Optionen sind deutsch benannt. Umlaute in den Name
 | `/event setzen` · `/event entfernen` | Termin des Community-Events festlegen/entfernen (Admin) |
 | `/event countdown` | Zeigt, wie lange es noch bis zum Event dauert |
 | `/news` | Holt die neueste Spiel-News von lotgd.de und postet sie |
+| `/hilfe` | Gesamtübersicht über alle Befehle des Bots |
 | `/version` | Zeigt die aktuelle Bot-Version |
 
-`/sport` und `/twitch` haben zusätzlich je einen `hilfe`-Subcommand, der alle zugehörigen Befehle auflistet.
+`/sport`, `/twitch` und `/event` haben zusätzlich je einen `hilfe`-Subcommand, der alle zugehörigen Befehle auflistet. `/hilfe` gibt eine Gesamtübersicht über alle Bereiche und Befehle.
 
 ## 🛠 Architektur
 
@@ -117,7 +118,7 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] Sport: Bestandskilometer korrigier-/entfernbar (`/sport altkilometer-setzen`, `0` = entfernen)
 - [x] Countdown bis zum Community-Event (`/event setzen` / `/event countdown`)
 - [x] News aus dem Game anzeigen (`/news`, live von https://www.lotgd.de/news.php)
-- [ ] Hilfetexte ausbauen: jeder Command-Block bekommt einen eigenen `hilfe`-Subcommand (bisher nur `/sport` und `/twitch`), plus eine allgemeine Gesamt-Hilfe über alle Befehle
+- [x] Hilfetexte ausbauen: jeder Gruppen-Command hat ein eigenes `hilfe` (`/sport`, `/twitch`, `/event`), plus eine allgemeine Gesamt-Hilfe `/hilfe` über alle Befehle
 - [ ] Den Bot generalisieren für jeden Server (Multi-Guild-Plan: `docs/multi-guild-plan.md`)
 - [ ] Mit dem eigentlichen Spiel interagieren (Machbarkeitsnotiz: `docs/spiel-interaktion-idee.md`)
 - [ ] CI/Deploy-Workflow auf eine neuere Node-Version heben (Node 20 wird für GitHub Actions deprecated)
