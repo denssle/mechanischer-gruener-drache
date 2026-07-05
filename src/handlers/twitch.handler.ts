@@ -43,7 +43,7 @@ class TwitchHandler {
 
         return interaction.editReply(
             `✅ Twitch-Channel **${twitchUser.display_name}** erfolgreich verknüpft!\n` +
-            `Du bekommst ab jetzt eine Benachrichtigung wenn du live gehst.`
+            `Der Server wird ab jetzt benachrichtigt, wenn du live gehst.`
         );
     }
 
