@@ -32,8 +32,9 @@ describe('SportHandler', () => {
     });
 
     describe('handleEintragen', () => {
-        it('speichert den Eintrag und bestätigt ihn', async () => {
+        it('speichert den Eintrag und bestätigt ihn inkl. Gruppengesamt-Distanz', async () => {
             vi.mocked(sportService.addEntry).mockResolvedValue(mockEntry());
+            vi.mocked(sportService.getGesamtKilometer).mockResolvedValue(250);
             const interaction = {
                 user: { id: 'user-123' },
                 options: {
@@ -46,7 +47,9 @@ describe('SportHandler', () => {
             await sportHandler.handleEintragen(interaction);
 
             expect(sportService.addEntry).toHaveBeenCalledWith('user-123', 'laufen', 10);
+            expect(sportService.getGesamtKilometer).toHaveBeenCalled();
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('10 km'));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('250 km'));
         });
     });
 

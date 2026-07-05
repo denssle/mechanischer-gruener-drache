@@ -10,9 +10,14 @@ class SportHandler {
         const entry = await sportService.addEntry(interaction.user.id, aktivitaet, kilometer);
         const aktivitaetLabel = SportActivities[aktivitaet];
 
+        // Direkt nach dem Eintrag die neue gemeinsame Gesamtdistanz zeigen - passt zum
+        // kooperativen Design (jeder Eintrag zahlt sichtbar auf die Gruppensumme ein).
+        const gesamtKilometer = await sportService.getGesamtKilometer();
+
         return interaction.reply(
             `✅ Eintrag gespeichert!\n` +
             `${aktivitaetLabel} – **${kilometer} km**\n` +
+            `🌍 Gemeinsam schon **${gesamtKilometer} km**!\n` +
             `Eintrags-ID: \`${entry.id}\``
         );
     }
