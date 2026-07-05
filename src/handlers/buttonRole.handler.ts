@@ -22,7 +22,10 @@ class ButtonRoleHandler {
             });
         }
 
-        const text = interaction.options.getString('text', true);
+        // Slash-Eingabefelder erlauben kein echtes Enter - ein literal getipptes "\n"
+        // wird deshalb in einen echten Zeilenumbruch umgewandelt, damit Admins
+        // mehrzeilige Button-Nachrichten schreiben koennen.
+        const text = interaction.options.getString('text', true).replaceAll('\\n', '\n');
         const role = interaction.options.getRole('rolle', true);
         const label = interaction.options.getString('beschriftung', true);
         const emoji = interaction.options.getString('emoji');

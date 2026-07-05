@@ -101,6 +101,24 @@ describe('ButtonRoleHandler', () => {
             }));
         });
 
+        it('wandelt literal getipptes \\n in echte Zeilenumbrüche um', async () => {
+            const interaction = mockInteraction({
+                options: {
+                    getString: vi.fn((name: string) => {
+                        if (name === 'text') return 'Zeile 1\\nZeile 2';
+                        if (name === 'beschriftung') return 'Regeln akzeptieren';
+                        if (name === 'emoji') return null;
+                        return null;
+                    }),
+                    getRole: vi.fn().mockReturnValue({ id: 'role-1', name: 'Einwohner' }),
+                },
+            });
+
+            await buttonRoleHandler.handleCreate(interaction);
+
+            expect(interaction.channel.send.mock.calls[0][0].content).toBe('Zeile 1\nZeile 2');
+        });
+
         it('setzt ein Emoji auf den Button wenn angegeben', async () => {
             const interaction = mockInteraction({
                 options: {
