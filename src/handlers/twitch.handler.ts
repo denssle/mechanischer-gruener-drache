@@ -146,11 +146,21 @@ class TwitchHandler {
         const roleId = await twitchUserService.getNotificationRole();
         const roleMention = roleId ? `<@&${roleId}> ` : '';
 
-        await channel.send(
-            `${roleMention}🔴 **${displayName}** ist jetzt live auf Twitch!\n` +
-            `📺 https://twitch.tv/${event.broadcaster_user_login}\n` +
-            `⏰ Live seit ${startedAt} Uhr`
-        );
+        // Spiel/Kategorie + Titel sind eine Anreicherung: kommt nichts zurück (Abruf-Fehler
+        // oder direkt beim Live-Gehen noch nicht verfügbar), fallen die Zeilen einfach weg.
+        const streamInfo = await twitchService.getStreamInfo(twitchUserId);
+
+        const lines = [`${roleMention}🔴 **${displayName}** ist jetzt live auf Twitch!`];
+        if (streamInfo?.title) {
+            lines.push(`📝 ${streamInfo.title}`);
+        }
+        if (streamInfo?.game_name) {
+            lines.push(`🎮 ${streamInfo.game_name}`);
+        }
+        lines.push(`📺 https://twitch.tv/${event.broadcaster_user_login}`);
+        lines.push(`⏰ Live seit ${startedAt} Uhr`);
+
+        await channel.send(lines.join('\n'));
     }
 
     async handleDiagnose(interaction: ChatInputCommandInteraction) {

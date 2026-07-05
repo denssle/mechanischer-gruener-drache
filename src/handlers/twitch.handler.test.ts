@@ -22,6 +22,7 @@ vi.mock('../services/twitch.service.js', () => ({
         subscribeToStreamOnline: vi.fn(),
         unsubscribeFromStreamOnline: vi.fn(),
         listStreamOnlineSubscriptions: vi.fn(),
+        getStreamInfo: vi.fn(),
     }
 }));
 
@@ -413,6 +414,40 @@ describe('TwitchHandler', () => {
 
             expect(send).toHaveBeenCalledWith(expect.stringContaining('TestStreamer'));
             expect(send).toHaveBeenCalledWith(expect.not.stringContaining('<@&'));
+        });
+
+        it('ergänzt Spiel/Kategorie und Titel wenn Twitch Stream-Infos liefert', async () => {
+            const send = vi.fn();
+            vi.mocked(twitchUserService.getDiscordIdByTwitchId).mockResolvedValue('discord-1');
+            vi.mocked(twitchUserService.getNotificationChannel).mockResolvedValue('channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+            vi.mocked(userService.getUser).mockResolvedValue({ displayName: 'GespeicherterName' } as any);
+            vi.mocked(twitchUserService.getNotificationRole).mockResolvedValue(null);
+            vi.mocked(twitchService.getStreamInfo).mockResolvedValue({
+                game_id: '509658', game_name: 'Just Chatting', title: 'Wir quatschen', type: 'live'
+            });
+
+            await twitchHandler.handleStreamOnline('twitch-1', event);
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Just Chatting'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Wir quatschen'));
+        });
+
+        it('lässt Spiel/Titel weg wenn keine Stream-Infos verfügbar sind (Fallback)', async () => {
+            const send = vi.fn();
+            vi.mocked(twitchUserService.getDiscordIdByTwitchId).mockResolvedValue('discord-1');
+            vi.mocked(twitchUserService.getNotificationChannel).mockResolvedValue('channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+            vi.mocked(userService.getUser).mockResolvedValue({ displayName: 'GespeicherterName' } as any);
+            vi.mocked(twitchUserService.getNotificationRole).mockResolvedValue(null);
+            vi.mocked(twitchService.getStreamInfo).mockResolvedValue(null);
+
+            await twitchHandler.handleStreamOnline('twitch-1', event);
+
+            const message = send.mock.calls[0][0] as string;
+            expect(message).toContain('ist jetzt live');
+            expect(message).not.toContain('🎮');
+            expect(message).not.toContain('📝');
         });
     });
 });

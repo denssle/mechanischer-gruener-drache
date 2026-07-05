@@ -2,6 +2,7 @@ import config from '../../config.json' with {type: 'json'};
 import {TwitchAccessToken} from "../types/twitchAccessToken.js";
 import {TwitchUser} from "../types/twitchUser.js";
 import {EventSubSubscription} from "../types/eventSubSubscription.js";
+import {TwitchStream} from "../types/twitchStream.js";
 
 const TWITCH_API_BASE = 'https://api.twitch.tv/helix';
 const TWITCH_AUTH_URL = 'https://id.twitch.tv/oauth2/token';
@@ -62,6 +63,27 @@ class TwitchService {
 
         const data = await response.json() as { data: TwitchUser[] };
         return data.data[0] ?? null;
+    }
+
+    // Aktuelle Stream-Infos (Spiel/Kategorie + Titel) - das stream.online-Event selbst
+    // liefert die nicht mit. Bewusst fehlertolerant (fängt alles ab und gibt null zurück),
+    // weil das nur eine Anreicherung der Live-Meldung ist und die niemals blockieren darf.
+    // Direkt beim Live-Gehen kann Twitch hier noch nichts/eine leere Liste liefern -> null.
+    async getStreamInfo(twitchUserId: string): Promise<TwitchStream | null> {
+        try {
+            const response = await this.#twitchRequest(`/streams?user_id=${twitchUserId}`);
+
+            if (!response.ok) {
+                console.error(`Fehler beim Abrufen der Stream-Infos: ${response.statusText}`);
+                return null;
+            }
+
+            const data = await response.json() as { data: TwitchStream[] };
+            return data.data[0] ?? null;
+        } catch (error) {
+            console.error('Fehler beim Abrufen der Stream-Infos:', error);
+            return null;
+        }
     }
 
     async subscribeToStreamOnline(twitchUserId: string): Promise<string | null> {

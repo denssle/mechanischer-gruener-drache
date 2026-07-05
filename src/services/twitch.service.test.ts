@@ -68,6 +68,55 @@ describe('TwitchService', () => {
         });
     });
 
+    describe('getStreamInfo', () => {
+        it('gibt die Stream-Infos zurück wenn der Stream live ist', async () => {
+            const twitchService = await freshTwitchService();
+            vi.mocked(fetch)
+                .mockResolvedValueOnce(mockTokenResponse() as any)
+                .mockResolvedValueOnce({
+                    ok: true,
+                    json: async () => ({ data: [{ game_id: '509658', game_name: 'Just Chatting', title: 'Wir quatschen', type: 'live' }] }),
+                } as any);
+
+            const info = await twitchService.getStreamInfo('twitch-1');
+
+            expect(info).toEqual({ game_id: '509658', game_name: 'Just Chatting', title: 'Wir quatschen', type: 'live' });
+        });
+
+        it('gibt null zurück wenn Twitch keine Daten liefert (z.B. Stream noch nicht sichtbar)', async () => {
+            const twitchService = await freshTwitchService();
+            vi.mocked(fetch)
+                .mockResolvedValueOnce(mockTokenResponse() as any)
+                .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) } as any);
+
+            const info = await twitchService.getStreamInfo('twitch-1');
+
+            expect(info).toBeNull();
+        });
+
+        it('gibt null zurück wenn die Twitch-API einen Fehler liefert', async () => {
+            const twitchService = await freshTwitchService();
+            vi.mocked(fetch)
+                .mockResolvedValueOnce(mockTokenResponse() as any)
+                .mockResolvedValueOnce({ ok: false, statusText: 'Internal Server Error' } as any);
+
+            const info = await twitchService.getStreamInfo('twitch-1');
+
+            expect(info).toBeNull();
+        });
+
+        it('gibt null zurück wenn der Netzwerk-Call wirft (Anreicherung darf nie blockieren)', async () => {
+            const twitchService = await freshTwitchService();
+            vi.mocked(fetch)
+                .mockResolvedValueOnce(mockTokenResponse() as any)
+                .mockRejectedValueOnce(new Error('Netzwerk kaputt'));
+
+            const info = await twitchService.getStreamInfo('twitch-1');
+
+            expect(info).toBeNull();
+        });
+    });
+
     describe('subscribeToStreamOnline', () => {
         it('gibt die Subscription-ID bei Erfolg zurück', async () => {
             const twitchService = await freshTwitchService();
