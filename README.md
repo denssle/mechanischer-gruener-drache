@@ -120,6 +120,7 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] News aus dem Game anzeigen (`/news`, live von https://www.lotgd.de/news.php)
 - [x] Hilfetexte ausbauen: jeder Gruppen-Command hat ein eigenes `hilfe` (`/sport`, `/twitch`, `/event`), plus eine allgemeine Gesamt-Hilfe `/hilfe` über alle Befehle
 - [ ] Ping-Pong: PvP-Herausforderung (`/pingpong herausfordern @user`) – Match gegen eine andere Person per Buttons
+- [ ] Twitch-Live-Meldung um Spiel & Kategorie erweitern – das `stream.online`-Event liefert das nicht mit, daher ein zusätzlicher Helix-`Get Streams`-Call (`/helix/streams?user_id=`) nötig, mit Fallback auf die aktuelle Meldung falls (noch) nichts zurückkommt
 - [ ] Den Bot generalisieren für jeden Server (Multi-Guild-Plan: `docs/multi-guild-plan.md`)
 - [ ] Mit dem eigentlichen Spiel interagieren (Machbarkeitsnotiz: `docs/spiel-interaktion-idee.md`)
 - [ ] CI/Deploy-Workflow auf eine neuere Node-Version heben (Node 20 wird für GitHub Actions deprecated)
