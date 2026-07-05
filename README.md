@@ -117,5 +117,7 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] Sport: Bestandskilometer korrigier-/entfernbar (`/sport altkilometer-setzen`, `0` = entfernen)
 - [x] Countdown bis zum Community-Event (`/event setzen` / `/event countdown`)
 - [x] News aus dem Game anzeigen (`/news`, live von https://www.lotgd.de/news.php)
-- [ ] Den Bot generalisieren für jeden Server
+- [ ] Hilfetexte ausbauen: jeder Command-Block bekommt einen eigenen `hilfe`-Subcommand (bisher nur `/sport` und `/twitch`), plus eine allgemeine Gesamt-Hilfe über alle Befehle
+- [ ] Den Bot generalisieren für jeden Server (Multi-Guild-Plan: `docs/multi-guild-plan.md`)
+- [ ] Mit dem eigentlichen Spiel interagieren (Machbarkeitsnotiz: `docs/spiel-interaktion-idee.md`)
 - [ ] CI/Deploy-Workflow auf eine neuere Node-Version heben (Node 20 wird für GitHub Actions deprecated)
