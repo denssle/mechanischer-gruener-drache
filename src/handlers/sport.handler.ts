@@ -1,6 +1,22 @@
-import {ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits} from 'discord.js';
+import {ChatInputCommandInteraction, EmbedBuilder, MessageFlags, PermissionFlagsBits} from 'discord.js';
 import sportService from '../services/sport.service.js';
 import {SportActivities, SportActivity} from '../types/sport.js';
+
+// Zufällige, motivierende Flavor-Zeile für die Eintrags-Bestätigung - die konkrete
+// Aktivität/Distanz hängt der Handler danach an. Exportiert + getestet (wie die Ping-Pong-Flavors).
+export const EINTRAG_FLAVORS = [
+    '💪 Stark, das zahlt sich aus!',
+    '🔥 Weiter so – jeder Kilometer zählt!',
+    '🎉 Klasse gemacht!',
+    '🚀 Ordentlich was geschafft!',
+    '👏 Respekt, das war Bewegung!',
+    '🌟 Super, die Gruppe dankt dir!',
+    '🙌 Wieder ein Stück weiter gekommen!',
+];
+
+export function randomEintragFlavor(): string {
+    return EINTRAG_FLAVORS[Math.floor(Math.random() * EINTRAG_FLAVORS.length)];
+}
 
 class SportHandler {
     async handleEintragen(interaction: ChatInputCommandInteraction) {
@@ -14,12 +30,22 @@ class SportHandler {
         // kooperativen Design (jeder Eintrag zahlt sichtbar auf die Gruppensumme ein).
         const gesamtKilometer = await sportService.getGesamtKilometer();
 
-        return interaction.reply(
-            `✅ Eintrag gespeichert!\n` +
-            `${aktivitaetLabel} – **${kilometer} km**\n` +
-            `🌍 Gemeinsam schon **${gesamtKilometer} km**!\n` +
-            `Eintrags-ID: \`${entry.id}\``
-        );
+        // Persönlicher: der eintragende User steht mit Name + Profilbild oben im Embed, damit
+        // sich jede/r im Post wiederfindet. Eintrags-ID bleibt im Footer sichtbar (für loeschen/bearbeiten).
+        const embed = new EmbedBuilder()
+            .setColor(0x57F287)
+            .setAuthor({
+                name: interaction.user.displayName,
+                iconURL: interaction.user.displayAvatarURL(),
+            })
+            .setDescription(
+                `${randomEintragFlavor()}\n` +
+                `${aktivitaetLabel} – **${kilometer} km**\n` +
+                `🌍 Gemeinsam schon **${gesamtKilometer} km**!`
+            )
+            .setFooter({text: `Eintrags-ID: ${entry.id}`});
+
+        return interaction.reply({embeds: [embed]});
     }
 
     async handleLoeschen(interaction: ChatInputCommandInteraction) {

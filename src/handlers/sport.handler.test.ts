@@ -15,7 +15,7 @@ vi.mock('../services/sport.service.js', () => ({
 }));
 
 import sportService from '../services/sport.service.js';
-import sportHandler from './sport.handler.js';
+import sportHandler, { EINTRAG_FLAVORS, randomEintragFlavor } from './sport.handler.js';
 
 const mockEntry = (overrides = {}) => ({
     id: 'entry-1',
@@ -32,11 +32,15 @@ describe('SportHandler', () => {
     });
 
     describe('handleEintragen', () => {
-        it('speichert den Eintrag und bestätigt ihn inkl. Gruppengesamt-Distanz', async () => {
+        it('speichert den Eintrag und bestätigt ihn als Embed mit User, Distanz und Gruppengesamt', async () => {
             vi.mocked(sportService.addEntry).mockResolvedValue(mockEntry());
             vi.mocked(sportService.getGesamtKilometer).mockResolvedValue(250);
             const interaction = {
-                user: { id: 'user-123' },
+                user: {
+                    id: 'user-123',
+                    displayName: 'Testläufer',
+                    displayAvatarURL: vi.fn().mockReturnValue('https://cdn/avatar.png'),
+                },
                 options: {
                     getString: vi.fn().mockReturnValue('laufen'),
                     getNumber: vi.fn().mockReturnValue(10),
@@ -48,8 +52,24 @@ describe('SportHandler', () => {
 
             expect(sportService.addEntry).toHaveBeenCalledWith('user-123', 'laufen', 10);
             expect(sportService.getGesamtKilometer).toHaveBeenCalled();
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('10 km'));
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('250 km'));
+
+            const embed = (interaction.reply as any).mock.calls[0][0].embeds[0];
+            const json = embed.toJSON();
+            // User findet sich per Name + Profilbild im Post wieder.
+            expect(json.author.name).toBe('Testläufer');
+            expect(json.author.icon_url).toBe('https://cdn/avatar.png');
+            expect(json.description).toContain('10 km');
+            expect(json.description).toContain('250 km');
+            // Eintrags-ID bleibt sichtbar (für /sport loeschen bzw. bearbeiten).
+            expect(json.footer.text).toContain('entry-1');
+        });
+    });
+
+    describe('Eintrag-Flavor', () => {
+        it('randomEintragFlavor liefert immer eine Zeile aus EINTRAG_FLAVORS', () => {
+            for (let i = 0; i < 50; i++) {
+                expect(EINTRAG_FLAVORS).toContain(randomEintragFlavor());
+            }
         });
     });
 
