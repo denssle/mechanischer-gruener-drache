@@ -65,7 +65,7 @@ describe('BlahajHandler', () => {
             expect(message.reply).not.toHaveBeenCalled();
         });
 
-        it('addiert die Summe der Beträge und antwortet mit Blåhaj-Zahl und Gesamtfläche', async () => {
+        it('addiert die Summe zur Gesamtsumme und antwortet knapp nur mit der Blåhaj-Zahl', async () => {
             vi.mocked(blahajService.addEuroAmount).mockResolvedValue(4280);
             const message = mockMessage('Das Ticket kostet 60€');
 
@@ -75,7 +75,8 @@ describe('BlahajHandler', () => {
             const reply = (message.reply as any).mock.calls[0][0] as string;
             expect(reply).toContain('Blåhaj');
             expect(reply).toContain('2'); // 60 / 28 = 2 Blåhajs für diese Nachricht
-            expect(reply).toContain('ha');
+            // Gesamtfläche/-summe steht bewusst nicht mehr in der Auto-Antwort.
+            expect(reply).not.toContain('Insgesamt');
         });
 
         it('summiert mehrere Beträge einer Nachricht', async () => {

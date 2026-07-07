@@ -57,15 +57,14 @@ class BlahajHandler {
         if (!amounts.length) return;
 
         const messageSum = amounts.reduce((sum, amount) => sum + amount, 0);
-        const total = await blahajService.addEuroAmount(messageSum);
+        // Weiterhin zur Server-Gesamtsumme aufaddieren (für /blahaj), aber in der Auto-Antwort
+        // bewusst nicht mehr anzeigen - hält die spontane Chat-Reaktion knapp.
+        await blahajService.addEuroAmount(messageSum);
 
         const messageBlahaj = Math.floor(messageSum / EURO_PER_BLAHAJ);
-        const totalBlahaj = Math.floor(total / EURO_PER_BLAHAJ);
-        const area = totalBlahaj * HECTARES_PER_BLAHAJ;
 
         await message.reply(
-            `Für ${formatEuro(messageSum)}€ gäbe es **${messageBlahaj}** ${blahajWord(messageBlahaj)}!\n` +
-            `Insgesamt bedecken die Server-Blåhajs schon **${formatHectares(area)} ha**.`
+            `Für ${formatEuro(messageSum)}€ gäbe es **${messageBlahaj}** ${blahajWord(messageBlahaj)}!`
         );
     }
 
