@@ -10,6 +10,7 @@ import loggingHandler from "./handlers/logging.handler.js";
 import config from "../config.json" with {type: "json"};
 import webhookServer from './server/twitch.webhook.server.js';
 import twitchHandler from "./handlers/twitch.handler.js";
+import blahajHandler from "./handlers/blahaj.handler.js";
 
 webhookServer.onNotification((twitchUserId, streamData) => {
     twitchHandler.handleStreamOnline(twitchUserId, streamData).catch((error) => {
@@ -26,6 +27,12 @@ webhookServer.onRevocation((subscriptionId, reason) => {
 webhookServer.start(3000);
 
 client.on(Events.MessageCreate, messageHandler.messageCreate);
+// Async void-Callback: braucht .catch, sonst killt eine unhandled rejection den Prozess (siehe CLAUDE.md).
+client.on(Events.MessageCreate, (message) => {
+    blahajHandler.handleMessage(message).catch((error) => {
+        console.error('Fehler im Blåhaj-Handler:', error);
+    });
+});
 client.on(Events.MessageDelete, (message) => loggingHandler.handleMessageDelete(message));
 client.on(Events.MessageUpdate, (oldMessage, newMessage) => loggingHandler.handleMessageUpdate(oldMessage, newMessage));
 client.on(Events.GuildMemberAdd, (member) => loggingHandler.handleGuildMemberAdd(member));

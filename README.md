@@ -12,6 +12,7 @@ Ein Discord-Bot für den Discord-Server von [LotgD](http://www.lotgd.de/), gesch
 - **Rollen-Selbstvergabe**: Ein Admin postet mit `/rollenbutton` eine Nachricht mit einem Button; per Klick geben sich User selbst eine Rolle (nochmal klicken entfernt sie wieder), z.B. für die Regelakzeptanz oder Twitch-Benachrichtigungen. Der Bot braucht dafür "Rollen verwalten"-Rechte und muss in der Rollen-Hierarchie über der zu vergebenden Rolle stehen.
 - **Event-Countdown**: Ein Admin legt den Termin des nächsten Community-Events fest (`/event setzen`); alle können per `/event countdown` fragen, wie lange es noch dauert.
 - **Spiel-News**: `/news` holt die neueste News von [lotgd.de](https://www.lotgd.de/news.php) live ab und postet sie im Chat.
+- **Blåhaj-Rechner**: Erwähnt jemand einen Euro-Betrag im Chat, rechnet der Bot aus, wie viele Blåhajs (IKEA-Hai, 28 €/Stück) man dafür bekäme, und summiert alle je erwähnten Beträge zu einer „Blåhaj-Fläche" in Hektar. Auf Abruf per `/blahaj`.
 
 ## 💬 Befehle
 
@@ -36,6 +37,7 @@ Alle Befehle, Subcommands und Optionen sind deutsch benannt. Umlaute in den Name
 | `/event setzen` · `/event entfernen` | Termin des Community-Events festlegen/entfernen (Admin) |
 | `/event countdown` | Zeigt, wie lange es noch bis zum Event dauert |
 | `/news` | Holt die neueste Spiel-News von lotgd.de und postet sie |
+| `/blahaj` | Rechnet einen Euro-Betrag (oder die Server-Gesamtsumme) in Blåhajs & Fläche um |
 | `/hilfe` | Gesamtübersicht über alle Befehle des Bots |
 | `/version` | Zeigt die aktuelle Bot-Version |
 
@@ -129,3 +131,4 @@ Um den Webhook-Server lokal manuell zu testen:
 - [ ] `npm audit` meldet aktuell 4 Schwachstellen (3 moderate, 1 high) über `undici` → `@discordjs/rest`/`discord.js`; Fix nur per Breaking-Update von discord.js (`npm audit fix --force`), bei Gelegenheit angehen
 - [x] Sport: Meilenstein-Ankündigung, wenn die Gesamtsumme eine Schwelle überschreitet (`/sport meilenstein setzen` für alle offen, `liste`/`entfernen`/`ankuendigungskanal` als Admin; `announced`-Flag pro Meilenstein, Prüfung in allen summen-erhöhenden Pfaden)
 - [x] Sport: Bestätigung beim Eintragen persönlicher gestalten – Flavortext + Nennung des Users + Profilbild (Embed), damit User sich im Post wiederfinden
+- [x] Blåhaj-Rechner: reagiert automatisch auf €-Beträge im Chat (Umrechnung in Blåhajs à 28 €) und summiert alle Erwähnungen zu einer Gesamtfläche in ha; Abruf per `/blahaj`

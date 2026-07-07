@@ -99,6 +99,13 @@ class RedisService {
     async deleteHashField(key: string, field: string): Promise<void> {
         await this.#client.hDel(key, field);
     }
+
+    // Erhöht einen Zähler um einen (auch gebrochenen) Betrag und gibt den neuen Wert zurück.
+    // node-redis liefert das Ergebnis als String, daher parseFloat.
+    async incrementFloat(key: string, amount: number): Promise<number> {
+        const result = await this.#client.incrByFloat(key, amount);
+        return parseFloat(result);
+    }
 }
 
 export default new RedisService();

@@ -129,6 +129,16 @@ Discord-Bot für den Community-Server von [Legend of the Green Dragon (LotGD)](h
 - Seit 2026-07-05: **Anti-Spam-Cooldown** – pro User ein Redis-Key mit TTL (`PING_PONG:COOLDOWN:{userId}`, `COOLDOWN_SECONDS = 30`, leicht anpassbar). Vor dem Spielen prüft `handlePingPong` `redisService.getTimeToLive(...)`; ist noch Zeit übrig, kommt eine ephemere „warte noch Xs"-Meldung und es wird **nicht** gespielt. Neue Redis-Helper dafür: `setWithExpiry` (`SET ... EX`) und `getTimeToLive` (`TTL`, liefert -2/-1 = kein Cooldown aktiv).
 - **Bekannte Design-Schwäche** (bewusst offen): Scores sind rein additiv → die Bestenliste belohnt eher *viel spielen* als *gut spielen*. Der Cooldown dämpft das nur. Die geplante **PvP-Herausforderung** (`/pingpong herausfordern @user`, README-Todo) soll echte Interaktion/Skill bringen.
 
+## Blåhaj-Rechner-Feature (`/blahaj` + Auto-Listener)
+
+- Zweck (seit 2026-07-07, Community-Spielerei): Wird im Chat ein Euro-Betrag erwähnt, rechnet der Bot ihn in Blåhajs um (`EURO_PER_BLAHAJ = 28`) und summiert **alle je erwähnten Beträge** serverweit zu einer „Blåhaj-Fläche" in ha (`HECTARES_PER_BLAHAJ = 0.00003`). Beide Konstanten oben in `blahaj.handler.ts`, leicht anpassbar, falls sich der Preis ändert.
+- **Zwei Einstiege:** (1) Auto-Listener auf `MessageCreate` – reagiert auf User-Wunsch **bei jeder** €-Erwähnung mit einer Antwort. (2) `/blahaj [betrag]` – ohne Betrag die Server-Gesamtsumme + Fläche, mit Betrag ein reiner Rechner. **Der `/blahaj betrag:`-Wert zählt bewusst NICHT zur Gesamtsumme** – nur der Auto-Listener akkumuliert (sonst wäre der Rechner nicht gefahrlos nutzbar).
+- **Bot-Nachrichten werden zwingend ignoriert** (`message.author.bot`): sonst würde die „28 €" in der eigenen Antwort den Listener endlos erneut triggern. Das ist kein Nice-to-have, sondern verhindert eine Schleife.
+- Verkabelung: **zweiter** `client.on(Events.MessageCreate, …)` in `index.ts` (neben `messageHandler.messageCreate`), bewusst getrennte Zuständigkeit wie bei den doppelt registrierten Logging-Events. Async void-Callback → `.catch()` (siehe Stolperfalle unhandled rejection). `blahaj.handler.ts` importiert `client` nicht (arbeitet nur mit `message`/`interaction`).
+- Speicher: ein einzelner Redis-Float-Zähler `BLAHAJ:TOTAL_EUR` via neuem `redisService.incrementFloat` (`INCRBYFLOAT`, gibt String → `parseFloat`). Kein Verlauf pro User/Nachricht, nur die Summe.
+- Parsing (`parseEuroAmounts`, exportiert + getestet): erkennt `50€`/`€50`/`50 €`/`50 Euro`/`50 EUR` inkl. deutschem Zahlenformat (Komma = Dezimal, Punkt = Tausender, mit Heuristik für alleinstehende Punkte). **Fragil by design** bei exotischen Formaten (z.B. „3€50" → nur 3) – bewusst simpel gehalten (Hobby-Spielerei), im Zweifel Tests erweitern.
+- `/blahaj` ist ein **flacher** Command (kein Subcommand) → wie `/news`/`/version` nur in `/hilfe` dokumentiert (nicht per eigenem `hilfe`). `hilfe.handler.test.ts` sichert per `it.each` ab, dass `/blahaj` im `HELP_TEXT` steht.
+
 ## Links
 
 - [GitHub](https://github.com/denssle/mechanischer-gruener-drache)

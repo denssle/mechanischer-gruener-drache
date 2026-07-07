@@ -7,7 +7,8 @@ export const HELP_TEXT =
     `📖 **Befehlsübersicht – Mechanischer Grüner Drache**\n` +
     `Tippe \`/\` und den Befehl, um ihn zu nutzen. Details zu einem Bereich gibt es per \`/<bereich> hilfe\`.\n\n` +
     `**🏓 Spiel & Spaß**\n` +
-    `\`/pingpong\` – eine Runde Ping-Pong · \`/pingbestenliste\` – die Bestenliste\n\n` +
+    `\`/pingpong\` – eine Runde Ping-Pong · \`/pingbestenliste\` – die Bestenliste\n` +
+    `\`/blahaj\` – Euro-Beträge in Blåhajs umrechnen (der Bot reagiert auch automatisch auf €-Beträge im Chat)\n\n` +
     `**📺 Twitch** (Details: \`/twitch hilfe\`)\n` +
     `\`/twitch verknuepfen\` – deinen Kanal hinterlegen; der Server wird benachrichtigt, wenn du live gehst\n\n` +
     `**🏃 Sport** (Details: \`/sport hilfe\`)\n` +
