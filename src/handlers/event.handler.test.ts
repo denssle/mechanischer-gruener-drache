@@ -186,8 +186,9 @@ describe('EventHandler', () => {
 
             const reply = interaction.reply.mock.calls[0][0];
             expect(reply).toContain('/event countdown');
-            expect(reply).toContain('/event setzen');
-            expect(reply).toContain('/event entfernen');
+            // Admin-Aktionen (setzen/entfernen) werden in der Hilfe bewusst nicht mehr gelistet.
+            expect(reply).not.toContain('/event setzen');
+            expect(reply).not.toContain('/event entfernen');
         });
     });
 

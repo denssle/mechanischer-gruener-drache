@@ -84,9 +84,6 @@ class SportHandler {
             `**/sport bearbeiten** – Kilometeranzahl eines Eintrags korrigieren\n` +
             `**/sport gesamt** – Gesamtkilometer aller Sportler\n` +
             `**/sport statistik** – Deine persönliche Übersicht pro Aktivität\n` +
-            `**/sport setzen** – Kilometerstand eines Mitglieds setzen (nur Admins)\n` +
-            `**/sport altkilometer** – Altkilometer ohne zugeordnetes Mitglied einspeisen (nur Admins)\n` +
-            `**/sport altkilometer-setzen** – Bestandskilometer setzen/entfernen (0 = weg) (nur Admins)\n` +
             `**/sport hilfe** – Zeigt diese Übersicht`
         );
     }

@@ -109,9 +109,6 @@ class TwitchHandler {
             `**/twitch verknuepfen** – Deinen Twitch-Kanal hinterlegen\n` +
             `**/twitch entfernen** – Deine Twitch-Verknüpfung entfernen\n` +
             `**/twitch status** – Deine aktuelle Verknüpfung anzeigen\n` +
-            `**/twitch benachrichtigungskanal** – Benachrichtigungs-Kanal festlegen (nur Admins)\n` +
-            `**/twitch benachrichtigungsrolle** – Rolle für Benachrichtigungen festlegen (nur Admins)\n` +
-            `**/twitch diagnose** – Kanal, Rolle & Subscriptions prüfen + Testnachricht (nur Admins)\n` +
             `**/twitch hilfe** – Zeigt diese Übersicht`
         );
     }

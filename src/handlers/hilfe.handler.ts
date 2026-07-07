@@ -17,10 +17,7 @@ export const HELP_TEXT =
     `**📰 News**\n` +
     `\`/news\` – die neuesten News aus dem Spiel (lotgd.de)\n\n` +
     `**🙋 Rollen zum Selbstvergeben**\n` +
-    `An Button-Nachrichten (von Admins via \`/rollenbutton\` gepostet) gibst du dir per Klick selbst Rollen.\n\n` +
-    `**🔧 Nur für Admins**\n` +
-    `\`/rollenbutton\` – Button-Rollen-Nachricht posten · \`/protokoll\` – Log-Kanal festlegen\n` +
-    `Dazu die Admin-Aktionen in \`/sport\`, \`/twitch\` und \`/event\` (siehe jeweiliges \`hilfe\`).\n\n` +
+    `An Button-Nachrichten (von Admins gepostet) gibst du dir per Klick selbst Rollen.\n\n` +
     `\`/version\` – aktuelle Bot-Version · \`/hilfe\` – diese Übersicht`;
 
 class HilfeHandler {
