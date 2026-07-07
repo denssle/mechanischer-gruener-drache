@@ -1,6 +1,6 @@
 {
   "name": "mechanischer-gruener-drache",
-  "version": "1.18.0",
+  "version": "1.18.1",
   "description": "",
   "main": "dist/index.js",
   "scripts": {
@@ -27,5 +27,8 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.0",
     "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "undici": "^6.27.0"
   }
 }

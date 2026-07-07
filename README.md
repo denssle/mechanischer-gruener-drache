@@ -128,9 +128,10 @@ Um den Webhook-Server lokal manuell zu testen:
 - [ ] Den Bot generalisieren für jeden Server (Multi-Guild-Plan: `docs/multi-guild-plan.md`)
 - [ ] Mit dem eigentlichen Spiel interagieren (Machbarkeitsnotiz: `docs/spiel-interaktion-idee.md`)
 - [ ] CI/Deploy-Workflow auf eine neuere Node-Version heben (Node 20 wird für GitHub Actions deprecated)
-- [ ] `npm audit` meldet aktuell 4 Schwachstellen (3 moderate, 1 high) über `undici` → `@discordjs/rest`/`discord.js`; Fix nur per Breaking-Update von discord.js (`npm audit fix --force`), bei Gelegenheit angehen
+- [x] `npm audit`-Schwachstellen (4× via verwundbarem `undici`, transitiv über `discord.js`/`@discordjs/rest`) behoben – **nicht** per `--force` (das hätte auf discord.js@13 downgraded), sondern per `overrides: { "undici": "^6.27.0" }` in der `package.json`; discord.js bleibt auf 14.x, `npm audit` meldet 0 Schwachstellen
 - [x] Sport: Meilenstein-Ankündigung, wenn die Gesamtsumme eine Schwelle überschreitet (`/sport meilenstein setzen` für alle offen, `liste`/`entfernen`/`ankuendigungskanal` als Admin; `announced`-Flag pro Meilenstein, Prüfung in allen summen-erhöhenden Pfaden)
 - [x] Sport: Bestätigung beim Eintragen persönlicher gestalten – Flavortext + Nennung des Users + Profilbild (Embed), damit User sich im Post wiederfinden
 - [x] Blåhaj-Rechner: reagiert automatisch auf €-Beträge im Chat (Umrechnung in Blåhajs à 28 €) und summiert alle Erwähnungen zu einer Gesamtfläche in ha; Abruf per `/blahaj`
 - [x] Visual Noise reduzieren: Emojis radikal aus den Bot-Antworten entfernt (User-Feedback: „visuelles Äquivalent von ADHS"). Ausnahmen bewusst behalten: `/hilfe`-Kategorie-Icons, Sport-Aktivitäts-Icons, sowie die funktionalen Statusmarker im Audit-Log (`/protokoll`) und in `/twitch diagnose`
 - [ ] Bot-Namen kürzen/knackiger machen, damit er kompakt in der Chatleiste steht (aktuell „Mechanischer Grüner Drache")
+- [ ] `/news`: zusätzlich den „Neuigkeiten am "-Teil von https://www.lotgd.de/news.php ausgeben (entweder in `/news` mit aufnehmen oder als eigenen Befehl)
