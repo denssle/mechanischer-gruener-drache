@@ -11,10 +11,25 @@ vi.mock('../services/sport.service.js', () => ({
         addLegacyKilometer: vi.fn(),
         getLegacyKilometer: vi.fn(),
         setLegacyKilometer: vi.fn(),
+        setMilestone: vi.fn(),
+        getMilestones: vi.fn(),
+        removeMilestone: vi.fn(),
+        checkAndMarkReachedMilestones: vi.fn().mockResolvedValue([]),
+        getAnnouncementChannel: vi.fn().mockResolvedValue(null),
+        setAnnouncementChannel: vi.fn(),
+    }
+}));
+
+vi.mock('../client.js', () => ({
+    default: {
+        channels: {
+            fetch: vi.fn(),
+        }
     }
 }));
 
 import sportService from '../services/sport.service.js';
+import client from '../client.js';
 import sportHandler, { EINTRAG_FLAVORS, randomEintragFlavor } from './sport.handler.js';
 
 const mockEntry = (overrides = {}) => ({
@@ -70,6 +85,139 @@ describe('SportHandler', () => {
             for (let i = 0; i < 50; i++) {
                 expect(EINTRAG_FLAVORS).toContain(randomEintragFlavor());
             }
+        });
+    });
+
+    describe('handleMeilensteinSetzen', () => {
+        it('speichert den Meilenstein und wandelt literal \\n in echte Zeilenumbrüche', async () => {
+            const interaction = {
+                memberPermissions: { has: vi.fn().mockReturnValue(false) }, // offen für alle - kein Admin nötig
+                options: {
+                    getNumber: vi.fn().mockReturnValue(2000),
+                    getString: vi.fn().mockReturnValue('Zeile 1\\nZeile 2'),
+                },
+                reply: vi.fn(),
+            } as any;
+
+            await sportHandler.handleMeilensteinSetzen(interaction);
+
+            expect(sportService.setMilestone).toHaveBeenCalledWith(2000, 'Zeile 1\nZeile 2');
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('2000 km'));
+        });
+    });
+
+    describe('handleMeilensteinListe', () => {
+        it('lehnt ohne Administrator-Rechte ab', async () => {
+            const interaction = {
+                memberPermissions: { has: vi.fn().mockReturnValue(false) },
+                reply: vi.fn(),
+            } as any;
+
+            await sportHandler.handleMeilensteinListe(interaction);
+
+            expect(sportService.getMilestones).not.toHaveBeenCalled();
+        });
+
+        it('listet die Meilensteine mit Status-Symbol', async () => {
+            vi.mocked(sportService.getMilestones).mockResolvedValue([
+                { kilometers: 500, text: 'Erstes Ziel', announced: true },
+                { kilometers: 2000, text: 'Grosses Ziel\nmehrzeilig', announced: false },
+            ]);
+            const interaction = {
+                memberPermissions: { has: vi.fn().mockReturnValue(true) },
+                reply: vi.fn(),
+            } as any;
+
+            await sportHandler.handleMeilensteinListe(interaction);
+
+            const reply = (interaction.reply as any).mock.calls[0][0] as string;
+            expect(reply).toContain('✅ **500 km** – Erstes Ziel');
+            expect(reply).toContain('⏳ **2000 km** – Grosses Ziel');
+            // nur die erste Zeile des mehrzeiligen Textes
+            expect(reply).not.toContain('mehrzeilig');
+        });
+    });
+
+    describe('handleMeilensteinEntfernen', () => {
+        it('bestätigt das Entfernen bei Erfolg', async () => {
+            vi.mocked(sportService.removeMilestone).mockResolvedValue(true);
+            const interaction = {
+                memberPermissions: { has: vi.fn().mockReturnValue(true) },
+                options: { getNumber: vi.fn().mockReturnValue(2000) },
+                reply: vi.fn(),
+            } as any;
+
+            await sportHandler.handleMeilensteinEntfernen(interaction);
+
+            expect(sportService.removeMilestone).toHaveBeenCalledWith(2000);
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('entfernt'));
+        });
+
+        it('meldet wenn kein Meilenstein gefunden wurde', async () => {
+            vi.mocked(sportService.removeMilestone).mockResolvedValue(false);
+            const interaction = {
+                memberPermissions: { has: vi.fn().mockReturnValue(true) },
+                options: { getNumber: vi.fn().mockReturnValue(999) },
+                reply: vi.fn(),
+            } as any;
+
+            await sportHandler.handleMeilensteinEntfernen(interaction);
+
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('Kein Meilenstein'));
+        });
+    });
+
+    describe('handleAnkuendigungskanal', () => {
+        it('setzt den Kanal mit Administrator-Rechten', async () => {
+            const interaction = {
+                memberPermissions: { has: vi.fn().mockReturnValue(true) },
+                options: { getChannel: vi.fn().mockReturnValue({ id: 'chan-1' }) },
+                reply: vi.fn(),
+            } as any;
+
+            await sportHandler.handleAnkuendigungskanal(interaction);
+
+            expect(sportService.setAnnouncementChannel).toHaveBeenCalledWith('chan-1');
+        });
+    });
+
+    describe('Meilenstein-Ankündigung beim Eintragen', () => {
+        const eintragenInteraction = () => ({
+            user: {
+                id: 'user-123',
+                displayName: 'Testläufer',
+                displayAvatarURL: vi.fn().mockReturnValue('https://cdn/avatar.png'),
+            },
+            options: {
+                getString: vi.fn().mockReturnValue('laufen'),
+                getNumber: vi.fn().mockReturnValue(10),
+            },
+            reply: vi.fn(),
+        } as any);
+
+        it('postet einen erreichten Meilenstein in den konfigurierten Kanal', async () => {
+            vi.mocked(sportService.addEntry).mockResolvedValue(mockEntry());
+            vi.mocked(sportService.getGesamtKilometer).mockResolvedValue(2000);
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('chan-1');
+            vi.mocked(sportService.checkAndMarkReachedMilestones).mockResolvedValue([
+                { kilometers: 2000, text: 'Yay, 2000 km!', announced: true },
+            ]);
+            const send = vi.fn();
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await sportHandler.handleEintragen(eintragenInteraction());
+
+            expect(send).toHaveBeenCalledWith('Yay, 2000 km!');
+        });
+
+        it('markiert nichts als erreicht wenn kein Ankündigungskanal gesetzt ist', async () => {
+            vi.mocked(sportService.addEntry).mockResolvedValue(mockEntry());
+            vi.mocked(sportService.getGesamtKilometer).mockResolvedValue(2000);
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue(null);
+
+            await sportHandler.handleEintragen(eintragenInteraction());
+
+            expect(sportService.checkAndMarkReachedMilestones).not.toHaveBeenCalled();
         });
     });
 

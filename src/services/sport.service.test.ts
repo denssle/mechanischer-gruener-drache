@@ -13,6 +13,9 @@ vi.mock('../services/redis.service.js', () => ({
         getSortedSet: vi.fn(),
         getSortedSetAll: vi.fn(),
         setSortedSet: vi.fn(),
+        setHashField: vi.fn(),
+        getHashAll: vi.fn(),
+        deleteHashField: vi.fn(),
     }
 }));
 
@@ -208,6 +211,103 @@ describe('SportService', () => {
             const gesamt = await sportService.getGesamtKilometer();
 
             expect(gesamt).toBe(0);
+        });
+    });
+
+    describe('setMilestone', () => {
+        it('speichert den Meilenstein als Hash-Feld mit announced=false', async () => {
+            await sportService.setMilestone(2000, 'Yay, 2000 km!');
+
+            expect(redisService.setHashField).toHaveBeenCalledWith(
+                'SPORT:MILESTONES',
+                '2000',
+                JSON.stringify({kilometers: 2000, text: 'Yay, 2000 km!', announced: false})
+            );
+        });
+    });
+
+    describe('getMilestones', () => {
+        it('parst und sortiert die Meilensteine aufsteigend nach Kilometern', async () => {
+            vi.mocked(redisService.getHashAll).mockResolvedValue({
+                '2000': JSON.stringify({kilometers: 2000, text: 'B', announced: false}),
+                '500': JSON.stringify({kilometers: 500, text: 'A', announced: true}),
+            });
+
+            const milestones = await sportService.getMilestones();
+
+            expect(milestones.map(m => m.kilometers)).toEqual([500, 2000]);
+        });
+    });
+
+    describe('removeMilestone', () => {
+        it('entfernt einen vorhandenen Meilenstein und gibt true zurück', async () => {
+            vi.mocked(redisService.getHashAll).mockResolvedValue({
+                '2000': JSON.stringify({kilometers: 2000, text: 'B', announced: false}),
+            });
+
+            const result = await sportService.removeMilestone(2000);
+
+            expect(result).toBe(true);
+            expect(redisService.deleteHashField).toHaveBeenCalledWith('SPORT:MILESTONES', '2000');
+        });
+
+        it('gibt false zurück wenn kein Meilenstein bei der Kilometerzahl existiert', async () => {
+            vi.mocked(redisService.getHashAll).mockResolvedValue({});
+
+            const result = await sportService.removeMilestone(2000);
+
+            expect(result).toBe(false);
+            expect(redisService.deleteHashField).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('checkAndMarkReachedMilestones', () => {
+        it('markiert nur noch nicht angekündigte, erreichte Meilensteine und gibt sie zurück', async () => {
+            // Gesamtsumme = 2500
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'u1', score: 2500}] as any);
+            vi.mocked(redisService.getHashAll).mockResolvedValue({
+                '1000': JSON.stringify({kilometers: 1000, text: '1k', announced: true}),   // schon gefeiert
+                '2000': JSON.stringify({kilometers: 2000, text: '2k', announced: false}),  // jetzt erreicht
+                '3000': JSON.stringify({kilometers: 3000, text: '3k', announced: false}),  // noch nicht erreicht
+            });
+
+            const reached = await sportService.checkAndMarkReachedMilestones();
+
+            expect(reached.map(m => m.kilometers)).toEqual([2000]);
+            // 2000 wird als announced=true zurückgeschrieben
+            expect(redisService.setHashField).toHaveBeenCalledWith(
+                'SPORT:MILESTONES',
+                '2000',
+                JSON.stringify({kilometers: 2000, text: '2k', announced: true})
+            );
+            // 3000 bleibt unangetastet
+            expect(redisService.setHashField).not.toHaveBeenCalledWith(
+                'SPORT:MILESTONES',
+                '3000',
+                expect.anything()
+            );
+        });
+
+        it('gibt ein leeres Array zurück wenn keine neue Schwelle erreicht wurde', async () => {
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'u1', score: 100}] as any);
+            vi.mocked(redisService.getHashAll).mockResolvedValue({
+                '2000': JSON.stringify({kilometers: 2000, text: '2k', announced: false}),
+            });
+
+            const reached = await sportService.checkAndMarkReachedMilestones();
+
+            expect(reached).toEqual([]);
+            expect(redisService.setHashField).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('Ankündigungskanal', () => {
+        it('setzt und liest den Ankündigungskanal', async () => {
+            await sportService.setAnnouncementChannel('channel-123');
+            expect(redisService.set).toHaveBeenCalledWith('SPORT:ANNOUNCEMENT_CHANNEL', 'channel-123');
+
+            vi.mocked(redisService.get).mockResolvedValue('channel-123');
+            expect(await sportService.getAnnouncementChannel()).toBe('channel-123');
         });
     });
 });

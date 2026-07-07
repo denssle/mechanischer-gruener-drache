@@ -1,11 +1,13 @@
 import {randomUUID} from 'crypto';
 import redisService from './redis.service.js';
-import {SportEntry, SportActivity} from '../types/sport.js';
+import {SportEntry, SportActivity, SportMilestone} from '../types/sport.js';
 
 const KEYS = {
     entry: (id: string) => `SPORT:ENTRY:${id}`,
     userEntries: (userId: string) => `SPORT:USER:${userId}`,
     highscore: 'SPORT:HIGHSCORE',
+    milestones: 'SPORT:MILESTONES',
+    announcementChannel: 'SPORT:ANNOUNCEMENT_CHANNEL',
 };
 
 const DUMMY_USER_ID = 'LEGACY_KILOMETERS';
@@ -97,6 +99,53 @@ class SportService {
         } else {
             await redisService.setSortedSet(KEYS.highscore, DUMMY_USER_ID, kilometers);
         }
+    }
+
+    // Legt einen Meilenstein an bzw. überschreibt einen bestehenden bei gleicher Kilometerzahl.
+    // announced startet immer bei false, damit ein neu gesetzter Meilenstein feiern kann.
+    async setMilestone(kilometers: number, text: string): Promise<void> {
+        const milestone: SportMilestone = {kilometers, text, announced: false};
+        await redisService.setHashField(KEYS.milestones, String(kilometers), JSON.stringify(milestone));
+    }
+
+    async getMilestones(): Promise<SportMilestone[]> {
+        const all = await redisService.getHashAll(KEYS.milestones);
+        return Object.values(all)
+            .map(value => JSON.parse(value) as SportMilestone)
+            .sort((a, b) => a.kilometers - b.kilometers);
+    }
+
+    async removeMilestone(kilometers: number): Promise<boolean> {
+        const all = await redisService.getHashAll(KEYS.milestones);
+        if (!(String(kilometers) in all)) return false;
+        await redisService.deleteHashField(KEYS.milestones, String(kilometers));
+        return true;
+    }
+
+    // Findet alle noch nicht angekündigten Meilensteine, deren Schwelle die Gesamtsumme
+    // (getGesamtKilometer - alles zählt) erreicht hat, markiert sie als announced und gibt
+    // sie zurück. Das eigentliche Posten übernimmt der Handler (braucht den Discord-Client).
+    async checkAndMarkReachedMilestones(): Promise<SportMilestone[]> {
+        const gesamt = await this.getGesamtKilometer();
+        const milestones = await this.getMilestones();
+
+        const newlyReached: SportMilestone[] = [];
+        for (const milestone of milestones) {
+            if (!milestone.announced && milestone.kilometers <= gesamt) {
+                milestone.announced = true;
+                await redisService.setHashField(KEYS.milestones, String(milestone.kilometers), JSON.stringify(milestone));
+                newlyReached.push(milestone);
+            }
+        }
+        return newlyReached;
+    }
+
+    async setAnnouncementChannel(channelId: string): Promise<void> {
+        await redisService.set(KEYS.announcementChannel, channelId);
+    }
+
+    async getAnnouncementChannel(): Promise<string | null> {
+        return redisService.get(KEYS.announcementChannel);
     }
 }
 

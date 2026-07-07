@@ -87,6 +87,18 @@ class RedisService {
     async getTimeToLive(key: string): Promise<number> {
         return this.#client.ttl(key);
     }
+
+    async setHashField(key: string, field: string, value: string): Promise<void> {
+        await this.#client.hSet(key, field, value);
+    }
+
+    async getHashAll(key: string): Promise<Record<string, string>> {
+        return this.#client.hGetAll(key);
+    }
+
+    async deleteHashField(key: string, field: string): Promise<void> {
+        await this.#client.hDel(key, field);
+    }
 }
 
 export default new RedisService();

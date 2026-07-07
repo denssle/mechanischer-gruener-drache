@@ -15,3 +15,11 @@ export const SportActivities = {
 } as const;
 
 export type SportActivity = keyof typeof SportActivities;
+
+export interface SportMilestone {
+    kilometers: number;
+    text: string;
+    // Einmal erreicht = erreicht: verhindert, dass derselbe Meilenstein erneut feiert,
+    // wenn die Gesamtsumme später wieder unter die Schwelle fällt und erneut steigt.
+    announced: boolean;
+}

@@ -120,12 +120,12 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] News aus dem Game anzeigen (`/news`, live von https://www.lotgd.de/news.php)
 - [x] Hilfetexte ausbauen: jeder Gruppen-Command hat ein eigenes `hilfe` (`/sport`, `/twitch`, `/event`), plus eine allgemeine Gesamt-Hilfe `/hilfe` über alle Befehle
 - [x] Admin Funktionen aus den Hilfetexten entfernen - die Listen werden zu lang
-- [ ] Idee: Tipps zu Funktionen einstreuen wie bei Ladebildschirmen in Videospielen - damit UserInnen wissen was die Anwendung kann
+- [ ] Idee: Tipps zu Funktionen einstreuen wie bei Ladebildschirmen in Videospielen - damit UserInnen wissen was Bedie Anwendung kann
 - [ ] Ping-Pong: PvP-Herausforderung (`/pingpong herausfordern @user`) – Match gegen eine andere Person per Buttons
 - [x] Twitch-Live-Meldung um Spiel & Kategorie erweitert (`twitchService.getStreamInfo` via Helix `Get Streams`, mit Fallback falls beim Live-Gehen noch nichts verfügbar ist)
 - [ ] Den Bot generalisieren für jeden Server (Multi-Guild-Plan: `docs/multi-guild-plan.md`)
 - [ ] Mit dem eigentlichen Spiel interagieren (Machbarkeitsnotiz: `docs/spiel-interaktion-idee.md`)
 - [ ] CI/Deploy-Workflow auf eine neuere Node-Version heben (Node 20 wird für GitHub Actions deprecated)
 - [ ] `npm audit` meldet aktuell 4 Schwachstellen (3 moderate, 1 high) über `undici` → `@discordjs/rest`/`discord.js`; Fix nur per Breaking-Update von discord.js (`npm audit fix --force`), bei Gelegenheit angehen
-- [ ] Sport: Meilenstein-Ankündigung, wenn die Gesamtsumme eine runde Schwelle überschreitet (z.B. bei 2000 km "Yay, wir haben 2000 km geschafft!") – braucht einen persistierten "zuletzt erreichte Schwelle"-Wert, Prüfung in allen summenändernden Pfaden (eintragen/bearbeiten/löschen/altkilometer/setzen) und einen Ziel-Channel
+- [x] Sport: Meilenstein-Ankündigung, wenn die Gesamtsumme eine Schwelle überschreitet (`/sport meilenstein setzen` für alle offen, `liste`/`entfernen`/`ankuendigungskanal` als Admin; `announced`-Flag pro Meilenstein, Prüfung in allen summen-erhöhenden Pfaden)
 - [x] Sport: Bestätigung beim Eintragen persönlicher gestalten – Flavortext + Nennung des Users + Profilbild (Embed), damit User sich im Post wiederfinden

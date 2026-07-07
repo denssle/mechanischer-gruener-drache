@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, SlashCommandBuilder} from 'discord.js';
+import {ChannelType, ChatInputCommandInteraction, SlashCommandBuilder} from 'discord.js';
 import sportHandler from '../handlers/sport.handler.js';
 
 export default {
@@ -79,10 +79,57 @@ export default {
                 .setName('kilometer')
                 .setDescription('Neuer Bestandskilometer-Wert (0 = entfernen)')
                 .setRequired(true)
-                .setMinValue(0))),
+                .setMinValue(0)))
+        .addSubcommand(sub => sub
+            .setName('ankuendigungskanal')
+            .setDescription('Kanal für Meilenstein-Ankündigungen festlegen (nur Admins)')
+            .addChannelOption(option => option
+                .setName('kanal')
+                .setDescription('Ziel-Kanal für die Ankündigungen')
+                .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+                .setRequired(true)))
+        .addSubcommandGroup(group => group
+            .setName('meilenstein')
+            .setDescription('Meilensteine für die gemeinsame Gesamtdistanz')
+            .addSubcommand(sub => sub
+                .setName('setzen')
+                .setDescription('Meilenstein mit Kilometerzahl und Ankündigungstext anlegen')
+                .addNumberOption(option => option
+                    .setName('kilometer')
+                    .setDescription('Ab welcher Gesamtdistanz gefeiert wird')
+                    .setRequired(true)
+                    .setMinValue(1))
+                .addStringOption(option => option
+                    .setName('text')
+                    .setDescription('Ankündigungstext (Markdown erlaubt, \\n für Zeilenumbruch)')
+                    .setRequired(true)))
+            .addSubcommand(sub => sub
+                .setName('liste')
+                .setDescription('Alle gesetzten Meilensteine anzeigen (nur Admins)'))
+            .addSubcommand(sub => sub
+                .setName('entfernen')
+                .setDescription('Einen Meilenstein anhand der Kilometerzahl entfernen (nur Admins)')
+                .addNumberOption(option => option
+                    .setName('kilometer')
+                    .setDescription('Kilometerzahl des zu entfernenden Meilensteins')
+                    .setRequired(true)
+                    .setMinValue(1)))),
 
     async execute(interaction: ChatInputCommandInteraction) {
+        const group = interaction.options.getSubcommandGroup(false);
         const subcommand = interaction.options.getSubcommand();
+
+        if (group === 'meilenstein') {
+            switch (subcommand) {
+                case 'setzen':
+                    return sportHandler.handleMeilensteinSetzen(interaction);
+                case 'liste':
+                    return sportHandler.handleMeilensteinListe(interaction);
+                case 'entfernen':
+                    return sportHandler.handleMeilensteinEntfernen(interaction);
+            }
+            return;
+        }
 
         switch (subcommand) {
             case 'eintragen':
@@ -103,6 +150,8 @@ export default {
                 return sportHandler.handleAltkilometer(interaction);
             case 'altkilometer-setzen':
                 return sportHandler.handleAltkilometerSetzen(interaction);
+            case 'ankuendigungskanal':
+                return sportHandler.handleAnkuendigungskanal(interaction);
         }
     }
 };

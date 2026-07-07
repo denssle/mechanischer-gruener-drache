@@ -11,14 +11,21 @@ vi.mock('../handlers/sport.handler.js', () => ({
         handleGesamt: vi.fn(),
         handleAltkilometer: vi.fn(),
         handleAltkilometerSetzen: vi.fn(),
+        handleAnkuendigungskanal: vi.fn(),
+        handleMeilensteinSetzen: vi.fn(),
+        handleMeilensteinListe: vi.fn(),
+        handleMeilensteinEntfernen: vi.fn(),
     }
 }));
 
 import sportHandler from '../handlers/sport.handler.js';
 import sportCommand from './sport.command.js';
 
-const mockInteraction = (subcommand: string) => ({
-    options: { getSubcommand: vi.fn().mockReturnValue(subcommand) },
+const mockInteraction = (subcommand: string, group: string | null = null) => ({
+    options: {
+        getSubcommand: vi.fn().mockReturnValue(subcommand),
+        getSubcommandGroup: vi.fn().mockReturnValue(group),
+    },
 } as any);
 
 describe('sport.command', () => {
@@ -36,8 +43,21 @@ describe('sport.command', () => {
         ['gesamt', 'handleGesamt'],
         ['altkilometer', 'handleAltkilometer'],
         ['altkilometer-setzen', 'handleAltkilometerSetzen'],
+        ['ankuendigungskanal', 'handleAnkuendigungskanal'],
     ] as const)('leitet Subcommand "%s" an sportHandler.%s weiter', async (subcommand, handlerMethod) => {
         const interaction = mockInteraction(subcommand);
+
+        await sportCommand.execute(interaction);
+
+        expect(sportHandler[handlerMethod]).toHaveBeenCalledWith(interaction);
+    });
+
+    it.each([
+        ['setzen', 'handleMeilensteinSetzen'],
+        ['liste', 'handleMeilensteinListe'],
+        ['entfernen', 'handleMeilensteinEntfernen'],
+    ] as const)('leitet Subcommand "meilenstein %s" an sportHandler.%s weiter', async (subcommand, handlerMethod) => {
+        const interaction = mockInteraction(subcommand, 'meilenstein');
 
         await sportCommand.execute(interaction);
 
@@ -54,13 +74,14 @@ describe('sport.command', () => {
         }
     });
 
-    it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
-        const definedSubcommands = sportCommand.data.options.map((option) => option.toJSON().name);
-        const dispatchedSubcommands = [
+    it('registriert alle im SlashCommandBuilder definierten Top-Level-Optionen auch im Dispatch', () => {
+        const definedOptions = sportCommand.data.options.map((option) => option.toJSON().name);
+        const dispatchedOptions = [
             'eintragen', 'loeschen', 'bearbeiten', 'statistik',
             'hilfe', 'setzen', 'gesamt', 'altkilometer', 'altkilometer-setzen',
+            'ankuendigungskanal', 'meilenstein',
         ];
 
-        expect(definedSubcommands.sort()).toEqual(dispatchedSubcommands.sort());
+        expect(definedOptions.sort()).toEqual(dispatchedOptions.sort());
     });
 });

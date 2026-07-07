@@ -1,6 +1,7 @@
-import {ChatInputCommandInteraction, EmbedBuilder, MessageFlags, PermissionFlagsBits} from 'discord.js';
+import {ChatInputCommandInteraction, EmbedBuilder, MessageFlags, PermissionFlagsBits, TextChannel} from 'discord.js';
 import sportService from '../services/sport.service.js';
 import {SportActivities, SportActivity} from '../types/sport.js';
+import client from '../client.js';
 
 // Zufällige, motivierende Flavor-Zeile für die Eintrags-Bestätigung - die konkrete
 // Aktivität/Distanz hängt der Handler danach an. Exportiert + getestet (wie die Ping-Pong-Flavors).
@@ -45,7 +46,8 @@ class SportHandler {
             )
             .setFooter({text: `Eintrags-ID: ${entry.id}`});
 
-        return interaction.reply({embeds: [embed]});
+        await interaction.reply({embeds: [embed]});
+        await this.announceReachedMilestones();
     }
 
     async handleLoeschen(interaction: ChatInputCommandInteraction) {
@@ -70,10 +72,11 @@ class SportHandler {
         }
 
         const aktivitaetLabel = SportActivities[entry.activity as SportActivity];
-        return interaction.reply(
+        await interaction.reply(
             `✅ Eintrag aktualisiert!\n` +
             `${aktivitaetLabel} – jetzt **${kilometer} km**`
         );
+        await this.announceReachedMilestones();
     }
 
     async handleStatistik(interaction: ChatInputCommandInteraction) {
@@ -110,6 +113,7 @@ class SportHandler {
             `**/sport bearbeiten** – Kilometeranzahl eines Eintrags korrigieren\n` +
             `**/sport gesamt** – Gesamtkilometer aller Sportler\n` +
             `**/sport statistik** – Deine persönliche Übersicht pro Aktivität\n` +
+            `**/sport meilenstein setzen** – Einen Meilenstein für die gemeinsame Gesamtdistanz anlegen\n` +
             `**/sport hilfe** – Zeigt diese Übersicht`
         );
     }
@@ -127,9 +131,10 @@ class SportHandler {
 
         await sportService.setKilometer(user.id, kilometer);
 
-        return interaction.reply(
+        await interaction.reply(
             `✅ Kilometerstand von <@${user.id}> wurde auf **${kilometer} km** gesetzt.`
         );
+        await this.announceReachedMilestones();
     }
 
     async handleGesamt(interaction: ChatInputCommandInteraction) {
@@ -152,9 +157,10 @@ class SportHandler {
         const kilometer = interaction.options.getNumber('kilometer', true);
         await sportService.addLegacyKilometer(kilometer);
 
-        return interaction.reply(
+        await interaction.reply(
             `✅ **${kilometer} km** wurden als Altdaten eingespeist.`
         );
+        await this.announceReachedMilestones();
     }
 
     async handleAltkilometerSetzen(interaction: ChatInputCommandInteraction) {
@@ -169,15 +175,111 @@ class SportHandler {
         const vorher = await sportService.getLegacyKilometer();
         await sportService.setLegacyKilometer(kilometer);
 
-        if (kilometer <= 0) {
-            return interaction.reply(
-                `✅ Bestandskilometer entfernt (vorher **${vorher} km**).`
-            );
-        }
+        await interaction.reply(kilometer <= 0
+            ? `✅ Bestandskilometer entfernt (vorher **${vorher} km**).`
+            : `✅ Bestandskilometer auf **${kilometer} km** gesetzt (vorher **${vorher} km**).`
+        );
+        await this.announceReachedMilestones();
+    }
+
+    async handleMeilensteinSetzen(interaction: ChatInputCommandInteraction) {
+        const kilometer = interaction.options.getNumber('kilometer', true);
+        // Wie bei /rollenbutton: literal getipptes \n wird zu echten Zeilenumbrüchen, damit
+        // mehrzeilige, formatierte Ankündigungstexte möglich sind (Slash-Eingaben erlauben kein Enter).
+        const text = interaction.options.getString('text', true).replaceAll('\\n', '\n');
+
+        await sportService.setMilestone(kilometer, text);
 
         return interaction.reply(
-            `✅ Bestandskilometer auf **${kilometer} km** gesetzt (vorher **${vorher} km**).`
+            `✅ Meilenstein bei **${kilometer} km** gespeichert. ` +
+            `Sobald die gemeinsame Gesamtdistanz das erreicht, wird der Text im Ankündigungskanal gepostet.`
         );
+    }
+
+    async handleMeilensteinListe(interaction: ChatInputCommandInteraction) {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({
+                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const milestones = await sportService.getMilestones();
+        if (!milestones.length) {
+            return interaction.reply('Es sind keine Meilensteine gesetzt. Leg einen mit `/sport meilenstein setzen` an.');
+        }
+
+        // Nur die erste Zeile des (evtl. mehrzeiligen) Textes als Vorschau, sonst wird die Liste zu lang.
+        const lines = milestones.map(m =>
+            `${m.announced ? '✅' : '⏳'} **${m.kilometers} km** – ${m.text.split('\n')[0]}`
+        );
+
+        return interaction.reply(
+            `🎯 **Meilensteine**\n(✅ = bereits gefeiert, ⏳ = noch offen)\n\n${lines.join('\n')}`
+        );
+    }
+
+    async handleMeilensteinEntfernen(interaction: ChatInputCommandInteraction) {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({
+                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const kilometer = interaction.options.getNumber('kilometer', true);
+        const removed = await sportService.removeMilestone(kilometer);
+
+        return interaction.reply(removed
+            ? `✅ Meilenstein bei **${kilometer} km** entfernt.`
+            : `❌ Kein Meilenstein bei **${kilometer} km** gefunden.`
+        );
+    }
+
+    async handleAnkuendigungskanal(interaction: ChatInputCommandInteraction) {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({
+                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const channel = interaction.options.getChannel('kanal', true);
+        await sportService.setAnnouncementChannel(channel.id);
+
+        return interaction.reply(
+            `✅ Meilenstein-Ankündigungen werden ab jetzt in <#${channel.id}> gepostet.`
+        );
+    }
+
+    // Postet neu erreichte Meilensteine in den Ankündigungskanal. Bewusst fehlertolerant: darf
+    // eine erfolgreich eingetragene Aktivität niemals nachträglich scheitern lassen (daher try/catch).
+    // Ohne konfigurierten/abrufbaren Kanal wird NICHT als announced markiert - so wird die Feier
+    // nachgeholt, sobald ein Kanal existiert und die Summe erneut steigt.
+    private async announceReachedMilestones(): Promise<void> {
+        try {
+            const channelId = await sportService.getAnnouncementChannel();
+            if (!channelId) {
+                return;
+            }
+
+            const channel = await client.channels.fetch(channelId).catch(() => null) as TextChannel | null;
+            if (!channel) {
+                console.warn(`⚠️ Sport-Ankündigungskanal ${channelId} nicht abrufbar - Meilenstein-Meldung(en) werden verworfen.`);
+                return;
+            }
+
+            const reached = await sportService.checkAndMarkReachedMilestones();
+            for (const milestone of reached) {
+                try {
+                    await channel.send(milestone.text);
+                } catch (error) {
+                    console.error(`Fehler beim Posten des Sport-Meilensteins (${milestone.kilometers} km):`, error);
+                }
+            }
+        } catch (error) {
+            console.error('Fehler beim Prüfen/Posten der Sport-Meilensteine:', error);
+        }
     }
 }
 
