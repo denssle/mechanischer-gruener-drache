@@ -10,7 +10,7 @@ class NewsHandler {
 
         const news = await newsService.getLatestNews();
         if (!news) {
-            return interaction.editReply('❌ Konnte die aktuellen News gerade nicht abrufen. Versuch es später nochmal.');
+            return interaction.editReply('Konnte die aktuellen News gerade nicht abrufen. Versuch es später nochmal.');
         }
 
         let text = news.text;
@@ -19,7 +19,7 @@ class NewsHandler {
         }
 
         return interaction.editReply(
-            `📰 **${news.title}**\n_${news.date}_\n\n${text}\n\n🔗 Weiterlesen: <${news.url}>`
+            `**${news.title}**\n_${news.date}_\n\n${text}\n\nWeiterlesen: <${news.url}>`
         );
     }
 }

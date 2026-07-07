@@ -73,7 +73,7 @@ describe('BlahajHandler', () => {
 
             expect(blahajService.addEuroAmount).toHaveBeenCalledWith(60);
             const reply = (message.reply as any).mock.calls[0][0] as string;
-            expect(reply).toContain('🦈');
+            expect(reply).toContain('Blåhaj');
             expect(reply).toContain('2'); // 60 / 28 = 2 Blåhajs für diese Nachricht
             expect(reply).toContain('ha');
         });

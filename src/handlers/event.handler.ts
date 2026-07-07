@@ -51,14 +51,14 @@ export function formatRemaining(diffMs: number): string {
 // Spielerischer Fallback, wenn kein Event gesetzt ist - eine zufällige Variation von
 // "noch viel zu lange", passend zur "Noch X"-Formulierung des echten Countdowns.
 export const NO_EVENT_REPLIES = [
-    '⏳ Noch **viel zu lange**.',
-    '⏳ Noch **ewig** – am Horizont ist kein Termin in Sicht.',
-    '🔮 Noch **unbestimmt lange** – die Sterne schweigen.',
-    '🕰️ Noch **gefühlt eine halbe Ewigkeit**.',
-    '⏳ Noch **so lange, dass es sich nicht in Tagen messen lässt**.',
-    '🐉 Noch **viel zu lange**. Geduld, junger Drache.',
-    '⏳ Noch **viel zu lange** … und ehrlich gesagt danach noch etwas länger.',
-    '🌌 Noch **eine kleine Unendlichkeit**.',
+    'Noch **viel zu lange**.',
+    'Noch **ewig** – am Horizont ist kein Termin in Sicht.',
+    'Noch **unbestimmt lange** – die Sterne schweigen.',
+    'Noch **gefühlt eine halbe Ewigkeit**.',
+    'Noch **so lange, dass es sich nicht in Tagen messen lässt**.',
+    'Noch **viel zu lange**. Geduld, junger Drache.',
+    'Noch **viel zu lange** … und ehrlich gesagt danach noch etwas länger.',
+    'Noch **eine kleine Unendlichkeit**.',
 ];
 
 export function randomNoEventReply(): string {
@@ -69,7 +69,7 @@ class EventHandler {
     async handleSetzen(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -81,14 +81,14 @@ class EventHandler {
         const timestamp = parseGermanDateTime(datum, uhrzeit);
         if (timestamp === null) {
             return interaction.reply({
-                content: '❌ Ungültiges Datum. Format: `TT.MM.JJJJ` (z.B. `24.12.2026`), Uhrzeit optional als `HH:MM`.',
+                content: 'Ungültiges Datum. Format: `TT.MM.JJJJ` (z.B. `24.12.2026`), Uhrzeit optional als `HH:MM`.',
                 flags: MessageFlags.Ephemeral
             });
         }
 
         if (timestamp <= Date.now()) {
             return interaction.reply({
-                content: '❌ Das Datum liegt in der Vergangenheit.',
+                content: 'Das Datum liegt in der Vergangenheit.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -97,7 +97,7 @@ class EventHandler {
 
         const unix = Math.floor(timestamp / 1000);
         const was = titel ? `**${titel}**` : 'Das nächste Event';
-        return interaction.reply(`✅ ${was} wurde auf <t:${unix}:F> gesetzt (<t:${unix}:R>).`);
+        return interaction.reply(`${was} wurde auf <t:${unix}:F> gesetzt (<t:${unix}:R>).`);
     }
 
     async handleCountdown(interaction: ChatInputCommandInteraction) {
@@ -114,14 +114,14 @@ class EventHandler {
 
         if (diffMs <= 0) {
             const text = event.title
-                ? `🎉 **${event.title}** ist da – es ist so weit!`
-                : '🎉 Es ist so weit – das Event ist da!';
+                ? `**${event.title}** ist da – es ist so weit!`
+                : 'Es ist so weit – das Event ist da!';
             return interaction.reply(`${text} (Termin war <t:${unix}:F>)`);
         }
 
         return interaction.reply(
-            `⏳ Noch **${formatRemaining(diffMs)}** bis zum nächsten Event${titelTeil}!\n` +
-            `📅 Termin: <t:${unix}:F> (<t:${unix}:R>)`
+            `Noch **${formatRemaining(diffMs)}** bis zum nächsten Event${titelTeil}!\n` +
+            `Termin: <t:${unix}:F> (<t:${unix}:R>)`
         );
     }
 
@@ -136,7 +136,7 @@ class EventHandler {
     async handleEntfernen(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -147,7 +147,7 @@ class EventHandler {
         }
 
         await eventService.clearEvent();
-        return interaction.reply(`🗑️ **${event.title}** wurde entfernt.`);
+        return interaction.reply(`**${event.title}** wurde entfernt.`);
     }
 }
 

@@ -18,21 +18,21 @@ const KEYS = {
 // Zufällige Flavor-Zeilen für Sieg/Niederlage - die eigentliche Punkte-Info hängt der Handler
 // danach an. Exportiert + getestet, damit die Auswahl abgesichert ist.
 export const WIN_FLAVORS = [
-    '🏓 Ass! Der Ball zischt an der Kante vorbei.',
-    '🏓 Sauberer Schmetterball – nicht zu halten!',
-    '🏓 Netzroller! Frech, aber der zählt.',
-    '🏓 Volltreffer, der Gegner guckt nur zu.',
-    '🏓 Perfekter Return – Punkt für dich!',
-    '🏓 Der Aufschlag sitzt!',
+    'Ass! Der Ball zischt an der Kante vorbei.',
+    'Sauberer Schmetterball – nicht zu halten!',
+    'Netzroller! Frech, aber der zählt.',
+    'Volltreffer, der Gegner guckt nur zu.',
+    'Perfekter Return – Punkt für dich!',
+    'Der Aufschlag sitzt!',
 ];
 
 export const LOSS_FLAVORS = [
-    '🏓 Ball ins Aus – knapp daneben. 😬',
-    '🏓 Ins Netz gesetzt. Ärgerlich!',
-    '🏓 Der Return war eine Nummer zu groß für dich.',
-    '🏓 Aufschlag verpatzt.',
-    '🏓 Am Tisch vorbei – das war nichts.',
-    '🏓 Der Gegner kontert, du kommst nicht ran.',
+    'Ball ins Aus – knapp daneben.',
+    'Ins Netz gesetzt. Ärgerlich!',
+    'Der Return war eine Nummer zu groß für dich.',
+    'Aufschlag verpatzt.',
+    'Am Tisch vorbei – das war nichts.',
+    'Der Gegner kontert, du kommst nicht ran.',
 ];
 
 export function randomWinFlavor(): string {
@@ -52,7 +52,7 @@ class PingPongHandler {
             const remaining = await redisService.getTimeToLive(KEYS.cooldown(userId));
             if (remaining > 0) {
                 return interaction.reply({
-                    content: `🏓 Kurz durchatmen – du kannst in **${remaining}s** wieder aufschlagen.`,
+                    content: `Kurz durchatmen – du kannst in **${remaining}s** wieder aufschlagen.`,
                     flags: MessageFlags.Ephemeral
                 });
             }

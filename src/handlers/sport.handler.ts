@@ -6,13 +6,13 @@ import client from '../client.js';
 // Zufällige, motivierende Flavor-Zeile für die Eintrags-Bestätigung - die konkrete
 // Aktivität/Distanz hängt der Handler danach an. Exportiert + getestet (wie die Ping-Pong-Flavors).
 export const EINTRAG_FLAVORS = [
-    '💪 Stark, das zahlt sich aus!',
-    '🔥 Weiter so – jeder Kilometer zählt!',
-    '🎉 Klasse gemacht!',
-    '🚀 Ordentlich was geschafft!',
-    '👏 Respekt, das war Bewegung!',
-    '🌟 Super, die Gruppe dankt dir!',
-    '🙌 Wieder ein Stück weiter gekommen!',
+    'Stark, das zahlt sich aus!',
+    'Weiter so – jeder Kilometer zählt!',
+    'Klasse gemacht!',
+    'Ordentlich was geschafft!',
+    'Respekt, das war Bewegung!',
+    'Super, die Gruppe dankt dir!',
+    'Wieder ein Stück weiter gekommen!',
 ];
 
 export function randomEintragFlavor(): string {
@@ -42,7 +42,7 @@ class SportHandler {
             .setDescription(
                 `${randomEintragFlavor()}\n` +
                 `${aktivitaetLabel} – **${kilometer} km**\n` +
-                `🌍 Gemeinsam schon **${gesamtKilometer} km**!`
+                `Gemeinsam schon **${gesamtKilometer} km**!`
             )
             .setFooter({text: `Eintrags-ID: ${entry.id}`});
 
@@ -55,10 +55,10 @@ class SportHandler {
         const success = await sportService.deleteEntry(interaction.user.id, entryId);
 
         if (!success) {
-            return interaction.reply('❌ Eintrag nicht gefunden oder gehört dir nicht.');
+            return interaction.reply('Eintrag nicht gefunden oder gehört dir nicht.');
         }
 
-        return interaction.reply('✅ Eintrag erfolgreich gelöscht.');
+        return interaction.reply('Eintrag erfolgreich gelöscht.');
     }
 
     async handleBearbeiten(interaction: ChatInputCommandInteraction) {
@@ -68,12 +68,12 @@ class SportHandler {
         const entry = await sportService.editEntry(interaction.user.id, entryId, kilometer);
 
         if (!entry) {
-            return interaction.reply('❌ Eintrag nicht gefunden oder gehört dir nicht.');
+            return interaction.reply('Eintrag nicht gefunden oder gehört dir nicht.');
         }
 
         const aktivitaetLabel = SportActivities[entry.activity as SportActivity];
         await interaction.reply(
-            `✅ Eintrag aktualisiert!\n` +
+            `Eintrag aktualisiert!\n` +
             `${aktivitaetLabel} – jetzt **${kilometer} km**`
         );
         await this.announceReachedMilestones();
@@ -101,7 +101,7 @@ class SportHandler {
         return interaction.reply(
             `**Deine Statistik**\n\n` +
             `${aktivitaetsListe}\n\n` +
-            `🏁 Gesamt: **${gesamtKilometer} km**`
+            `Gesamt: **${gesamtKilometer} km**`
         );
     }
 
@@ -121,7 +121,7 @@ class SportHandler {
     async handleSetzen(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -132,7 +132,7 @@ class SportHandler {
         await sportService.setKilometer(user.id, kilometer);
 
         await interaction.reply(
-            `✅ Kilometerstand von <@${user.id}> wurde auf **${kilometer} km** gesetzt.`
+            `Kilometerstand von <@${user.id}> wurde auf **${kilometer} km** gesetzt.`
         );
         await this.announceReachedMilestones();
     }
@@ -141,7 +141,7 @@ class SportHandler {
         const gesamtKilometer = await sportService.getGesamtKilometer();
 
         return interaction.reply(
-            `🌍 **Gesamtkilometer**\n\n` +
+            `**Gesamtkilometer**\n\n` +
             `Zusammen habt ihr bereits **${gesamtKilometer} km** zurückgelegt!`
         );
     }
@@ -149,7 +149,7 @@ class SportHandler {
     async handleAltkilometer(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -158,7 +158,7 @@ class SportHandler {
         await sportService.addLegacyKilometer(kilometer);
 
         await interaction.reply(
-            `✅ **${kilometer} km** wurden als Altdaten eingespeist.`
+            `**${kilometer} km** wurden als Altdaten eingespeist.`
         );
         await this.announceReachedMilestones();
     }
@@ -166,7 +166,7 @@ class SportHandler {
     async handleAltkilometerSetzen(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -176,8 +176,8 @@ class SportHandler {
         await sportService.setLegacyKilometer(kilometer);
 
         await interaction.reply(kilometer <= 0
-            ? `✅ Bestandskilometer entfernt (vorher **${vorher} km**).`
-            : `✅ Bestandskilometer auf **${kilometer} km** gesetzt (vorher **${vorher} km**).`
+            ? `Bestandskilometer entfernt (vorher **${vorher} km**).`
+            : `Bestandskilometer auf **${kilometer} km** gesetzt (vorher **${vorher} km**).`
         );
         await this.announceReachedMilestones();
     }
@@ -191,7 +191,7 @@ class SportHandler {
         await sportService.setMilestone(kilometer, text);
 
         return interaction.reply(
-            `✅ Meilenstein bei **${kilometer} km** gespeichert. ` +
+            `Meilenstein bei **${kilometer} km** gespeichert. ` +
             `Sobald die gemeinsame Gesamtdistanz das erreicht, wird der Text im Ankündigungskanal gepostet.`
         );
     }
@@ -199,7 +199,7 @@ class SportHandler {
     async handleMeilensteinListe(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -211,18 +211,18 @@ class SportHandler {
 
         // Nur die erste Zeile des (evtl. mehrzeiligen) Textes als Vorschau, sonst wird die Liste zu lang.
         const lines = milestones.map(m =>
-            `${m.announced ? '✅' : '⏳'} **${m.kilometers} km** – ${m.text.split('\n')[0]}`
+            `**${m.kilometers} km** [${m.announced ? 'gefeiert' : 'offen'}] – ${m.text.split('\n')[0]}`
         );
 
         return interaction.reply(
-            `🎯 **Meilensteine**\n(✅ = bereits gefeiert, ⏳ = noch offen)\n\n${lines.join('\n')}`
+            `**Meilensteine**\n\n${lines.join('\n')}`
         );
     }
 
     async handleMeilensteinEntfernen(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -231,15 +231,15 @@ class SportHandler {
         const removed = await sportService.removeMilestone(kilometer);
 
         return interaction.reply(removed
-            ? `✅ Meilenstein bei **${kilometer} km** entfernt.`
-            : `❌ Kein Meilenstein bei **${kilometer} km** gefunden.`
+            ? `Meilenstein bei **${kilometer} km** entfernt.`
+            : `Kein Meilenstein bei **${kilometer} km** gefunden.`
         );
     }
 
     async handleAnkuendigungskanal(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -248,7 +248,7 @@ class SportHandler {
         await sportService.setAnnouncementChannel(channel.id);
 
         return interaction.reply(
-            `✅ Meilenstein-Ankündigungen werden ab jetzt in <#${channel.id}> gepostet.`
+            `Meilenstein-Ankündigungen werden ab jetzt in <#${channel.id}> gepostet.`
         );
     }
 

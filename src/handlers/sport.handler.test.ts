@@ -131,8 +131,8 @@ describe('SportHandler', () => {
             await sportHandler.handleMeilensteinListe(interaction);
 
             const reply = (interaction.reply as any).mock.calls[0][0] as string;
-            expect(reply).toContain('✅ **500 km** – Erstes Ziel');
-            expect(reply).toContain('⏳ **2000 km** – Grosses Ziel');
+            expect(reply).toContain('**500 km** [gefeiert] – Erstes Ziel');
+            expect(reply).toContain('**2000 km** [offen] – Grosses Ziel');
             // nur die erste Zeile des mehrzeiligen Textes
             expect(reply).not.toContain('mehrzeilig');
         });

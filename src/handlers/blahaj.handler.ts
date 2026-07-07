@@ -64,8 +64,8 @@ class BlahajHandler {
         const area = totalBlahaj * HECTARES_PER_BLAHAJ;
 
         await message.reply(
-            `🦈 Für ${formatEuro(messageSum)}€ gäbe es **${messageBlahaj}** ${blahajWord(messageBlahaj)}!\n` +
-            `Insgesamt bedecken die Server-Blåhajs schon **${formatHectares(area)} ha** 🌍`
+            `Für ${formatEuro(messageSum)}€ gäbe es **${messageBlahaj}** ${blahajWord(messageBlahaj)}!\n` +
+            `Insgesamt bedecken die Server-Blåhajs schon **${formatHectares(area)} ha**.`
         );
     }
 
@@ -77,7 +77,7 @@ class BlahajHandler {
         if (betrag !== null) {
             const blahaj = Math.floor(betrag / EURO_PER_BLAHAJ);
             return interaction.reply(
-                `🦈 Für ${formatEuro(betrag)}€ gäbe es **${blahaj}** ${blahajWord(blahaj)}.`
+                `Für ${formatEuro(betrag)}€ gäbe es **${blahaj}** ${blahajWord(blahaj)}.`
             );
         }
 
@@ -86,9 +86,9 @@ class BlahajHandler {
         const area = totalBlahaj * HECTARES_PER_BLAHAJ;
 
         return interaction.reply(
-            `🦈 **Blåhaj-Rechner**\n` +
+            `**Blåhaj-Rechner**\n` +
             `Bisher wurden auf dem Server **${formatEuro(total)}€** erwähnt.\n` +
-            `Das wären **${totalBlahaj}** ${blahajWord(totalBlahaj)} = **${formatHectares(area)} ha** Blåhaj-Fläche! 🌍`
+            `Das wären **${totalBlahaj}** ${blahajWord(totalBlahaj)} = **${formatHectares(area)} ha** Blåhaj-Fläche!`
         );
     }
 }

@@ -6,7 +6,7 @@ class LoggingHandler {
     async handleSetChannel(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -15,7 +15,7 @@ class LoggingHandler {
         await loggingService.setLogChannel(channel.id);
 
         return interaction.reply(
-            `✅ Bearbeitete/gelöschte Nachrichten werden ab jetzt in <#${channel.id}> geloggt.`
+            `Bearbeitete/gelöschte Nachrichten werden ab jetzt in <#${channel.id}> geloggt.`
         );
     }
 

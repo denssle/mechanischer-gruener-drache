@@ -23,13 +23,13 @@ class TwitchHandler {
         // Twitch User suchen
         const twitchUser = await twitchService.getUserByLogin(twitchLogin);
         if (!twitchUser) {
-            return interaction.editReply(`❌ Twitch-Channel **${twitchLogin}** nicht gefunden.`);
+            return interaction.editReply(`Twitch-Channel **${twitchLogin}** nicht gefunden.`);
         }
 
         // EventSub-Subscription registrieren
         const subscriptionId = await twitchService.subscribeToStreamOnline(twitchUser.id);
         if (!subscriptionId) {
-            return interaction.editReply('❌ Fehler beim Registrieren der Twitch-Benachrichtigung.');
+            return interaction.editReply('Fehler beim Registrieren der Twitch-Benachrichtigung.');
         }
 
         // Verknüpfung speichern
@@ -42,7 +42,7 @@ class TwitchHandler {
         );
 
         return interaction.editReply(
-            `✅ Twitch-Channel **${twitchUser.display_name}** erfolgreich verknüpft!\n` +
+            `Twitch-Channel **${twitchUser.display_name}** erfolgreich verknüpft!\n` +
             `Der Server wird ab jetzt benachrichtigt, wenn du live gehst.`
         );
     }
@@ -52,20 +52,20 @@ class TwitchHandler {
 
         const link = await twitchUserService.getLinkByDiscordId(interaction.user.id);
         if (!link) {
-            return interaction.editReply('❌ Du hast keinen Twitch-Channel verknüpft.');
+            return interaction.editReply('Du hast keinen Twitch-Channel verknüpft.');
         }
 
         // EventSub-Subscription löschen
         const unsubscribed = await twitchService.unsubscribeFromStreamOnline(link.subscriptionId);
         if (!unsubscribed) {
-            return interaction.editReply('❌ Fehler beim Entfernen der Twitch-Benachrichtigung. Versuch es später nochmal.');
+            return interaction.editReply('Fehler beim Entfernen der Twitch-Benachrichtigung. Versuch es später nochmal.');
         }
 
         // Verknüpfung aus Redis entfernen
         await twitchUserService.unlinkUser(interaction.user.id);
 
         return interaction.editReply(
-            `✅ Verknüpfung mit **${link.twitchDisplayName}** wurde entfernt.`
+            `Verknüpfung mit **${link.twitchDisplayName}** wurde entfernt.`
         );
     }
 
@@ -73,14 +73,14 @@ class TwitchHandler {
         const link = await twitchUserService.getLinkByDiscordId(interaction.user.id);
         if (!link) {
             return interaction.reply(
-                '❌ Du hast keinen Twitch-Kanal verknüpft.\n' +
+                'Du hast keinen Twitch-Kanal verknüpft.\n' +
                 'Nutze `/twitch verknuepfen <benutzername>` um einen zu hinterlegen.'
             );
         }
 
         const linkedAt = new Date(link.linkedAt).toLocaleDateString('de-DE');
         return interaction.reply(
-            `📺 **Deine Twitch-Verknüpfung**\n\n` +
+            `**Deine Twitch-Verknüpfung**\n\n` +
             `Channel: **${link.twitchDisplayName}**\n` +
             `Twitch-Login: \`${link.twitchLogin}\`\n` +
             `Verknüpft seit: ${linkedAt}`
@@ -90,7 +90,7 @@ class TwitchHandler {
     async handleBenachrichtigungskanal(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -99,7 +99,7 @@ class TwitchHandler {
         await twitchUserService.setNotificationChannel(channel.id);
 
         return interaction.reply(
-            `✅ Twitch-Notifications werden ab jetzt in <#${channel.id}> gepostet.`
+            `Twitch-Notifications werden ab jetzt in <#${channel.id}> gepostet.`
         );
     }
 
@@ -147,15 +147,15 @@ class TwitchHandler {
         // oder direkt beim Live-Gehen noch nicht verfügbar), fallen die Zeilen einfach weg.
         const streamInfo = await twitchService.getStreamInfo(twitchUserId);
 
-        const lines = [`${roleMention}🔴 **${displayName}** ist jetzt live auf Twitch!`];
+        const lines = [`${roleMention}**${displayName}** ist jetzt live auf Twitch!`];
         if (streamInfo?.title) {
-            lines.push(`📝 ${streamInfo.title}`);
+            lines.push(streamInfo.title);
         }
         if (streamInfo?.game_name) {
-            lines.push(`🎮 ${streamInfo.game_name}`);
+            lines.push(streamInfo.game_name);
         }
-        lines.push(`📺 https://twitch.tv/${event.broadcaster_user_login}`);
-        lines.push(`⏰ Live seit ${startedAt} Uhr`);
+        lines.push(`https://twitch.tv/${event.broadcaster_user_login}`);
+        lines.push(`Live seit ${startedAt} Uhr`);
 
         await channel.send(lines.join('\n'));
     }
@@ -163,7 +163,7 @@ class TwitchHandler {
     async handleDiagnose(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -253,7 +253,7 @@ class TwitchHandler {
     async handleBenachrichtigungsrolle(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: '❌ Du benötigst Administrator-Rechte für diesen Befehl.',
+                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -262,7 +262,7 @@ class TwitchHandler {
         await twitchUserService.setNotificationRole(rolle.id);
 
         return interaction.reply(
-            `✅ Bei Twitch-Notifications wird ab jetzt <@&${rolle.id}> gepingt.`
+            `Bei Twitch-Notifications wird ab jetzt <@&${rolle.id}> gepingt.`
         );
     }
 }
