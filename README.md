@@ -132,3 +132,5 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] Sport: Meilenstein-Ankündigung, wenn die Gesamtsumme eine Schwelle überschreitet (`/sport meilenstein setzen` für alle offen, `liste`/`entfernen`/`ankuendigungskanal` als Admin; `announced`-Flag pro Meilenstein, Prüfung in allen summen-erhöhenden Pfaden)
 - [x] Sport: Bestätigung beim Eintragen persönlicher gestalten – Flavortext + Nennung des Users + Profilbild (Embed), damit User sich im Post wiederfinden
 - [x] Blåhaj-Rechner: reagiert automatisch auf €-Beträge im Chat (Umrechnung in Blåhajs à 28 €) und summiert alle Erwähnungen zu einer Gesamtfläche in ha; Abruf per `/blahaj`
+- [ ] Visual Noise reduzieren: deutlich weniger Emojis in den Bot-Antworten (User-Feedback: „visuelles Äquivalent von ADHS"). Ziel: max. ein Emoji pro Nachricht, nur noch als Kategorie-Icon am Zeilenanfang, nicht mehr mitten im Fließtext
+- [ ] Bot-Namen kürzen/knackiger machen, damit er kompakt in der Chatleiste steht (aktuell „Mechanischer Grüner Drache")
