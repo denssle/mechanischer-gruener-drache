@@ -127,5 +127,5 @@ Um den Webhook-Server lokal manuell zu testen:
 - [ ] Mit dem eigentlichen Spiel interagieren (Machbarkeitsnotiz: `docs/spiel-interaktion-idee.md`)
 - [ ] CI/Deploy-Workflow auf eine neuere Node-Version heben (Node 20 wird für GitHub Actions deprecated)
 - [ ] `npm audit` meldet aktuell 4 Schwachstellen (3 moderate, 1 high) über `undici` → `@discordjs/rest`/`discord.js`; Fix nur per Breaking-Update von discord.js (`npm audit fix --force`), bei Gelegenheit angehen
-- [ ] Sport: bei Überschreiten einer Kilometer-Gesamtschwelle ein "Sport-Event" ermöglichen (von Usern anlegbar)
-- [ ] Sport: Bestätigung beim Eintragen einer Aktivität persönlicher gestalten
+- [ ] Sport: Meilenstein-Ankündigung, wenn die Gesamtsumme eine runde Schwelle überschreitet (z.B. bei 2000 km "Yay, wir haben 2000 km geschafft!") – braucht einen persistierten "zuletzt erreichte Schwelle"-Wert, Prüfung in allen summenändernden Pfaden (eintragen/bearbeiten/löschen/altkilometer/setzen) und einen Ziel-Channel
+- [ ] Sport: Bestätigung beim Eintragen persönlicher gestalten – Flavortext + Nennung des Users (Mention) + ggf. Profilbild, damit User sich im Post wiederfinden
