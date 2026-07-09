@@ -134,4 +134,4 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] Blåhaj-Rechner: reagiert automatisch auf €-Beträge im Chat (Umrechnung in Blåhajs à 28 €) und summiert alle Erwähnungen zu einer Gesamtfläche in ha; Abruf per `/blahaj`
 - [x] Visual Noise reduzieren: Emojis radikal aus den Bot-Antworten entfernt (User-Feedback: „visuelles Äquivalent von ADHS"). Ausnahmen bewusst behalten: `/hilfe`-Kategorie-Icons, Sport-Aktivitäts-Icons, sowie die funktionalen Statusmarker im Audit-Log (`/protokoll`) und in `/twitch diagnose`
 - [ ] Bot-Namen kürzen/knackiger machen, damit er kompakt in der Chatleiste steht (aktuell „Mechanischer Grüner Drache")
-- [ ] `/news`: zusätzlich den „Neuigkeiten am "-Teil von https://www.lotgd.de/news.php ausgeben (entweder in `/news` mit aufnehmen oder als eigenen Befehl)
+- [x] Der „Neuigkeiten am "-Teil von https://www.lotgd.de/news.php (das Ingame-Ereignislog) wird als eigener Befehl `/ereignisse` ausgegeben – die neuesten 5 der 50 Ereignisse. Bewusst kein `/news`-Subcommand: das hätte das blanke `/news` gekostet, da Discord dann immer einen Subcommand verlangt

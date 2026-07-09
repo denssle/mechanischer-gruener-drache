@@ -16,7 +16,8 @@ export const HELP_TEXT =
     `**📅 Event** (Details: \`/event hilfe\`)\n` +
     `\`/event countdown\` – wie lange noch bis zum nächsten Community-Event?\n\n` +
     `**📰 News**\n` +
-    `\`/news\` – die neuesten News aus dem Spiel (lotgd.de)\n\n` +
+    `\`/news\` – die neuesten News aus dem Spiel (lotgd.de)\n` +
+    `\`/ereignisse\` – was zuletzt im Spiel passiert ist (Kämpfe, Wiederbelebungen, Blamagen)\n\n` +
     `**🙋 Rollen zum Selbstvergeben**\n` +
     `An Button-Nachrichten (von Admins gepostet) gibst du dir per Klick selbst Rollen.\n\n` +
     `\`/version\` – aktuelle Bot-Version · \`/hilfe\` – diese Übersicht`;
