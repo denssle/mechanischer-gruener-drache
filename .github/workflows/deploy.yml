@@ -16,7 +16,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # 22 = hoechste auf Uberspace verfuegbare Version (siehe CLAUDE.md), nicht das aktuelle Active LTS
+          node-version: '22'
 
       - name: Install dependencies
         run: npm ci

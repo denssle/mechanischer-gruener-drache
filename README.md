@@ -127,7 +127,7 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] Twitch-Live-Meldung um Spiel & Kategorie erweitert (`twitchService.getStreamInfo` via Helix `Get Streams`, mit Fallback falls beim Live-Gehen noch nichts verfügbar ist)
 - [ ] Den Bot generalisieren für jeden Server (Multi-Guild-Plan: `docs/multi-guild-plan.md`)
 - [ ] Mit dem eigentlichen Spiel interagieren (Machbarkeitsnotiz: `docs/spiel-interaktion-idee.md`)
-- [ ] CI/Deploy-Workflow auf eine neuere Node-Version heben (Node 20 wird für GitHub Actions deprecated)
+- [x] CI/Deploy-Workflow auf Node 22 gehoben – Node 20 war seit April 2026 End-of-Life. Nicht 24: das bietet Uberspace (noch) nicht an, 22 ist dort die höchste verfügbare Version und Maintenance LTS bis April 2027. **Der Uberspace-Host muss mit `uberspace tools version use node 22` mitgezogen werden**, sonst testet die CI eine andere Version, als Prod baut
 - [x] `npm audit`-Schwachstellen (4× via verwundbarem `undici`, transitiv über `discord.js`/`@discordjs/rest`) behoben – **nicht** per `--force` (das hätte auf discord.js@13 downgraded), sondern per `overrides: { "undici": "^6.27.0" }` in der `package.json`; discord.js bleibt auf 14.x, `npm audit` meldet 0 Schwachstellen
 - [x] Sport: Meilenstein-Ankündigung, wenn die Gesamtsumme eine Schwelle überschreitet (`/sport meilenstein setzen` für alle offen, `liste`/`entfernen`/`ankuendigungskanal` als Admin; `announced`-Flag pro Meilenstein, Prüfung in allen summen-erhöhenden Pfaden)
 - [x] Sport: Bestätigung beim Eintragen persönlicher gestalten – Flavortext + Nennung des Users + Profilbild (Embed), damit User sich im Post wiederfinden
