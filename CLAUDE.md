@@ -124,6 +124,14 @@ Discord-Bot für den Community-Server von [Legend of the Green Dragon (LotGD)](h
 - Das Überschriften-Datum ist **englisch** (`Thu, Jul 9, 2026`) und wird über eine Monats-Map ins deutsche `TT.MM.JJJJ` gebracht; unbekannte Formate bleiben unverändert stehen, statt zu scheitern.
 - Die Seite liefert 50 Ereignisse, `/ereignisse` zeigt die **neuesten 5** (`EVENT_COUNT`). Beim 2000-Zeichen-Limit werden **ganze Ereignisse weggelassen** statt Sätze abgeschnitten (nur wenn schon das erste zu lang ist, wird es gekürzt) – Ereignisse sind vollständige Sätze, halbe wären unlesbar.
 
+## Online-Feature (`/online`)
+
+- Zweck (seit 2026-07-10, war README-Todo/Spiel-Anbindung): `/online` (alle) zeigt live per Scraping, wer gerade im Spiel eingeloggt ist. Quelle ist `https://www.lotgd.de/list.php` (die „Kriegerliste") – **öffentlich ohne Login abrufbar** (im Gegensatz zu Charakterdaten/Mail, die ein programmatisches Login bräuchten). Eigener Service `online.service.ts`, flacher Command wie `/news`/`/ereignisse` (nur in `/hilfe` dokumentiert, per `it.each` abgesichert).
+- Wie News: **ISO-8859-1**, Bot-`User-Agent` (der Standard-Fetch-UA bekommt `403`), fehlertolerant. `getOnline()` macht **einen** Netz-Call und liefert daraus beide Listen.
+- **Zwei Listen aus einer Seite** (Wunsch „beide kombiniert"): (1) `parseOnlinePlayers` = die reiche Haupttabelle „gerade eingeloggt" mit Spalten Gilde/Name/Ort/Level/Rasse/Geschlecht/Lebt (Geschlecht wird aktuell nicht angezeigt); (2) `parseRecentlyOnline` = die Seitenleiste „Online letzte 30 Minuten" (nur Namen). Der Handler hängt die 30-Min-Namen an, **dedupliziert** gegen die schon Eingeloggten.
+- `parseOnlinePlayers` gibt **`[]`** zurück (niemand eingeloggt, Struktur ok) vs. **`null`** (Anker/Tabelle weg = Markup geändert) – der Handler unterscheidet: „niemand eingeloggt" vs. „konnte nicht abrufen". Tote Charaktere (`Lebt` = Nein) bleiben in der Liste, nur mit `(tot)` markiert. Namen sind auf der Seite oft Buchstabe-je-Farb-`<span>` zerlegt (Regenbogennamen) – `htmlToText` (aus `news.service.ts`, wiederverwendet) fügt sie zusammen.
+- **Nebenfix am geteilten `decodeEntities` (news.service):** um die vollen Latin-1-Akzentbuchstaben (`&Uacute;`→Ú etc.) + hex-numerische Entities (`&#xDA;`) erweitert, weil Spielernamen sonst als `&Uacute;tlaga` durchrutschen. Kam `/news`/`/ereignisse` mit zugute.
+
 ## Hilfe-Feature (`/hilfe` + `hilfe`-Subcommands)
 
 - Zweck (seit 2026-07-05, war README-Todo): Nutzer sollen ohne Vorwissen die Befehle finden. Zwei Ebenen: **Gruppen-Befehle** (`/sport`, `/twitch`, `/event`) haben je ein `hilfe`-Subcommand mit ihren eigenen Befehlen; **`/hilfe`** ist die neue **Gesamtübersicht** über alle Bereiche (flache Command-Datei `hilfe.command.ts` → `hilfe.handler.ts`, wie `/news`/`/version`).

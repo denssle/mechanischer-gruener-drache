@@ -8,6 +8,7 @@ import rollenbutton from "./rollenbutton.command.js";
 import event from "./event.command.js";
 import news from "./news.command.js";
 import ereignisse from "./ereignisse.command.js";
+import online from "./online.command.js";
 import hilfe from "./hilfe.command.js";
 import blahaj from "./blahaj.command.js";
 
@@ -22,6 +23,7 @@ export default [
     event,
     news,
     ereignisse,
+    online,
     hilfe,
     blahaj
 ];

@@ -106,6 +106,16 @@ describe('news.service', () => {
         it('dekodiert Umlaut- und &-Entities', () => {
             expect(htmlToText('Gr&uuml;&szlig;e &amp; mehr')).toBe('Grüße & mehr');
         });
+
+        it('dekodiert weitere Latin-1-Akzentbuchstaben (z.B. in Spielernamen)', () => {
+            expect(htmlToText('&Uacute;tlaga N&aacute;hea')).toBe('Útlaga Náhea');
+            expect(htmlToText('&Oslash;rn &ccedil;a')).toBe('Ørn ça');
+        });
+
+        it('dekodiert numerische Entities dezimal und hexadezimal', () => {
+            expect(htmlToText('&#218;tlaga')).toBe('Útlaga');
+            expect(htmlToText('&#xDA;tlaga')).toBe('Útlaga');
+        });
     });
 
     describe('getLatestNews', () => {
