@@ -6,7 +6,7 @@ import {ChatInputCommandInteraction} from 'discord.js';
 export const HELP_TEXT =
     `**Befehlsübersicht – Mechanischer Grüner Drache**\n` +
     `Tippe \`/\` und den Befehl, um ihn zu nutzen. Zu Bereichen mit mehreren Unterbefehlen gibt es Details per \`/<bereich> hilfe\`.\n\n` +
-    `**Spielwelt (lotgd.de)**\n` +
+    `**Spielwelt (lotgd.de)** (Details: \`/spielwelt\`)\n` +
     `\`/online\` – wer gerade im Spiel eingeloggt ist\n` +
     `\`/news\` – die neuesten Spiel-News · \`/ereignisse\` – was zuletzt im Spiel geschah (Kämpfe, Wiederbelebungen, Blamagen)\n\n` +
     `**Twitch** (Details: \`/twitch hilfe\`)\n` +
