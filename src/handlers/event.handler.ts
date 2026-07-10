@@ -127,7 +127,7 @@ class EventHandler {
 
     async handleHilfe(interaction: ChatInputCommandInteraction) {
         return interaction.reply(
-            `📖 **Event-Befehle**\n\n` +
+            `**Event-Befehle**\n\n` +
             `**/event countdown** – Zeigt, wie lange es noch bis zum nächsten Event dauert\n` +
             `**/event hilfe** – Zeigt diese Übersicht`
         );

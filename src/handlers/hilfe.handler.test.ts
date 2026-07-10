@@ -12,7 +12,7 @@ describe('HilfeHandler', () => {
 
     // Flache Einzelbefehle haben kein eigenes `hilfe` (siehe Design-Entscheidung) - sie werden
     // NUR hier erklärt. Dieser Test ist die Absicherung, dass keiner davon vergessen wird.
-    it.each(['/pingpong', '/pingbestenliste', '/blahaj', '/news', '/ereignisse', '/version'])(
+    it.each(['/pingpong', '/pingbestenliste', '/blahaj', '/news', '/ereignisse', '/online', '/version'])(
         'erwähnt den flachen Befehl %s (der sonst nirgends dokumentiert ist)',
         (command) => {
             expect(HELP_TEXT).toContain(command);

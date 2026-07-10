@@ -107,7 +107,7 @@ class SportHandler {
 
     async handleHilfe(interaction: ChatInputCommandInteraction) {
         return interaction.reply(
-            `📖 **Sport-Befehle**\n\n` +
+            `**Sport-Befehle**\n\n` +
             `**/sport eintragen** – Neue sportliche Aktivität eintragen\n` +
             `**/sport loeschen** – Eintrag anhand der ID löschen\n` +
             `**/sport bearbeiten** – Kilometeranzahl eines Eintrags korrigieren\n` +

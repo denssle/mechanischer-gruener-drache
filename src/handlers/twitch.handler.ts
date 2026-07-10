@@ -105,7 +105,7 @@ class TwitchHandler {
 
     async handleHilfe(interaction: ChatInputCommandInteraction) {
         return interaction.reply(
-            `📖 **Twitch-Befehle**\n\n` +
+            `**Twitch-Befehle**\n\n` +
             `**/twitch verknuepfen** – Deinen Twitch-Kanal hinterlegen\n` +
             `**/twitch entfernen** – Deine Twitch-Verknüpfung entfernen\n` +
             `**/twitch status** – Deine aktuelle Verknüpfung anzeigen\n` +
