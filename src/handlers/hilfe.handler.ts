@@ -8,7 +8,8 @@ export const HELP_TEXT =
     `Tippe \`/\` und den Befehl, um ihn zu nutzen. Zu Bereichen mit mehreren Unterbefehlen gibt es Details per \`/<bereich> hilfe\`.\n\n` +
     `**Spielwelt (lotgd.de)** (Details: \`/spielwelt\`)\n` +
     `\`/online\` – wer gerade im Spiel eingeloggt ist\n` +
-    `\`/news\` – die neuesten Spiel-News · \`/ereignisse\` – was zuletzt im Spiel geschah (Kämpfe, Wiederbelebungen, Blamagen)\n\n` +
+    `\`/news\` – die neuesten Spiel-News · \`/ereignisse\` – was zuletzt im Spiel geschah (Kämpfe, Wiederbelebungen, Blamagen)\n` +
+    `\`/charakter\` – Charakter-Infos aus der Kriegerliste (Details: \`/charakter hilfe\`)\n\n` +
     `**Twitch** (Details: \`/twitch hilfe\`)\n` +
     `\`/twitch verknuepfen\` – deinen Kanal hinterlegen; der Server wird benachrichtigt, wenn du live gehst\n\n` +
     `**Sport** (Details: \`/sport hilfe\`)\n` +

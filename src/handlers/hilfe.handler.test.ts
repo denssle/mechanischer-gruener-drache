@@ -23,6 +23,7 @@ describe('HilfeHandler', () => {
         expect(HELP_TEXT).toContain('/sport hilfe');
         expect(HELP_TEXT).toContain('/twitch hilfe');
         expect(HELP_TEXT).toContain('/event hilfe');
+        expect(HELP_TEXT).toContain('/charakter hilfe');
     });
 
     it('bleibt unter dem Discord-Limit von 2000 Zeichen', () => {

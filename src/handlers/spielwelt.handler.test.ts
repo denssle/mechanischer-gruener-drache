@@ -10,7 +10,7 @@ describe('SpielweltHandler', () => {
         expect(interaction.reply).toHaveBeenCalledWith(SPIELWELT_HELP);
     });
 
-    it.each(['/news', '/ereignisse', '/online'])('erklärt den Befehl %s', (command) => {
+    it.each(['/news', '/ereignisse', '/online', '/charakter'])('erklärt den Befehl %s', (command) => {
         expect(SPIELWELT_HELP).toContain(command);
     });
 

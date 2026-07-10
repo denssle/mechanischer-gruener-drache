@@ -10,6 +10,7 @@ import news from "./news.command.js";
 import ereignisse from "./ereignisse.command.js";
 import online from "./online.command.js";
 import spielwelt from "./spielwelt.command.js";
+import charakter from "./character.command.js";
 import hilfe from "./hilfe.command.js";
 import blahaj from "./blahaj.command.js";
 
@@ -26,6 +27,7 @@ export default [
     ereignisse,
     online,
     spielwelt,
+    charakter,
     hilfe,
     blahaj
 ];

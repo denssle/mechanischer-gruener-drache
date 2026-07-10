@@ -1,6 +1,7 @@
 import { htmlToText } from './news.service.js';
+import { fetchLotgdHtml, LOTGD_BASE_URL } from './lotgd.service.js';
 
-const LIST_URL = 'https://www.lotgd.de/list.php';
+const LIST_URL = `${LOTGD_BASE_URL}/list.php`;
 
 // Ein gerade eingeloggter Charakter aus der Haupttabelle von list.php.
 export interface OnlinePlayer {
@@ -58,26 +59,11 @@ export function parseRecentlyOnline(html: string): string[] | null {
 }
 
 class OnlineService {
-    // Seite ist ISO-8859-1 kodiert - explizit dekodieren, sonst kaputte Umlaute.
-    private async fetchHtml(): Promise<string | null> {
-        const response = await fetch(LIST_URL, {
-            headers: { 'User-Agent': 'MechanischerGruenerDrache-DiscordBot' }
-        });
-
-        if (!response.ok) {
-            console.error(`Fehler beim Abrufen der LotGD-Kriegerliste: ${response.status} ${response.statusText}`);
-            return null;
-        }
-
-        const buffer = await response.arrayBuffer();
-        return new TextDecoder('iso-8859-1').decode(buffer);
-    }
-
     // Holt beide Listen aus demselben Abruf (ein Netz-Call): die reiche "gerade eingeloggt"-
     // Tabelle und die 30-Minuten-Namen. null nur, wenn schon der Abruf/das Markup scheitert.
     async getOnline(): Promise<{ players: OnlinePlayer[]; recent: string[] } | null> {
         try {
-            const html = await this.fetchHtml();
+            const html = await fetchLotgdHtml(LIST_URL, 'Kriegerliste');
             if (!html) return null;
 
             const players = parseOnlinePlayers(html);

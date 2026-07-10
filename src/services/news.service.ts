@@ -1,4 +1,6 @@
-const NEWS_URL = 'https://www.lotgd.de/news.php';
+import { fetchLotgdHtml, LOTGD_BASE_URL } from './lotgd.service.js';
+
+const NEWS_URL = `${LOTGD_BASE_URL}/news.php`;
 
 export interface NewsItem {
     title: string;
@@ -119,24 +121,9 @@ export function parseGameEvents(html: string): GameEvents | null {
 }
 
 class NewsService {
-    // Seite ist ISO-8859-1 kodiert - explizit dekodieren, sonst kaputte Umlaute.
-    private async fetchHtml(): Promise<string | null> {
-        const response = await fetch(NEWS_URL, {
-            headers: { 'User-Agent': 'MechanischerGruenerDrache-DiscordBot' }
-        });
-
-        if (!response.ok) {
-            console.error(`Fehler beim Abrufen der LotGD-News: ${response.status} ${response.statusText}`);
-            return null;
-        }
-
-        const buffer = await response.arrayBuffer();
-        return new TextDecoder('iso-8859-1').decode(buffer);
-    }
-
     async getLatestNews(): Promise<NewsItem | null> {
         try {
-            const html = await this.fetchHtml();
+            const html = await fetchLotgdHtml(NEWS_URL, 'News');
             return html ? parseLatestNews(html) : null;
         } catch (error) {
             console.error('Fehler beim Abrufen/Parsen der LotGD-News:', error);
@@ -146,7 +133,7 @@ class NewsService {
 
     async getGameEvents(): Promise<GameEvents | null> {
         try {
-            const html = await this.fetchHtml();
+            const html = await fetchLotgdHtml(NEWS_URL, 'Ereignisse');
             return html ? parseGameEvents(html) : null;
         } catch (error) {
             console.error('Fehler beim Abrufen/Parsen der LotGD-Ereignisse:', error);

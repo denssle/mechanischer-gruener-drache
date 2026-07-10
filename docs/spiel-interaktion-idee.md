@@ -1,9 +1,62 @@
 # Idee: Mit dem Spiel selbst interagieren
 
-> Status: **Idee / Machbarkeitsnotiz** – noch keine Entscheidung, noch kein Code.
-> Wunsch: Über den Bot direkt mit dem eigentlichen LotGD-Spiel auf lotgd.de interagieren
-> (nicht nur Community-Spielereien drumherum). Diese Notiz hält fest, **warum das schwierig
-> ist**, was realistisch geht und in welcher Reihenfolge man es anginge.
+> Status: **teils umgesetzt.** Wunsch: Über den Bot direkt mit dem eigentlichen LotGD-Spiel auf
+> lotgd.de interagieren (nicht nur Community-Spielereien drumherum). Diese Notiz hält fest, warum
+> das schwierig ist, was realistisch geht und in welcher Reihenfolge man es anginge.
+
+## Update 2026-07-10 (was sich geändert hat)
+
+- **Blocker 2 (Betreiber-OK) ist erledigt:** Die lotgd.de-Entwickler haben grünes Licht gegeben –
+  wir dürfen anbinden, was wir wollen. Aber **kein Support/keine Kapazitäten** von ihrer Seite
+  (keine API, keine Vorwarnung bei HTML-Änderungen). Robustheit liegt komplett bei uns.
+- **Stufe 1 (öffentlich, read-only) ist gebaut:** `/news`, `/ereignisse` (beide aus `news.php`) und
+  `/online` (aus `list.php`, die eingeloggten Spieler).
+- **Credential-Frage entschieden (vorerst): keine User-Passwörter.** Grund: lotgd.de hasht das
+  Passwort schon im Browser per `md5()` und akzeptiert diesen Hash am `login.php`-Endpoint → der
+  **Hash ist login-äquivalent**, „wir speichern nur den Hash" bringt also **keinen** Sicherheits-
+  gewinn. Für einen Hobby-Bot auf Shared Hosting sind login-äquivalente Geheimnisse Dritter eine
+  unverhältnismäßige Haftung. Deshalb: **Weg A** (nur öffentlicher Charaktername, kein Login).
+
+### Machbarkeit Weg A – was lotgd.de ohne Login pro Charakter hergibt
+
+Geprüft am 2026-07-10 (Bot-User-Agent, sonst `403`): Die **paginierte Kriegerliste**
+`list.php?op=bypage&page=N` ist ein **vollständiges öffentliches Charakterverzeichnis** – alle
+~695 Charaktere (7 Seiten à 100, auch offline), alphabetisch nach Kern-Namen. Spalten:
+**Gilde · Name · Ort · Level · Rasse · Geschlecht · Lebt · „Zuletzt da"** (z.B. „Heute", „5 Tage").
+
+- **Keine öffentliche Charakter-Detailseite:** Namen verlinken nirgendwohin, `about.php` ist nur
+  „Über das Spiel". Alles **Private** (Gold, genaue Kampfwerte, Ingame-Post, Ausrüstung) steckt
+  hinter dem Login und ist mit Weg A **nicht** erreichbar.
+- **Titel-Präfix-Falle:** Der angezeigte Name trägt einen level-/drachenabhängigen Titel vorn
+  („Centurio Acaine", „Grünwicht Adalbert", manche ganz ohne). Der eigentliche Charaktername ist
+  nur das/die letzte(n) Wort(e). Verknüpfung/Suche muss darauf matchen (Suffix), nicht auf den
+  ganzen String – sonst bricht die Zuordnung, sobald sich der Titel ändert.
+
+### Geplantes Feature: `/charakter` (Weg A)
+
+Gruppen-Command (darf daher ein `hilfe`-Subcommand haben, konsistent mit `/sport`/`/twitch`):
+
+- `/charakter verknuepfen name:<Charaktername>` – speichert **nur den öffentlichen Namen** pro
+  Discord-User (`CHARACTER:LINK:{discordId}`), gleiches Vertrauensmodell wie `/twitch verknuepfen`.
+  Prüft beim Verknüpfen, ob der Name im Roster existiert (Tippfehler abfangen).
+- `/charakter [anzeigen] [name:]` – Charakter-Karte (Level, Rasse, Ort, Gilde, lebendig, zuletzt
+  gesehen); ohne `name` der eigene verknüpfte.
+- `/charakter entfernen` – Verknüpfung löschen.
+- `/charakter hilfe` – Detail-Hilfe; `/hilfe` verweist im „Spielwelt"-Block darauf.
+
+Service `character.service.ts`: `parseRoster(html)` (8 Spalten, `htmlToText` für Regenbogen-Namen,
+`null` bei kaputtem Markup), `findCharacter(name)` mit Suffix-Match gegen den Titel-Präfix. Roster
+kurz cachen (Redis, TTL ~10 min), sonst 7 Seiten-Fetches pro Aufruf. Alles fehlertolerant (kein
+Crash, klare „nicht gefunden"/„konnte nicht abrufen"-Meldung). **Keine Credentials, kein Schreiben.**
+
+Die **privaten** Daten (Stufe 2) und **Aktionen** (Stufe 3) bleiben bewusst zurückgestellt – siehe
+unten. Falls je gewünscht, dann Stufe 2 mit **selbst hinterlegtem Session-Token** (opt-in), nicht
+mit gespeichertem Passwort.
+
+---
+
+_Die folgende Analyse ist der ursprüngliche Stand (vor dem Update oben) und bleibt als Kontext für
+Stufe 2/3 stehen._
 
 ## Die Ausgangslage
 
