@@ -4,10 +4,20 @@ on:
   push:
     branches:
       - main
+  pull_request:
+
+# Zwei schnell aufeinanderfolgende Pushes auf main duerfen sich nicht ueberlappen
+# (paralleles rsync + supervisorctl restart). Laufende Deploys nicht abbrechen.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  deploy:
-    name: Deploy to Uberspace
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,6 +28,7 @@ jobs:
         with:
           # 22 = hoechste auf Uberspace verfuegbare Version (siehe CLAUDE.md), nicht das aktuelle Active LTS
           node-version: '22'
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -47,6 +58,19 @@ jobs:
         env:
           CI: true
 
+  deploy:
+    name: Deploy to Uberspace
+    runs-on: ubuntu-latest
+    # Nur nach gruenen Tests und nur bei Push auf main deployen, nicht bei Pull Requests
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Kein Build hier: der Uberspace-Host baut sich beim Restart selbst neu
+      # (start-server = npm ci && npm run build && npm start), ein vorgebautes dist/
+      # waere Wegwerf-Arbeit. Es wird nur der Source-Baum gesynct.
       - name: rsync deployments
         uses: burnett01/rsync-deployments@7.1.0
         with:
