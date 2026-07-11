@@ -237,6 +237,36 @@ gebaut wird sie erst nach Zusage und Live-Gang des Moduls.
    fällt dort auf, nicht in Produktion).
 4. Übergabe durch Dominik (bestehender Draht zu den Entwicklern).
 
+## Live-Beobachtungen von lotgd.de (2026-07-12, Erkundungstour mit echtem Account)
+
+Beim Durchklicken durch die Spielwelt (mit Zustimmung des Account-Inhabers, rein lesend)
+haben sich mehrere Annahmen des Moduls am lebenden Server bestätigt – ohne dass sich daraus
+Code-Änderungen ergeben:
+
+- **`allowanonymous`/`override_forced_nav` sind auf lotgd.de aktiv:** Jede Seite trägt im
+  HTML-Kommentar `AllowAnonymous: False / Override Forced Nav: False`. Die laufende Engine
+  wertet also genau die beiden Flags aus, auf die sich unser `op=api`-Zweig verlässt –
+  bisher war das nur aus dem Dragonprime-Referenzcode abgeleitet.
+- **Ohne `override_forced_nav` ginge es nicht:** Das Nav-Counter-System (`c=N-XXXXXX` an
+  jedem Link, verbrauchte Links → `badnav.php`) macht es für einen Bot ohne Spielsitzung
+  unmöglich, gültige Links vorzuhalten. Der anonyme, counter-freie Endpunkt ist die einzige
+  tragfähige Variante, nicht bloß die bequemste. (Nebenbefund: Das Linkformat ändert sich
+  auch mal – im Reisen-Menü tauchte ein neuer `d=1`-Parameter auf. Scraping bleibt fragil,
+  die Modul-API ist der richtige Weg.)
+- **Drittmodule sind dort Alltag:** Mindestens acht Module live im Einsatz gesehen
+  (`cities`, `bonusnewdays`, `chatactivityviewer`, `notes`, `mobilevitals`, `colorpopup`,
+  `class_inventorypopup`, `userlist`). Ein weiteres Modul einzuspielen ist für die Betreiber
+  Routine – gut für die Erfolgsaussichten der Anfrage. `mobilevitals` liefert eigenes CSS
+  unter `modules/mobilevitals/` aus: Module können also auch statische Dateien mitbringen
+  (für uns aktuell nicht nötig).
+- **`source.php` existiert auf lotgd.de** (`source.php?url=/village.php`, auf jeder Seite
+  verlinkt): Der tatsächlich laufende Kern-Code ist einsehbar. Falls beim Einspielen etwas
+  vom Verhalten unserer Referenz in `lotgd-modul/referenz` abweicht, lässt sich dort direkt
+  gegenprüfen.
+- **Regenbogen-Namen bestätigen `drachenbot_strip_codes`:** Spielernamen kommen im HTML
+  buchstabenweise in Farb-Spans zerhackt an – in der Datenbank stecken die Namen voller
+  Backtick-Farbcodes. Das Strippen vor der JSON-Ausgabe ist notwendig, nicht Kosmetik.
+
 ## Ablage im Repo
 
 Alles unter **`lotgd-modul/`** in diesem Repo (Modul, Endpunkt, Docker-Setup, Betreiber-README).
