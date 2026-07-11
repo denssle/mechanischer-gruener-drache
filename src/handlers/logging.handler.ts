@@ -1,6 +1,7 @@
 import {ChatInputCommandInteraction, GuildBan, GuildMember, GuildTextBasedChannel, Message, MessageFlags, PartialGuildMember, PartialMessage, PermissionFlagsBits, ReadonlyCollection, TextChannel} from 'discord.js';
 import client from '../client.js';
 import loggingService, {CachedMessage} from '../services/logging.service.js';
+import memberService from '../services/member.service.js';
 
 // Anhänge werden nur mit Dateinamen protokolliert (die CDN-Links funktionieren nach dem Löschen
 // ohnehin nicht mehr, und die Dateien selbst spiegeln wir bewusst nicht).
@@ -118,10 +119,16 @@ class LoggingHandler {
 
     async handleGuildMemberAdd(member: GuildMember) {
         try {
+            // Bewusst VOR dem Channel-Check: gezählt wird auch dann, wenn (noch) kein
+            // Log-Channel konfiguriert ist - sonst würde die Zahl später falsch dastehen.
+            const anzahl = await memberService.zaehleBeitritt(member.id);
+
             const logChannel = await this.getLogChannel();
             if (!logChannel) return;
 
-            await logChannel.send(`📥 **${member.user.tag}** ist dem Server beigetreten.`);
+            // Beim ersten Mal ist die Zahl keine Information - erst ein Wiederkommen ist eine.
+            const zusatz = anzahl > 1 ? ` (bereits zum ${anzahl}. Mal)` : '';
+            await logChannel.send(`📥 **${member.user.tag}** ist dem Server beigetreten${zusatz}.`);
         } catch (error) {
             console.error('Fehler beim Loggen des Server-Beitritts:', error);
         }

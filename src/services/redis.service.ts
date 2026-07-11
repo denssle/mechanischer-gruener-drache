@@ -106,6 +106,13 @@ class RedisService {
         const result = await this.#client.incrByFloat(key, amount);
         return parseFloat(result);
     }
+
+    // Zählt einen Ganzzahl-Zähler um eins hoch und gibt den neuen Stand zurück (INCR legt den
+    // Key bei Bedarf mit 0 an). Hochzählen und Lesen in einem Schritt - dadurch kann sich kein
+    // zweiter Event-Listener dazwischenschieben.
+    async increment(key: string): Promise<number> {
+        return this.#client.incr(key);
+    }
 }
 
 export default new RedisService();

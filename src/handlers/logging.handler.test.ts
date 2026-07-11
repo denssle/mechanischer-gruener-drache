@@ -11,6 +11,13 @@ vi.mock('../services/logging.service.js', () => ({
     }
 }));
 
+vi.mock('../services/member.service.js', () => ({
+    default: {
+        zaehleBeitritt: vi.fn(),
+        getBeitrittsAnzahl: vi.fn(),
+    }
+}));
+
 vi.mock('../client.js', () => ({
     default: {
         on: vi.fn(),
@@ -18,6 +25,7 @@ vi.mock('../client.js', () => ({
     }
 }));
 
+import memberService from '../services/member.service.js';
 import loggingService from '../services/logging.service.js';
 import client from '../client.js';
 import loggingHandler from './logging.handler.js';
@@ -288,18 +296,21 @@ describe('LoggingHandler', () => {
     });
 
     describe('handleGuildMemberAdd', () => {
-        const mockMember = () => ({ user: { tag: 'Neuling#0001' } } as any);
+        const mockMember = () => ({ id: 'user-1', user: { tag: 'Neuling#0001' } } as any);
 
-        it('tut nichts wenn kein Log-Channel konfiguriert ist', async () => {
+        it('zählt den Beitritt auch dann, wenn kein Log-Channel konfiguriert ist', async () => {
+            vi.mocked(memberService.zaehleBeitritt).mockResolvedValue(1);
             vi.mocked(loggingService.getLogChannel).mockResolvedValue(null);
 
             await loggingHandler.handleGuildMemberAdd(mockMember());
 
+            expect(memberService.zaehleBeitritt).toHaveBeenCalledWith('user-1');
             expect(client.channels.fetch).not.toHaveBeenCalled();
         });
 
-        it('loggt den Server-Beitritt', async () => {
+        it('loggt den ersten Beitritt ohne Zählung (die Zahl wäre dort keine Information)', async () => {
             const send = vi.fn();
+            vi.mocked(memberService.zaehleBeitritt).mockResolvedValue(1);
             vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
             vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
 
@@ -307,10 +318,22 @@ describe('LoggingHandler', () => {
 
             expect(send).toHaveBeenCalledWith(expect.stringContaining('Neuling#0001'));
             expect(send).toHaveBeenCalledWith(expect.stringContaining('beigetreten'));
+            expect(send).not.toHaveBeenCalledWith(expect.stringContaining('Mal'));
+        });
+
+        it('nennt beim Wiederkommen, das wievielte Mal es ist', async () => {
+            const send = vi.fn();
+            vi.mocked(memberService.zaehleBeitritt).mockResolvedValue(3);
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await loggingHandler.handleGuildMemberAdd(mockMember());
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('bereits zum 3. Mal'));
         });
 
         it('fängt Fehler beim Loggen ab', async () => {
-            vi.mocked(loggingService.getLogChannel).mockRejectedValue(new Error('Redis kaputt'));
+            vi.mocked(memberService.zaehleBeitritt).mockRejectedValue(new Error('Redis kaputt'));
 
             await expect(loggingHandler.handleGuildMemberAdd(mockMember())).resolves.not.toThrow();
         });
