@@ -1,7 +1,8 @@
 {
   "name": "mechanischer-gruener-drache",
-  "version": "1.29.5",
+  "version": "1.29.6",
   "description": "",
+  "license": "MIT",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

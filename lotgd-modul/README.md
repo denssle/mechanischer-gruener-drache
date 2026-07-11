@@ -86,6 +86,13 @@ Standard-Modul-API (`getmoduleinfo`/`install`/`uninstall`/`dohook`/`run`, `set_m
 **Vorschlag:** Zuerst auf `dev.lotgd.de` einspielen. Dort lässt es sich risikofrei am echten
 1.2.0-Stand testen (wir testen gern mit), bevor es – wenn überhaupt – in die Produktion geht.
 
+## Lizenz
+
+Dieses Modul baut auf der Modul-API von Legend of the Green Dragon 1.x (Dragonprime Edition)
+auf, das unter [CC BY-NC-SA 2.0](https://creativecommons.org/licenses/by-nc-sa/2.0/) steht.
+Entsprechend der Share-Alike-Bedingung steht auch dieses Modul unter **CC BY-NC-SA 2.0**
+(anders als der restliche Bot-Code in diesem Repository, der MIT-lizenziert ist).
+
 ## Kontakt
 
 Dominik Hellweg (Betreiber des Discord-Community-Servers), dominik.hellweg@protonmail.com.

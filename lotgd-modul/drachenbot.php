@@ -9,6 +9,10 @@
 //
 // Hinweis Zeichensatz: Dieses File benutzt bewusst nur ASCII (ue/oe/ae),
 // damit es unabhaengig vom File-Encoding im ISO-8859-1-Spiel korrekt anzeigt.
+//
+// Lizenz: CC BY-NC-SA 2.0 (https://creativecommons.org/licenses/by-nc-sa/2.0/),
+// wie LotGD 1.x Dragonprime Edition selbst, auf dessen Modul-API dieses Modul
+// aufbaut (Share-Alike). Autor: Dominik Hellweg, 2026.
 
 function drachenbot_getmoduleinfo() {
 	$info = array(
