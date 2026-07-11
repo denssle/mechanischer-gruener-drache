@@ -17,6 +17,54 @@
   gewinn. Für einen Hobby-Bot auf Shared Hosting sind login-äquivalente Geheimnisse Dritter eine
   unverhältnismäßige Haftung. Deshalb: **Weg A** (nur öffentlicher Charaktername, kein Login).
 
+## Update 2026-07-11: Machbarkeit „Session-Token statt Passwort" (Stufe 2) – geprüft, **Sackgasse**
+
+Die Idee für Stufe 2 war: Der User hinterlegt **selbst** ein Session-Token (statt eines Passworts),
+der Bot benutzt es lesend. Die Frage war, was man dafür überhaupt hinterlegen würde. lotgd.de setzt
+zwei Cookies – beide wurden geprüft, das Ergebnis erledigt die Idee.
+
+**`lgi` ist KEIN Login-Cookie.** Das war die Sorge (in vielen LotGD-Foren klingt es nach
+„eingeloggt bleiben"), sie ist **unbegründet**. Im Quellcode (`common.php`, LotGD 1.x) ist `lgi`
+schlicht eine **Browser-Kennung** – `md5(microtime())`, gespeichert als `uniqueid` beim Account,
+dient der Mehrfach-Account-Erkennung:
+
+```php
+$u = md5(microtime());
+...
+else if (isset($_COOKIE['lgi'])) { $session['user']['uniqueid'] = $_COOKIE['lgi']; }
+else { $_COOKIE['lgi'] = $u; $session['user']['uniqueid'] = $u; }
+```
+
+Bestätigt gegen die echte Seite: Ein **anonymer** Request auf `source.php` bekommt sofort ein
+`lgi=8436c53b…` gesetzt (1 Jahr gültig) – ohne jeden Login. Der Cookie enthält also **kein**
+Geheimnis und **keine** Session; er nützt uns für Auth exakt nichts (und ist umgekehrt auch
+ungefährlich).
+
+**Der echte Login steckt nur in `PHPSESSID`** – einer ganz normalen PHP-Session, serverseitig. Und
+genau daran scheitert das Feature, aus zwei unabhängigen Gründen:
+
+1. **15 Minuten Leerlauf, dann tot.** `common.php` erzwingt einen Login-Timeout
+   (`getsetting("LOGINTIMEOUT", 900)` = 900 Sekunden): liegt der letzte Zugriff länger zurück, wird
+   die Session verworfen. Ein Token, das der User aus den DevTools kopiert, ist also nach einer
+   Viertelstunde Nichtstun wertlos. Ein Feature, das man mehrmals täglich per F12 neu einrichtet,
+   benutzt niemand.
+2. **Am-Leben-Halten wäre schlimmer als das Problem.** Der naheliegende Ausweg – der Bot pollt alle
+   paar Minuten und hält die Session frisch – hat einen **im Spiel sichtbaren** Nebeneffekt: der
+   User gilt dauerhaft als eingeloggt (steht permanent in der Kriegerliste/„Online"-Liste), und die
+   Bot-Session kollidiert mit seiner echten Browser-Session. Wir würden also fremdes Spielgeschehen
+   verfälschen, um an eine Zahl zu kommen.
+
+**Fazit:** Es gibt bei lotgd.de **kein** Token, das gleichzeitig (a) hinterlegbar, (b) langlebig und
+(c) harmlos ist. Was langlebig wäre (Passwort/md5-Hash), ist login-äquivalent; was harmlos ist
+(`lgi`), taugt nicht zur Auth; was tatsächlich authentifiziert (`PHPSESSID`), lebt 15 Minuten.
+Sauber lösbar wäre das nur mit einem **vom Betreiber ausgestellten, widerrufbaren Read-Only-Token** –
+das existiert nicht, und die Entwickler haben klar gesagt, dass sie keine Kapazität haben, so etwas
+zu bauen.
+
+**Konsequenz: Stufe 2 und 3 bleiben liegen** – nicht aus Bequemlichkeit, sondern weil jeder Weg
+dorthin entweder fremde Login-Geheimnisse horten oder in fremde Spielsitzungen eingreifen würde.
+Wer das später nochmal aufgreift: Bitte hier anfangen, nicht bei „ach, ein Token wird schon gehen".
+
 ### Machbarkeit Weg A – was lotgd.de ohne Login pro Charakter hergibt
 
 Geprüft am 2026-07-10 (Bot-User-Agent, sonst `403`): Die **paginierte Kriegerliste**
