@@ -199,6 +199,14 @@ Bewusst schlank – die Bot-Integration wird erst richtig gebaut, wenn das Modul
    API-Daten und fällt ohne Token auf das heutige Roster-Scraping zurück. Gleiche
    Fehlertoleranz-Linie wie überall: Endpunkt nicht erreichbar → alte Anzeige, kein Crash.
 
+#### Phase-4-Ergebnisse (2026-07-11, erledigt)
+
+`scripts/test-modul-api.ts` (kompiliert wie die Twitch-Skripte über `tsconfig.scripts.json`,
+Aufruf `npm run test:modul -- <token> [baseUrl]`) prüft Positivfall (200 + alle 13
+Whitelist-Felder vorhanden) und Negativfall (falsches Token → 401 mit generischer Meldung) –
+gegen die Sandbox bestanden. Die `/charakter`-Integrationsskizze steht oben in Phase 4;
+gebaut wird sie erst nach Zusage und Live-Gang des Moduls.
+
 ### Phase 5 – Paket schnüren und vorlegen
 
 1. **README für die Betreiber** (deutsch, im Modul-Verzeichnis): Was es tut, was es **nicht**

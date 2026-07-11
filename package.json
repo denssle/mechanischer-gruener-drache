@@ -1,6 +1,6 @@
 {
   "name": "mechanischer-gruener-drache",
-  "version": "1.29.2",
+  "version": "1.29.3",
   "description": "",
   "main": "dist/index.js",
   "scripts": {
@@ -11,7 +11,8 @@
     "lint:fix": "eslint src/ --fix",
     "test": "vitest run",
     "build:scripts": "tsc -p tsconfig.scripts.json",
-    "test:twitch": "npm run build:scripts && node dist-scripts/run-integration-test.js"
+    "test:twitch": "npm run build:scripts && node dist-scripts/run-integration-test.js",
+    "test:modul": "npm run build:scripts && node dist-scripts/test-modul-api.js"
   },
   "type": "module",
   "private": true,
