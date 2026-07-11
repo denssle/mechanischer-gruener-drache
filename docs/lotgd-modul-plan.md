@@ -165,6 +165,28 @@ ist also ein **`op=api`-Zweig im selben Modul** – keine zweite Datei, nichts i
    der Modul-Prefs- oder einer kleinen eigenen Tabelle) – muss nicht raffiniert sein, nur
    „kein Brute-Force auf Tokens" glaubhaft machen.
 
+#### Phase-2+3-Ergebnisse (2026-07-11, erledigt)
+
+Beide Phasen sind in `lotgd-modul/drachenbot.php` umgesetzt und in der Sandbox end-to-end
+getestet (UI-Flow per HTTP durchgespielt, DB gegengeprüft):
+
+- **Token-Verwaltung:** erzeugen (einmalige Anzeige, DB speichert nur den sha256-Hash –
+  per Gegenprobe verifiziert), neu erzeugen, widerrufen (leert die Prefs; das Token ist
+  **sofort** an der API ungültig, getestet). Zufallsquelle `random_bytes` →
+  `openssl_random_pseudo_bytes`-Fallback; eigener `hash_equals`-Fallback – alles
+  **PHP-5-kompatibel** (gelintet mit `php -l` unter 5.6).
+- **API:** `op=api&token=<32 hex>` → JSON (UTF-8, Farbcodes aus dem Namen gestrippt).
+  Whitelist: name, level, race, sex, alive, location, gold, gems, experience, dragonkills,
+  hitpoints, maxhitpoints, laston. Format-Check wirft alles Nicht-Hex vor dem SQL raus
+  (Injection-Test bestanden); Hash-Vergleich in PHP über **alle** Zeilen (konstante Zeit);
+  Fehlerantwort generisch 401 + 0,5-s-Bremse gegen Raten. Kein Schreiben, keine Session –
+  der Spieler erscheint durch API-Aufrufe nicht als online.
+- **Zwei Sandbox-Stolperfallen dokumentiert** (docker/README): Einzeldatei-Bind-Mounts
+  hängen am Inode (nach Änderungen `up -d --force-recreate web`, `restart` reicht nicht);
+  und beim Testen nicht von der per Login-Restore angezeigten Seite täuschen lassen – LotGD
+  zeigt da den **gespeicherten** letzten Seitenstand aus `accounts_output`, nicht frisch
+  gerenderten Code (frisch übers Dorf navigieren).
+
 ### Phase 4 – Bot-Seite: minimaler Beweis, kein Vollausbau
 
 Bewusst schlank – die Bot-Integration wird erst richtig gebaut, wenn das Modul live ist:

@@ -44,10 +44,16 @@ Die DB liegt im benannten Volume `dbdata` und überlebt `docker compose down`
 
 ## Modul entwickeln
 
-`../drachenbot.php` ist direkt nach `modules/drachenbot.php` gemountet – Änderungen sind ohne
-Neustart sofort wirksam (LotGD lädt Moduldateien pro Request). Nur bei Änderungen an
-`_getmoduleinfo`/`_install` (Hooks, Settings) muss das Modul im Admin-Bereich einmal
-deinstalliert/reinstalliert bzw. „reinstalled" werden.
+`../drachenbot.php` ist direkt nach `modules/drachenbot.php` gemountet. **Achtung, Docker-Falle:**
+Einzeldatei-Bind-Mounts hängen am Inode – Editoren/Tools, die die Datei beim Speichern ersetzen
+statt in-place zu schreiben, lassen den Container auf dem alten Stand. Nach Änderungen deshalb:
+
+```bash
+docker compose up -d --force-recreate web
+```
+
+(`docker compose restart` reicht dafür **nicht**.) Bei Änderungen an `_getmoduleinfo`/`_install`
+(Hooks, Settings) muss das Modul zusätzlich im Admin-Bereich einmal reinstalliert werden.
 
 ## Warum PHP 5.6?
 
