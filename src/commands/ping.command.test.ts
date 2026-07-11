@@ -1,18 +1,48 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../handlers/pingPong.handler.js', () => ({
-    default: { handlePingPong: vi.fn(), handlePingPongHighscore: vi.fn() }
+    default: {
+        handleHerausfordern: vi.fn(),
+        handlePingPongHighscore: vi.fn(),
+        handleHilfe: vi.fn(),
+    }
 }));
 
 import pingPongHandler from '../handlers/pingPong.handler.js';
 import pingCommand from './ping.command.js';
 
+const mockInteraction = (subcommand: string) => ({
+    options: { getSubcommand: vi.fn().mockReturnValue(subcommand) },
+} as any);
+
 describe('ping.command', () => {
-    it('leitet execute an pingPongHandler.handlePingPong weiter', async () => {
-        const interaction = {} as any;
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it.each([
+        ['herausfordern', 'handleHerausfordern'],
+        ['bestenliste', 'handlePingPongHighscore'],
+        ['hilfe', 'handleHilfe'],
+    ] as const)('leitet Subcommand "%s" an pingPongHandler.%s weiter', async (subcommand, method) => {
+        const interaction = mockInteraction(subcommand);
 
         await pingCommand.execute(interaction);
 
-        expect(pingPongHandler.handlePingPong).toHaveBeenCalledWith(interaction);
+        expect(pingPongHandler[method]).toHaveBeenCalledWith(interaction);
+    });
+
+    it('tut nichts bei einem unbekannten Subcommand', async () => {
+        await pingCommand.execute(mockInteraction('nicht-existent'));
+
+        expect(pingPongHandler.handleHerausfordern).not.toHaveBeenCalled();
+        expect(pingPongHandler.handlePingPongHighscore).not.toHaveBeenCalled();
+        expect(pingPongHandler.handleHilfe).not.toHaveBeenCalled();
+    });
+
+    it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
+        const definedSubcommands = pingCommand.data.options.map((option) => option.toJSON().name);
+
+        expect(definedSubcommands.sort()).toEqual(['bestenliste', 'herausfordern', 'hilfe']);
     });
 });

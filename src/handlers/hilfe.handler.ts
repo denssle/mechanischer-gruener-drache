@@ -2,7 +2,7 @@ import {ChatInputCommandInteraction} from 'discord.js';
 
 // Gesamt-Übersicht aller Befehle. Flache Einzelbefehle (kein eigenes hilfe) werden NUR hier
 // erklärt - ein Test stellt sicher, dass jeder von ihnen hier auftaucht. Die Gruppen-Befehle
-// (/sport, /twitch, /event) haben zusätzlich je ein eigenes `hilfe` mit allen Details.
+// (/sport, /twitch, /event, /pingpong, /charakter) haben zusätzlich je ein eigenes `hilfe` mit allen Details.
 export const HELP_TEXT =
     `**Befehlsübersicht – Mechanischer Grüner Drache**\n` +
     `Tippe \`/\` und den Befehl, um ihn zu nutzen. Zu Bereichen mit mehreren Unterbefehlen gibt es Details per \`/<bereich> hilfe\`.\n\n` +
@@ -17,7 +17,7 @@ export const HELP_TEXT =
     `**Event** (Details: \`/event hilfe\`)\n` +
     `\`/event countdown\` – wie lange noch bis zum nächsten Community-Event?\n\n` +
     `**Spiel & Spaß**\n` +
-    `\`/pingpong\` – eine Runde Ping-Pong · \`/pingbestenliste\` – die Bestenliste\n` +
+    `\`/pingpong herausfordern\` – jemanden zum Ping-Pong-Duell fordern, er nimmt per Button an (Details: \`/pingpong hilfe\`)\n` +
     `\`/blahaj\` – Euro-Beträge in Blåhajs umrechnen (reagiert auch automatisch auf €-Beträge im Chat)\n\n` +
     `**Rollen zum Selbstvergeben**\n` +
     `An Button-Nachrichten (von Admins gepostet) gibst du dir per Klick selbst Rollen.\n\n` +

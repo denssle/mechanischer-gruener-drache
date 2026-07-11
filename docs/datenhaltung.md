@@ -30,7 +30,7 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `TWITCH:NOTIFICATION_CHANNEL`, `TWITCH:NOTIFICATION_ROLE` | Admin-Konfiguration | bis zum Überschreiben | Live-Benachrichtigungen |
 | `SPORT:ENTRY:<id>`, `SPORT:USER:<userId>` | Sport-Einträge: Distanz, Aktivität, Datum, optionale Notiz | dauerhaft (bis `/sport loeschen`) | `/sport statistik` |
 | `SPORT:HIGHSCORE`, `SPORT:MILESTONES`, `SPORT:ANNOUNCEMENT_CHANNEL` | Kilometer je User, Meilensteine, Ankündigungskanal | dauerhaft | `/sport gesamt`, Meilenstein-Ankündigungen |
-| `<userId>PING_PONG`, `PING_PONG` (Sorted Set) | Ping-Pong-Punktestand | dauerhaft | `/pingbestenliste` |
+| `<userId>PING_PONG`, `PING_PONG` (Sorted Set) | Ping-Pong-Punktestand | dauerhaft | `/pingpong bestenliste` |
 | `PING_PONG:COOLDOWN:<userId>` | Marker, dass gerade gespielt wurde | 30 Sekunden (TTL) | Anti-Spam |
 | `BLAHAJ:TOTAL_EUR` | eine einzige Zahl (Summe aller je erwähnten Euro-Beträge) | dauerhaft | `/blahaj` |
 | `EVENT:NEXT` | Timestamp + optionaler Titel des nächsten Community-Events | bis `/event entfernen` | `/event countdown` |

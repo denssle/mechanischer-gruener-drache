@@ -4,7 +4,7 @@ Ein Discord-Bot für den Discord-Server von [LotgD](http://www.lotgd.de/), gesch
 
 ## 🚀 Features
 
-- **Ping-Pong-Spiel**: Ein einfaches Spiel (`/pingpong`) mit zufälligem Flavor-Text und Anti-Spam-Cooldown, plus Bestenliste (`/pingbestenliste`), gespeichert in Redis.
+- **Ping-Pong-Duell**: Man fordert eine andere Person heraus (`/pingpong herausfordern`), sie nimmt per Button an, dann wird gespielt – Sieg bringt einen Punkt, Niederlage kostet einen. Dazu ein Anti-Spam-Cooldown und eine Bestenliste (`/pingpong bestenliste`), gespeichert in Redis.
 - **Twitch-Integration**: User verknüpfen ihren eigenen Twitch-Kanal (`/twitch verknuepfen`); der Bot meldet per Webhook, wenn sie live gehen – inkl. Stream-Titel und Spiel/Kategorie. Admin-Diagnose via `/twitch diagnose`.
 - **Sport-Tracking**: Bewusst kooperativ – alle tragen ihre Kilometer zu einer gemeinsamen Gesamtsumme bei (`/sport gesamt`), keine Rangliste.
 - **User-Daten-Tracking**: Hält intern Namen und Rollen der Mitglieder aktuell (z.B. damit Live-Meldungen den richtigen Namen zeigen).
@@ -20,8 +20,8 @@ Alle Befehle, Subcommands und Optionen sind deutsch benannt. Umlaute in den Name
 
 | Befehl | Beschreibung |
 |---|---|
-| `/pingpong` | Spielt eine Runde Ping-Pong |
-| `/pingbestenliste` | Zeigt die Ping-Pong-Bestenliste |
+| `/pingpong herausfordern` | Fordert eine andere Person zu einem Duell heraus (sie nimmt per Button an) |
+| `/pingpong bestenliste` | Zeigt die Ping-Pong-Bestenliste |
 | `/sport eintragen` | Sportliche Aktivität mit Kilometern eintragen |
 | `/sport statistik` | Eigene Statistik pro Aktivität |
 | `/sport gesamt` | Gemeinsame Gesamtkilometer aller Mitglieder |
@@ -123,7 +123,7 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] Hilfetexte ausbauen: jeder Gruppen-Command hat ein eigenes `hilfe` (`/sport`, `/twitch`, `/event`), plus eine allgemeine Gesamt-Hilfe `/hilfe` über alle Befehle
 - [x] Admin Funktionen aus den Hilfetexten entfernen - die Listen werden zu lang
 - [ ] Idee: Tipps zu Funktionen einstreuen wie bei Ladebildschirmen in Videospielen - damit UserInnen wissen was Bedie Anwendung kann
-- [ ] Ping-Pong: PvP-Herausforderung (`/pingpong herausfordern @user`) – Match gegen eine andere Person per Buttons
+- [x] Ping-Pong: **komplett auf PvP umgestellt** (`/pingpong herausfordern gegner:@user`) – Match gegen eine andere Person, sie nimmt per Button an; gespielt wird auf 3 gewonnene Ballwechsel, Sieg +1 / Niederlage -1 (nie unter 0). Das Solo-Spiel gegen den Bot wurde dabei **entfernt**: Punkte kommen jetzt ausschließlich aus echten Duellen, was die alte Design-Schwäche (Bestenliste belohnt viel Klicken statt Spielen) an der Wurzel behebt. `/pingpong` ist dafür ein Gruppen-Command (`herausfordern`/`bestenliste`/`hilfe`), `/pingbestenliste` ist entfallen
 - [x] Twitch-Live-Meldung um Spiel & Kategorie erweitert (`twitchService.getStreamInfo` via Helix `Get Streams`, mit Fallback falls beim Live-Gehen noch nichts verfügbar ist)
 - [ ] Den Bot generalisieren für jeden Server (Multi-Guild-Plan: `docs/multi-guild-plan.md`)
 - Mit dem eigentlichen Spiel interagieren (Machbarkeitsnotiz + Stufen: `docs/spiel-interaktion-idee.md`):

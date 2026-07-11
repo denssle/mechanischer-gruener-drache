@@ -12,7 +12,7 @@ describe('HilfeHandler', () => {
 
     // Flache Einzelbefehle haben kein eigenes `hilfe` (siehe Design-Entscheidung) - sie werden
     // NUR hier erklärt. Dieser Test ist die Absicherung, dass keiner davon vergessen wird.
-    it.each(['/pingpong', '/pingbestenliste', '/blahaj', '/news', '/ereignisse', '/online', '/spielwelt', '/version'])(
+    it.each(['/blahaj', '/news', '/ereignisse', '/online', '/spielwelt', '/version'])(
         'erwähnt den flachen Befehl %s (der sonst nirgends dokumentiert ist)',
         (command) => {
             expect(HELP_TEXT).toContain(command);
@@ -24,6 +24,7 @@ describe('HilfeHandler', () => {
         expect(HELP_TEXT).toContain('/twitch hilfe');
         expect(HELP_TEXT).toContain('/event hilfe');
         expect(HELP_TEXT).toContain('/charakter hilfe');
+        expect(HELP_TEXT).toContain('/pingpong hilfe');
     });
 
     it('bleibt unter dem Discord-Limit von 2000 Zeichen', () => {

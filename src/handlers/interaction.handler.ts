@@ -2,6 +2,7 @@ import {Events, Interaction, Collection} from "discord.js";
 import client from "../client.js";
 import { Command } from "../types/discord.js";
 import buttonRoleHandler from "./buttonRole.handler.js";
+import pingPongHandler from "./pingPong.handler.js";
 
 declare module 'discord.js' {
     interface Client {
@@ -10,8 +11,10 @@ declare module 'discord.js' {
 }
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
+    // Beide Button-Handler prüfen anhand des customId-Prefix selbst, ob sie zuständig sind.
     if (interaction.isButton()) {
         await buttonRoleHandler.handleButton(interaction);
+        await pingPongHandler.handleDuellButton(interaction);
         return;
     }
 
