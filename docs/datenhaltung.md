@@ -31,7 +31,8 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `SPORT:ENTRY:<id>`, `SPORT:USER:<userId>` | Sport-Einträge: Distanz, Aktivität, Datum, optionale Notiz | dauerhaft (bis `/sport loeschen`) | `/sport statistik` |
 | `SPORT:HIGHSCORE`, `SPORT:MILESTONES`, `SPORT:ANNOUNCEMENT_CHANNEL` | Kilometer je User, Meilensteine, Ankündigungskanal | dauerhaft | `/sport gesamt`, Meilenstein-Ankündigungen |
 | `<userId>PING_PONG`, `PING_PONG` (Sorted Set) | Ping-Pong-Punktestand | dauerhaft | `/pingpong bestenliste` |
-| `PING_PONG:COOLDOWN:<userId>` | Marker, dass gerade gespielt wurde | 30 Sekunden (TTL) | Anti-Spam |
+| `PING_PONG:COOLDOWN:<userId>` | Marker, dass gerade herausgefordert wurde | 30 Sekunden (TTL) | Anti-Spam |
+| `TIPP:COOLDOWN:<userId>` | Marker, dass die Person heute schon einen Tipp gesehen hat | 24 Stunden (TTL) | gelegentliche Tipps/Nettigkeiten |
 | `BLAHAJ:TOTAL_EUR` | eine einzige Zahl (Summe aller je erwähnten Euro-Beträge) | dauerhaft | `/blahaj` |
 | `EVENT:NEXT` | Timestamp + optionaler Titel des nächsten Community-Events | bis `/event entfernen` | `/event countdown` |
 

@@ -13,6 +13,7 @@ Ein Discord-Bot für den Discord-Server von [LotgD](http://www.lotgd.de/), gesch
 - **Event-Countdown**: Ein Admin legt den Termin des nächsten Community-Events fest (`/event setzen`); alle können per `/event countdown` fragen, wie lange es noch dauert.
 - **Spiel-News**: `/news` holt die neueste News von [lotgd.de](https://www.lotgd.de/news.php) live ab und postet sie im Chat.
 - **Blåhaj-Rechner**: Erwähnt jemand einen Euro-Betrag im Chat, rechnet der Bot aus, wie viele Blåhajs (IKEA-Hai, 28 €/Stück) man dafür bekäme, und summiert alle je erwähnten Beträge zu einer „Blåhaj-Fläche" in Hektar. Auf Abruf per `/blahaj`.
+- **Tipps & Nettigkeiten**: Selten (~15 %, höchstens einmal pro Person und Tag) hängt der Bot an eine ohnehin ausgelöste Antwort eine kleine, **nur für dich sichtbare** Zeile – meist ein Tipp zu einem Befehl, den man vielleicht noch nicht kennt, manchmal einfach ein netter Gruß.
 
 ## 💬 Befehle
 
@@ -122,9 +123,10 @@ Um den Webhook-Server lokal manuell zu testen:
 - [x] News aus dem Game anzeigen (`/news`, live von https://www.lotgd.de/news.php)
 - [x] Hilfetexte ausbauen: jeder Gruppen-Command hat ein eigenes `hilfe` (`/sport`, `/twitch`, `/event`), plus eine allgemeine Gesamt-Hilfe `/hilfe` über alle Befehle
 - [x] Admin Funktionen aus den Hilfetexten entfernen - die Listen werden zu lang
-- [ ] Idee: Tipps zu Funktionen einstreuen wie bei Ladebildschirmen in Videospielen - damit UserInnen wissen was Bedie Anwendung kann
+- [x] Tipps zu Funktionen einstreuen (Idee: Ladebildschirme in Videospielen) – umgesetzt als **ephemere Zeile** unter einer ohnehin ausgelösten Antwort, nicht als eigener Post im Channel: ~15 % Chance, max. **ein** Tipp pro Person und Tag, nie an ephemeren Antworten (Fehler/Cooldown/Admin-Quittungen) und nicht an `/hilfe`/`/spielwelt`. Rund jede dritte Zeile ist statt eines Tipps eine kleine Nettigkeit
 - [x] Ping-Pong: **komplett auf PvP umgestellt** (`/pingpong herausfordern gegner:@user`) – Match gegen eine andere Person, sie nimmt per Button an; gespielt wird auf 3 gewonnene Ballwechsel, Sieg +1 / Niederlage -1 (nie unter 0). Das Solo-Spiel gegen den Bot wurde dabei **entfernt**: Punkte kommen jetzt ausschließlich aus echten Duellen, was die alte Design-Schwäche (Bestenliste belohnt viel Klicken statt Spielen) an der Wurzel behebt. `/pingpong` ist dafür ein Gruppen-Command (`herausfordern`/`bestenliste`/`hilfe`), `/pingbestenliste` ist entfallen
 - [x] Twitch-Live-Meldung um Spiel & Kategorie erweitert (`twitchService.getStreamInfo` via Helix `Get Streams`, mit Fallback falls beim Live-Gehen noch nichts verfügbar ist)
+- [ ] Idee: Tipps nur noch zu Befehlen zeigen, die die Person **noch nie** benutzt hat (bräuchte ein Set benutzter Commands pro User in Redis) – die jetzige Variante ist rückwärtskompatibel darauf erweiterbar
 - [ ] Den Bot generalisieren für jeden Server (Multi-Guild-Plan: `docs/multi-guild-plan.md`)
 - Mit dem eigentlichen Spiel interagieren (Machbarkeitsnotiz + Stufen: `docs/spiel-interaktion-idee.md`):
   - [x] **Stufe 1 – öffentliche Spielinfos (read-only):** `/news`, `/ereignisse`, `/online`, `/charakter` – alles per Scraping ohne Login, keiner der Auth-/Schreib-Blocker greift

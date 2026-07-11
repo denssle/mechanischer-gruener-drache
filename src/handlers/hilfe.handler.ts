@@ -19,8 +19,6 @@ export const HELP_TEXT =
     `**Spiel & Spaß**\n` +
     `\`/pingpong herausfordern\` – jemanden zum Ping-Pong-Duell fordern, er nimmt per Button an (Details: \`/pingpong hilfe\`)\n` +
     `\`/blahaj\` – Euro-Beträge in Blåhajs umrechnen (reagiert auch automatisch auf €-Beträge im Chat)\n\n` +
-    `**Rollen zum Selbstvergeben**\n` +
-    `An Button-Nachrichten (von Admins gepostet) gibst du dir per Klick selbst Rollen.\n\n` +
     `\`/version\` – aktuelle Bot-Version · \`/hilfe\` – diese Übersicht`;
 
 class HilfeHandler {
