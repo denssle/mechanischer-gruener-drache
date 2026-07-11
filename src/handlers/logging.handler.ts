@@ -1,8 +1,33 @@
 import {ChatInputCommandInteraction, GuildBan, GuildMember, GuildTextBasedChannel, Message, MessageFlags, PartialGuildMember, PartialMessage, PermissionFlagsBits, ReadonlyCollection, TextChannel} from 'discord.js';
 import client from '../client.js';
-import loggingService from '../services/logging.service.js';
+import loggingService, {CachedMessage} from '../services/logging.service.js';
+
+// Anhänge werden nur mit Dateinamen protokolliert (die CDN-Links funktionieren nach dem Löschen
+// ohnehin nicht mehr, und die Dateien selbst spiegeln wir bewusst nicht).
+function formatAttachments(attachments: string[]): string {
+    return attachments.length ? `\nAnhänge: ${attachments.join(', ')}` : '';
+}
 
 class LoggingHandler {
+    // Merkt sich Inhalt + Anhang-Namen einer Nachricht, damit beim Löschen/Bearbeiten der alte
+    // Stand noch da ist (discord.js hält nur einen RAM-Cache, der jeden Neustart verliert).
+    // Gespeichert wird NUR, wenn ein Log-Channel konfiguriert ist - ohne Logging speichert der Bot nichts.
+    async handleMessageCreate(message: Message) {
+        try {
+            if (!message.guild) return;
+            if (message.author.bot) return;
+            if (!await loggingService.getLogChannel()) return;
+
+            await loggingService.cacheMessage(message.id, {
+                authorTag: message.author.tag,
+                content: message.content,
+                attachments: message.attachments.map(attachment => attachment.name),
+            });
+        } catch (error) {
+            console.error('Fehler beim Zwischenspeichern der Nachricht:', error);
+        }
+    }
+
     async handleSetChannel(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
@@ -24,17 +49,24 @@ class LoggingHandler {
             if (!message.guild) return;
             if (message.author?.bot) return;
 
+            // Auch bei nicht gecachter Nachricht: der eigene Redis-Cache kennt sie ggf. noch.
+            const cached = await loggingService.getCachedMessage(message.id);
+
             const logChannel = await this.getLogChannel();
             if (!logChannel) return;
 
-            const author = message.author ? message.author.tag : 'Unbekannt';
-            const content = message.partial
-                ? '*Inhalt nicht verfügbar (Nachricht war nicht im Cache)*'
-                : (message.content || '*kein Text*');
+            const author = message.author?.tag ?? cached?.authorTag ?? 'Unbekannt';
+            const content = this.resolveContent(message, cached);
+            const attachments = formatAttachments(
+                message.partial ? (cached?.attachments ?? []) : message.attachments.map(attachment => attachment.name)
+            );
 
             await logChannel.send(
-                `🗑️ **Nachricht gelöscht** – ${author} in <#${message.channelId}>\n${content}`
+                `🗑️ **Nachricht gelöscht** – ${author} in <#${message.channelId}>\n${content}${attachments}`
             );
+
+            // Gelöscht ist gelöscht - den Inhalt danach nicht länger als nötig vorhalten.
+            await loggingService.deleteCachedMessage(message.id);
         } catch (error) {
             console.error('Fehler beim Loggen der gelöschten Nachricht:', error);
         }
@@ -44,27 +76,44 @@ class LoggingHandler {
         try {
             if (!newMessage.guild) return;
             if (newMessage.author?.bot) return;
-            if (!oldMessage.partial && !newMessage.partial && oldMessage.content === newMessage.content) return;
+
+            const cached = await loggingService.getCachedMessage(newMessage.id);
+            // Alter Stand: erst der RAM-Cache von discord.js, sonst unser Redis-Cache.
+            const oldContent = oldMessage.partial ? (cached?.content ?? null) : oldMessage.content;
+            const newContent = newMessage.partial ? null : newMessage.content;
+
+            // Discord feuert MessageUpdate auch ohne echte Änderung (z.B. beim Nachladen von
+            // Link-Embeds) - nur loggen, wenn sich der Text nachweislich unterscheidet.
+            if (oldContent !== null && newContent !== null && oldContent === newContent) return;
 
             const logChannel = await this.getLogChannel();
             if (!logChannel) return;
 
-            const author = newMessage.author ? newMessage.author.tag : 'Unbekannt';
-            const oldContent = oldMessage.partial
-                ? '*nicht verfügbar (nicht im Cache)*'
-                : (oldMessage.content || '*kein Text*');
-            const newContent = newMessage.partial
-                ? '*nicht verfügbar*'
-                : (newMessage.content || '*kein Text*');
+            const author = newMessage.author?.tag ?? cached?.authorTag ?? 'Unbekannt';
 
             await logChannel.send(
                 `✏️ **Nachricht bearbeitet** – ${author} in <#${newMessage.channelId}>\n` +
-                `Vorher: ${oldContent}\n` +
-                `Nachher: ${newContent}`
+                `Vorher: ${oldContent === null ? '*nicht verfügbar*' : (oldContent || '*kein Text*')}\n` +
+                `Nachher: ${newContent === null ? '*nicht verfügbar*' : (newContent || '*kein Text*')}`
             );
+
+            // Ab jetzt ist der neue Stand der "alte" für die nächste Bearbeitung.
+            if (!newMessage.partial && newMessage.author) {
+                await loggingService.cacheMessage(newMessage.id, {
+                    authorTag: newMessage.author.tag,
+                    content: newMessage.content,
+                    attachments: newMessage.attachments.map(attachment => attachment.name),
+                });
+            }
         } catch (error) {
             console.error('Fehler beim Loggen der bearbeiteten Nachricht:', error);
         }
+    }
+
+    private resolveContent(message: Message | PartialMessage, cached: CachedMessage | null): string {
+        if (!message.partial) return message.content || cached?.content || '*kein Text*';
+        if (cached) return cached.content || '*kein Text*';
+        return '*Inhalt nicht verfügbar (Nachricht ist älter als der Log-Speicher)*';
     }
 
     async handleGuildMemberAdd(member: GuildMember) {

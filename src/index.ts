@@ -33,6 +33,13 @@ client.on(Events.MessageCreate, (message) => {
         console.error('Fehler im Blåhaj-Handler:', error);
     });
 });
+// Nachrichten-Cache fürs Logging (alter Inhalt beim Löschen/Bearbeiten) - eigene Zuständigkeit,
+// deshalb eine eigene MessageCreate-Registrierung neben messageHandler/blahajHandler.
+client.on(Events.MessageCreate, (message) => {
+    loggingHandler.handleMessageCreate(message).catch((error) => {
+        console.error('Fehler im Logging-Handler (MessageCreate):', error);
+    });
+});
 client.on(Events.MessageDelete, (message) => loggingHandler.handleMessageDelete(message));
 client.on(Events.MessageUpdate, (oldMessage, newMessage) => loggingHandler.handleMessageUpdate(oldMessage, newMessage));
 client.on(Events.GuildMemberAdd, (member) => loggingHandler.handleGuildMemberAdd(member));

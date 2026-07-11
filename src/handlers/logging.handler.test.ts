@@ -5,6 +5,9 @@ vi.mock('../services/logging.service.js', () => ({
     default: {
         setLogChannel: vi.fn(),
         getLogChannel: vi.fn(),
+        cacheMessage: vi.fn(),
+        getCachedMessage: vi.fn(),
+        deleteCachedMessage: vi.fn(),
     }
 }));
 
@@ -20,11 +23,13 @@ import client from '../client.js';
 import loggingHandler from './logging.handler.js';
 
 const mockMessage = (overrides = {}) => ({
+    id: 'message-1',
     guild: { id: 'guild-1' },
     author: { tag: 'User#0001', bot: false },
     partial: false,
     content: 'Hallo Welt',
     channelId: 'source-channel',
+    attachments: new Collection<string, { name: string }>(),
     ...overrides,
 });
 
@@ -59,6 +64,46 @@ describe('LoggingHandler', () => {
             expect(interaction.memberPermissions.has).toHaveBeenCalledWith(PermissionFlagsBits.Administrator);
             expect(loggingService.setLogChannel).toHaveBeenCalledWith('log-channel-1');
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('log-channel-1'));
+        });
+    });
+
+    describe('handleMessageCreate (Nachrichten-Cache)', () => {
+        const attachments = new Collection<string, { name: string }>([['a1', { name: 'bild.png' }]]);
+
+        it('merkt sich Inhalt und Anhang-Namen, wenn ein Log-Channel konfiguriert ist', async () => {
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            const message = mockMessage({ content: 'Hallo Welt', attachments });
+
+            await loggingHandler.handleMessageCreate(message as any);
+
+            expect(loggingService.cacheMessage).toHaveBeenCalledWith('message-1', {
+                authorTag: 'User#0001',
+                content: 'Hallo Welt',
+                attachments: ['bild.png'],
+            });
+        });
+
+        it('speichert nichts, wenn kein Log-Channel konfiguriert ist', async () => {
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue(null);
+
+            await loggingHandler.handleMessageCreate(mockMessage() as any);
+
+            expect(loggingService.cacheMessage).not.toHaveBeenCalled();
+        });
+
+        it('speichert weder Bot- noch DM-Nachrichten', async () => {
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+
+            await loggingHandler.handleMessageCreate(mockMessage({ author: { tag: 'Bot#0000', bot: true } }) as any);
+            await loggingHandler.handleMessageCreate(mockMessage({ guild: null }) as any);
+
+            expect(loggingService.cacheMessage).not.toHaveBeenCalled();
+        });
+
+        it('fängt Fehler ab, statt den MessageCreate-Pfad zu killen', async () => {
+            vi.mocked(loggingService.getLogChannel).mockRejectedValue(new Error('Redis kaputt'));
+
+            await expect(loggingHandler.handleMessageCreate(mockMessage() as any)).resolves.not.toThrow();
         });
     });
 
@@ -112,6 +157,31 @@ describe('LoggingHandler', () => {
 
             expect(send).toHaveBeenCalledWith(expect.stringContaining('Unbekannt'));
             expect(send).toHaveBeenCalledWith(expect.stringContaining('nicht verfügbar'));
+        });
+
+        it('holt den alten Inhalt aus dem Redis-Cache, wenn discord.js die Nachricht nicht mehr kennt', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+            vi.mocked(loggingService.getCachedMessage).mockResolvedValue({
+                authorTag: 'User#0001', content: 'Alte Nachricht', attachments: ['bild.png'],
+            });
+            const message = mockMessage({ partial: true, author: null, content: null });
+
+            await loggingHandler.handleMessageDelete(message as any);
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Alte Nachricht'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Anhänge: bild.png'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('User#0001'));
+        });
+
+        it('räumt den zwischengespeicherten Inhalt nach dem Loggen weg', async () => {
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send: vi.fn() } as any);
+
+            await loggingHandler.handleMessageDelete(mockMessage() as any);
+
+            expect(loggingService.deleteCachedMessage).toHaveBeenCalledWith('message-1');
         });
 
         it('fängt Fehler beim Loggen ab', async () => {
@@ -174,6 +244,38 @@ describe('LoggingHandler', () => {
 
             expect(send).toHaveBeenCalledWith(expect.stringContaining('nicht verfügbar'));
             expect(send).toHaveBeenCalledWith(expect.stringContaining('Neuer Text'));
+        });
+
+        it('holt den alten Inhalt aus dem Redis-Cache und schreibt den neuen Stand zurück', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+            vi.mocked(loggingService.getCachedMessage).mockResolvedValue({
+                authorTag: 'User#0001', content: 'Alter Text', attachments: [],
+            });
+            const oldMessage = mockMessage({ partial: true, content: null });
+            const newMessage = mockMessage({ content: 'Neuer Text' });
+
+            await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Vorher: Alter Text'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Nachher: Neuer Text'));
+            // Für die nächste Bearbeitung ist der neue Stand der alte.
+            expect(loggingService.cacheMessage).toHaveBeenCalledWith('message-1', {
+                authorTag: 'User#0001', content: 'Neuer Text', attachments: [],
+            });
+        });
+
+        it('ignoriert ein Update ohne Änderung auch dann, wenn der alte Stand nur im Redis-Cache liegt', async () => {
+            vi.mocked(loggingService.getCachedMessage).mockResolvedValue({
+                authorTag: 'User#0001', content: 'Gleicher Text', attachments: [],
+            });
+            const oldMessage = mockMessage({ partial: true, content: null });
+            const newMessage = mockMessage({ content: 'Gleicher Text' });
+
+            await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
+
+            expect(loggingService.getLogChannel).not.toHaveBeenCalled();
         });
 
         it('fängt Fehler beim Loggen ab', async () => {
