@@ -1,6 +1,7 @@
 # Plan: LotGD-Modul „Drachenbot-Token" (Prototyp zum Vorlegen)
 
-> Status: **geplant, noch nicht begonnen.** Ziel: Ein fertiger, review-barer Prototyp eines
+> Status: **Phasen 0–5 umgesetzt (2026-07-11)** – es fehlen nur noch die Screenshots (macht
+> Dominik) und der Versand. Ziel: Ein fertiger, review-barer Prototyp eines
 > LotGD-Moduls, das Spielern im Spiel ein widerrufbares Read-Only-Token ausstellt, mit dem sich
 > der Discord-Bot authentifizieren kann. Der Prototyp wird den lotgd.de-Betreibern **vorgelegt**
 > (nicht nur beschrieben) – vorzeigbarer Code beantwortet die Vertrauensfrage besser als eine
@@ -206,6 +207,17 @@ Aufruf `npm run test:modul -- <token> [baseUrl]`) prüft Positivfall (200 + alle
 Whitelist-Felder vorhanden) und Negativfall (falsches Token → 401 mit generischer Meldung) –
 gegen die Sandbox bestanden. Die `/charakter`-Integrationsskizze steht oben in Phase 4;
 gebaut wird sie erst nach Zusage und Live-Gang des Moduls.
+
+#### Phase-5-Ergebnisse (2026-07-11, weitgehend erledigt)
+
+- **`lotgd-modul/README.md`** – das Betreiber-Dokument: was es tut/nicht tut, vollständige
+  Whitelist, Sicherheits-Design, Installation/Deinstallation, Kompatibilität, Dev-Server-
+  Vorschlag, Kontakt. Kernbotschaft „ihr habt bei jeder Zeile das letzte Wort" steht drin.
+- **`lotgd-modul/ANSCHREIBEN.md`** – versandfertiger Entwurf mit Checkliste (Anrede,
+  Anhänge, Screenshots).
+- **Offen:** Screenshots aus der Sandbox (macht Dominik: Token-Seite im Dorf, einmalige
+  Token-Anzeige, JSON-Antwort der API – Ablage-Vorschlag `lotgd-modul/screenshots/`)
+  und der Versand selbst.
 
 ### Phase 5 – Paket schnüren und vorlegen
 
