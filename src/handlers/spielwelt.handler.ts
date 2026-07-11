@@ -9,6 +9,7 @@ export const SPIELWELT_HELP =
     `\`/ereignisse\` – das Ingame-Geschehen: die letzten Kämpfe, Wiederbelebungen und Blamagen der Mitspielenden.\n` +
     `\`/online\` – wer gerade eingeloggt ist (mit Stufe, Rasse, Ort und Gilde), dazu die Namen der letzten 30 Minuten.\n` +
     `\`/charakter\` – deinen Charakter verknüpfen und seine Karte abrufen (Details: \`/charakter hilfe\`).\n\n` +
+    `Wer seinen Charakter verknüpft hat, wird in \`/online\` und \`/ereignisse\` hervorgehoben.\n` +
     `Alle Befehle holen die Daten direkt von lotgd.de – ohne Login, immer frisch auf Abruf.`;
 
 class SpielweltHandler {

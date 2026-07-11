@@ -72,6 +72,37 @@ export function findInRoster(roster: CharacterEntry[], name: string): CharacterE
     }) ?? null;
 }
 
+// Eine Verknüpfung Charaktername <-> Discord-User.
+export interface CharacterLink {
+    discordUserId: string;
+    name: string;
+}
+
+// Verknüpfung zu einem Anzeigenamen aus dem Spiel (kann ein Titel-Präfix tragen, s. findInRoster).
+export function findLinkForName(links: CharacterLink[], displayName: string): CharacterLink | null {
+    const full = displayName.trim().toLowerCase();
+    if (!full) return null;
+
+    return links.find(link => {
+        const needle = link.name.trim().toLowerCase();
+        return !!needle && (full === needle || full.endsWith(` ${needle}`));
+    }) ?? null;
+}
+
+function escapeRegex(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Verknüpfte Namen in einem Fließtext (Ereignislog) finden. Wortgrenzen über Unicode-Lookarounds
+// statt \b - Namen wie "Útlaga" beginnen mit einem Zeichen, das \b nicht als Wortzeichen kennt.
+export function findLinksInText(links: CharacterLink[], text: string): CharacterLink[] {
+    return links.filter(link => {
+        const needle = link.name.trim();
+        if (!needle) return false;
+        return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex(needle)}(?![\\p{L}\\p{N}])`, 'iu').test(text);
+    });
+}
+
 class CharacterService {
     #rosterCache: { entries: CharacterEntry[]; at: number } | null = null;
 
@@ -127,11 +158,11 @@ class CharacterService {
         return true;
     }
 
-    // Alle Verknüpfungen (Name ↔ Discord-User) - Basis für den geplanten Abgleich in /online und
+    // Alle Verknüpfungen (Name ↔ Discord-User) - Basis für den Abgleich in /online und
     // /ereignisse ("taucht ein verknüpfter Charakter auf?").
-    async getAllLinks(): Promise<{ discordUserId: string; name: string }[]> {
+    async getAllLinks(): Promise<CharacterLink[]> {
         const ids = await redisService.getList(KEYS.allLinks);
-        const links: { discordUserId: string; name: string }[] = [];
+        const links: CharacterLink[] = [];
         for (const discordUserId of ids) {
             const name = await redisService.get(KEYS.link(discordUserId));
             if (name) links.push({ discordUserId, name });

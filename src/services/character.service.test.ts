@@ -10,7 +10,7 @@ const redis = vi.hoisted(() => ({
 }));
 vi.mock('./redis.service.js', () => ({ default: redis }));
 
-import characterService, { parseRoster, findInRoster } from './character.service.js';
+import characterService, { parseRoster, findInRoster, findLinkForName, findLinksInText } from './character.service.js';
 
 // Ausschnitt echten Roster-Markups (list.php?op=bypage): 8 Spalten inkl. "Zuletzt da", ein
 // Titel-Praefix ("Centurio Acaine"), ein Regenbogen-Name mit Gilde (<CdF>), ein toter Charakter.
@@ -115,5 +115,46 @@ describe('character.service', () => {
                 { discordUserId: 'u2', name: 'Abraxar' },
             ]);
         });
+    });
+});
+
+describe('findLinkForName', () => {
+    const links = [
+        { discordUserId: 'u1', name: 'Acaine' },
+        { discordUserId: 'u2', name: 'Xara' },
+    ];
+
+    it('findet den verknuepften Namen trotz Titel-Praefix im Anzeigenamen', () => {
+        expect(findLinkForName(links, 'Centurio Acaine')?.discordUserId).toBe('u1');
+    });
+
+    it('findet den Namen auch ohne Titel', () => {
+        expect(findLinkForName(links, 'Xara')?.discordUserId).toBe('u2');
+    });
+
+    it('matcht nur auf Wortgrenze, nicht mitten im Namen', () => {
+        expect(findLinkForName(links, 'Xarathon')).toBeNull();
+    });
+
+    it('gibt null zurueck, wenn niemand verknuepft ist', () => {
+        expect(findLinkForName([], 'Centurio Acaine')).toBeNull();
+    });
+});
+
+describe('findLinksInText', () => {
+    const links = [
+        { discordUserId: 'u1', name: 'Zalia' },
+        { discordUserId: 'u2', name: 'Útlaga' },
+        { discordUserId: 'u3', name: 'Treva' },
+    ];
+
+    it('findet verknuepfte Namen im Ereignistext', () => {
+        const found = findLinksInText(links, 'Zalia wurde von Útlaga getoetet.');
+        expect(found.map(link => link.discordUserId)).toEqual(['u1', 'u2']);
+    });
+
+    it('matcht auf Wortgrenze - auch bei Namen mit Akzent', () => {
+        expect(findLinksInText(links, 'Zaliana blamierte sich.')).toEqual([]);
+        expect(findLinksInText(links, 'Útlagaring blamierte sich.')).toEqual([]);
     });
 });
