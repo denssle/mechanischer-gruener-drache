@@ -213,8 +213,9 @@ gebaut wird sie erst nach Zusage und Live-Gang des Moduls.
 - **`lotgd-modul/README.md`** – das Betreiber-Dokument: was es tut/nicht tut, vollständige
   Whitelist, Sicherheits-Design, Installation/Deinstallation, Kompatibilität, Dev-Server-
   Vorschlag, Kontakt. Kernbotschaft „ihr habt bei jeder Zeile das letzte Wort" steht drin.
-- **`lotgd-modul/ANSCHREIBEN.md`** – versandfertiger Entwurf mit Checkliste (Anrede,
-  Anhänge, Screenshots).
+- ~~`lotgd-modul/ANSCHREIBEN.md`~~ – wieder entfernt (Entscheidung 2026-07-11): Dominik
+  zeigt den Betreibern direkt das README, ein separates Anschreiben braucht es nicht.
+  Der Dev-Server-Vorschlag steht ohnehin im README.
 - **Offen:** Screenshots aus der Sandbox (macht Dominik: Token-Seite im Dorf, einmalige
   Token-Anzeige, JSON-Antwort der API – Ablage-Vorschlag `lotgd-modul/screenshots/`)
   und der Versand selbst.

@@ -1,6 +1,6 @@
 {
   "name": "mechanischer-gruener-drache",
-  "version": "1.29.4",
+  "version": "1.29.5",
   "description": "",
   "main": "dist/index.js",
   "scripts": {
