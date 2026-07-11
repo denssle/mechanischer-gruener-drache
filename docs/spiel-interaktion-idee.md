@@ -65,6 +65,10 @@ zu bauen.
 dorthin entweder fremde Login-Geheimnisse horten oder in fremde Spielsitzungen eingreifen würde.
 Wer das später nochmal aufgreift: Bitte hier anfangen, nicht bei „ach, ein Token wird schon gehen".
 
+**Nachtrag (ebenfalls 2026-07-11):** Der eine saubere Weg – das widerrufbare Read-Only-Token vom
+Betreiber – wird nun doch verfolgt, aber andersherum: **wir** bauen das ausstellende LotGD-Modul
+selbst als Prototyp und legen es den Betreibern fertig vor. Plan: `docs/lotgd-modul-plan.md`.
+
 ### Machbarkeit Weg A – was lotgd.de ohne Login pro Charakter hergibt
 
 Geprüft am 2026-07-10 (Bot-User-Agent, sonst `403`): Die **paginierte Kriegerliste**

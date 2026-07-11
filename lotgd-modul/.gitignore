@@ -1,0 +1,5 @@
+# Referenz-Quellcode von LotGD (GPL, Fremdcode) – bewusst nicht im Repo.
+# Bezugsquelle: dragonprime-reborn.ca, Forum "Game Downloads" (f=11), Topic t=2,
+# Anhang "lotgd-1-1-2-dragonprime-e.zip" + "lotgddb.zip". Siehe docs/lotgd-modul-plan.md.
+referenz/
+docker/spiel/

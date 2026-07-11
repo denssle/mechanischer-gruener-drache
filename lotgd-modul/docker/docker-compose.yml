@@ -1,0 +1,29 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8080:80"
+    volumes:
+      # spiel/ ist eine Arbeitskopie von referenz/lotgd-1.1.2_... (gitignored),
+      # damit der Installer (schreibt dbconnect.php) nicht die Referenz anfasst.
+      - ./spiel:/var/www/html
+      # Unser Modul wird direkt reingemountet - Aenderungen ohne Rebuild sichtbar.
+      - ../drachenbot.php:/var/www/html/modules/drachenbot.php
+    depends_on:
+      - db
+
+  db:
+    image: mariadb:10.3
+    # Ohne leeren sql_mode verwirft STRICT_TRANS_TABLES die alten LotGD-INSERTs
+    # (fuellen nicht alle NOT-NULL-Spalten), z.B. das Anlegen des Admin-Accounts.
+    command: --sql-mode=
+    environment:
+      MYSQL_ROOT_PASSWORD: lotgd
+      MYSQL_DATABASE: lotgd
+      MYSQL_USER: lotgd
+      MYSQL_PASSWORD: lotgd
+    volumes:
+      - dbdata:/var/lib/mysql
+
+volumes:
+  dbdata:
