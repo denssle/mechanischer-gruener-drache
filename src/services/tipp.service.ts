@@ -1,4 +1,11 @@
 import redisService from './redis.service.js';
+import {TIPPS} from '../data/tipps.js';
+import {NETTIGKEITEN} from '../data/nettigkeiten.js';
+
+// Die beiden Listen liegen als reine Daten in src/data/ (die Nettigkeiten sind ~100 Zeilen
+// lang und würden die Logik hier sonst begraben). Re-Export, damit Aufrufer/Tests nur diesen
+// Service kennen müssen.
+export {TIPPS, NETTIGKEITEN};
 
 // Gelegentliche Tipps + kleine Nettigkeiten, die an eine ohnehin ausgelöste Bot-Antwort
 // gehängt werden (ephemer, siehe interaction.handler.ts) - damit Leute Befehle entdecken,
@@ -15,33 +22,6 @@ const KEYS = {
 // Bei /hilfe und /spielwelt weiß die Person gerade selbst, wo die Befehle stehen -
 // ein Tipp wäre dort nur redundant.
 const AUSGENOMMENE_COMMANDS = ['hilfe', 'spielwelt'];
-
-export const TIPPS = [
-    'Tipp: Mit `/charakter verknuepfen` hinterlegst du deinen LotGD-Charakter – danach wird dein Name in `/online` und `/ereignisse` hervorgehoben.',
-    'Tipp: `/online` zeigt dir, wer gerade im Spiel eingeloggt ist.',
-    'Tipp: `/ereignisse` zeigt, was zuletzt im Spiel passiert ist – wer wen erschlagen oder wiederbelebt hat.',
-    'Tipp: `/news` holt dir die neuesten Ankündigungen direkt von lotgd.de.',
-    'Tipp: Mit `/sport eintragen` zahlst du deine Kilometer auf die gemeinsame Gesamtstrecke ein – es gibt bewusst keine Rangliste.',
-    'Tipp: `/sport gesamt` zeigt, wie weit der Server zusammen schon gekommen ist.',
-    'Tipp: Mit `/sport meilenstein setzen` legst du ein Ziel fest – der Bot feiert es, sobald wir es gemeinsam erreichen.',
-    'Tipp: `/pingpong herausfordern` fordert jemanden zum Duell – Sieg bringt einen Punkt, Niederlage kostet einen.',
-    'Tipp: `/event countdown` verrät dir, wie lange es noch bis zum nächsten Treffen dauert.',
-    'Tipp: Mit `/twitch verknuepfen` sagt der Server Bescheid, wenn du live gehst.',
-    'Tipp: `/blahaj` rechnet dir Euro-Beträge in Blåhajs um.',
-    'Tipp: `/hilfe` zeigt dir alle Befehle auf einen Blick.',
-    'Tipp: `/spielwelt` erklärt die Befehle rund um lotgd.de.',
-];
-
-export const NETTIGKEITEN = [
-    'Schön, dass du da bist.',
-    'Ich hoffe, du hast einen guten Tag.',
-    'Denk dran, zwischendurch mal etwas zu trinken.',
-    'Falls es heute anstrengend war: Du hast es bis hierher geschafft.',
-    'Grüße aus dem Maschinenraum.',
-    'Kleine Erinnerung: Du machst das gut.',
-    'Ich freue mich jedes Mal, wenn hier jemand vorbeischaut.',
-    'Streck dich mal kurz. Ja, wirklich, jetzt.',
-];
 
 export function randomTipp(): string {
     return TIPPS[Math.floor(Math.random() * TIPPS.length)];

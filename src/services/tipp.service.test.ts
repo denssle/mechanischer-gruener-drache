@@ -99,5 +99,16 @@ describe('tipp.service', () => {
                 expect(zeile.length).toBeLessThanOrEqual(2000);
             }
         });
+
+        // Doppelte Zeilen fallen beim Pflegen langer Listen leicht durch - und ausgerechnet
+        // eine doppelte Nettigkeit würde man als Nutzer sofort merken.
+        it('enthält keine doppelten Zeilen', () => {
+            expect(new Set(TIPPS).size).toBe(TIPPS.length);
+            expect(new Set(NETTIGKEITEN).size).toBe(NETTIGKEITEN.length);
+        });
+
+        it('hat genug Nettigkeiten, dass sich so schnell nichts wiederholt', () => {
+            expect(NETTIGKEITEN.length).toBeGreaterThanOrEqual(100);
+        });
     });
 });
