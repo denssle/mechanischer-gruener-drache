@@ -13,6 +13,21 @@ export default {
                 .setDescription('Wen möchtest du herausfordern?')
                 .setRequired(true)))
         .addSubcommand(sub => sub
+            .setName('ansageduell')
+            .setDescription('Duell mit Ansage: sagst du den Ausgang richtig voraus, gibt es einen Extra-Punkt')
+            .addUserOption(option => option
+                .setName('gegner')
+                .setDescription('Wen möchtest du herausfordern?')
+                .setRequired(true))
+            .addStringOption(option => option
+                .setName('ansage')
+                .setDescription('Wie geht das Duell für dich aus?')
+                .setRequired(true)
+                .addChoices(
+                    {name: 'Ich gewinne', value: 'sieg'},
+                    {name: 'Ich verliere', value: 'niederlage'},
+                )))
+        .addSubcommand(sub => sub
             .setName('bestenliste')
             .setDescription('Zeigt die Ping-Pong-Bestenliste'))
         .addSubcommand(sub => sub
@@ -25,6 +40,8 @@ export default {
         switch (subcommand) {
             case 'herausfordern':
                 return pingPongHandler.handleHerausfordern(interaction);
+            case 'ansageduell':
+                return pingPongHandler.handleAnsageduell(interaction);
             case 'bestenliste':
                 return pingPongHandler.handlePingPongHighscore(interaction);
             case 'hilfe':

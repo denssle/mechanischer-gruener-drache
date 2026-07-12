@@ -28,6 +28,32 @@ const DUELL_LOSS = 1;
 // Doppeltes Annehmen verhindert das Entfernen der Buttons beim ersten Klick.
 const DUELL_PREFIX = 'pingpong-duell:';
 
+// Ansage-Duell (eigener Befehl neben dem normalen Duell): der Herausforderer sagt vorher an, ob er
+// gewinnt oder verliert. Gespielt wird wie immer rein zufällig - trifft die Ansage, gibt es einen
+// Extra-Punkt. Die Ansage steckt (wie die User-IDs) hinten in der customId, also kein Redis-State.
+const ANSAGE_PREFIX = 'pingpong-ansage:';
+const ANSAGE_BONUS = 1;
+
+export type Ansage = 'sieg' | 'niederlage';
+
+// Ein Duell ohne Ansage (normales /pingpong herausfordern) hat hier undefined stehen.
+export function istAnsageEingetroffen(ansage: string | undefined, herausfordererGewinnt: boolean): boolean {
+    if (ansage === 'sieg') return herausfordererGewinnt;
+    if (ansage === 'niederlage') return !herausfordererGewinnt;
+    return false;
+}
+
+// Die Ansage-Zeile fürs Ergebnis - null beim normalen Duell (da gab es keine Ansage).
+export function formatAnsage(ansage: string | undefined, herausfordererId: string, herausfordererGewinnt: boolean): string | null {
+    if (ansage !== 'sieg' && ansage !== 'niederlage') return null;
+
+    const angesagt = ansage === 'sieg' ? 'den eigenen Sieg' : 'die eigene Niederlage';
+
+    return istAnsageEingetroffen(ansage, herausfordererGewinnt)
+        ? `Ansage getroffen: <@${herausfordererId}> hatte ${angesagt} angekündigt – **+${ANSAGE_BONUS}** Punkt extra.`
+        : `Ansage daneben: <@${herausfordererId}> hatte ${angesagt} angekündigt. Kein Extra-Punkt.`;
+}
+
 // Siegesserie: laufender Zähler pro User (hoch bei Sieg, weg bei Niederlage) plus die längste
 // je erreichte Serie als persönlicher Rekord. Erwähnt wird sie erst ab MIN_SERIE - eine "Serie"
 // von einem einzelnen Duell ist keine.
@@ -106,40 +132,13 @@ class PingPongHandler {
             const herausforderer = interaction.user;
             const gegner = interaction.options.getUser('gegner', true);
 
-            if (gegner.id === herausforderer.id) {
-                return interaction.reply({
-                    content: 'Gegen dich selbst zu spielen ist auf Dauer langweilig. Such dir jemanden.',
-                    flags: MessageFlags.Ephemeral
-                });
+            const abfuhr = await this.pruefeUndSetzeCooldown(herausforderer.id, gegner);
+            if (abfuhr) {
+                return interaction.reply({content: abfuhr, flags: MessageFlags.Ephemeral});
             }
 
-            if (gegner.bot) {
-                return interaction.reply({
-                    content: 'Bots haben keine Hände. Fordere jemanden aus Fleisch und Blut heraus.',
-                    flags: MessageFlags.Ephemeral
-                });
-            }
-
-            const remaining = await redisService.getTimeToLive(KEYS.cooldown(herausforderer.id));
-            if (remaining > 0) {
-                return interaction.reply({
-                    content: `Kurz durchatmen – du kannst in **${remaining}s** wieder aufschlagen.`,
-                    flags: MessageFlags.Ephemeral
-                });
-            }
-            await redisService.setWithExpiry(KEYS.cooldown(herausforderer.id), '1', COOLDOWN_SECONDS);
-
-            const annehmen = new ButtonBuilder()
-                .setCustomId(`${DUELL_PREFIX}annehmen:${herausforderer.id}:${gegner.id}`)
-                .setLabel('Annehmen')
-                .setStyle(ButtonStyle.Success);
-
-            const ablehnen = new ButtonBuilder()
-                .setCustomId(`${DUELL_PREFIX}ablehnen:${herausforderer.id}:${gegner.id}`)
-                .setLabel('Ablehnen')
-                .setStyle(ButtonStyle.Secondary);
-
-            const row = new ActionRowBuilder<ButtonBuilder>().addComponents(annehmen, ablehnen);
+            const row = this.baueDuellButtons(`${DUELL_PREFIX}annehmen:${herausforderer.id}:${gegner.id}`,
+                `${DUELL_PREFIX}ablehnen:${herausforderer.id}:${gegner.id}`);
 
             return interaction.reply({
                 content: `<@${herausforderer.id}> fordert <@${gegner.id}> zu einem Ping-Pong-Duell heraus.\n`
@@ -156,11 +155,83 @@ class PingPongHandler {
         }
     }
 
+    // Ansage-Duell: derselbe Zufalls-Match wie beim normalen Duell, aber der Herausforderer sagt
+    // vorher an, wie es ausgeht. Trifft er, gibt es einen Extra-Punkt obendrauf - eine falsche
+    // Ansage kostet bewusst nichts extra (Sieg/Niederlage regeln die Punkte, die Ansage kann nur belohnen).
+    async handleAnsageduell(interaction: ChatInputCommandInteraction) {
+        try {
+            const herausforderer = interaction.user;
+            const gegner = interaction.options.getUser('gegner', true);
+            const ansage = interaction.options.getString('ansage', true) as Ansage;
+
+            const abfuhr = await this.pruefeUndSetzeCooldown(herausforderer.id, gegner);
+            if (abfuhr) {
+                return interaction.reply({content: abfuhr, flags: MessageFlags.Ephemeral});
+            }
+
+            const row = this.baueDuellButtons(`${ANSAGE_PREFIX}annehmen:${herausforderer.id}:${gegner.id}:${ansage}`,
+                `${ANSAGE_PREFIX}ablehnen:${herausforderer.id}:${gegner.id}:${ansage}`);
+
+            return interaction.reply({
+                content: `<@${herausforderer.id}> fordert <@${gegner.id}> zu einem Ansage-Duell heraus `
+                    + `und sagt **${ansage === 'sieg' ? 'den eigenen Sieg' : 'die eigene Niederlage'}** an.\n`
+                    + `Gespielt wird auf **${POINTS_TO_WIN}** gewonnene Ballwechsel (Sieg **+${DUELL_WIN}**, `
+                    + `Niederlage **-${DUELL_LOSS}**, nie unter 0). Geht die Ansage auf, gibt es **+${ANSAGE_BONUS}** Punkt extra.`,
+                components: [row]
+            });
+        } catch (error) {
+            console.error('Fehler beim Erstellen des Ping-Pong-Ansage-Duells:', error);
+            return interaction.reply({
+                content: 'Es gab einen Fehler beim Ausführen des Befehls.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+    }
+
+    // Gemeinsame Vorprüfung beider Duell-Befehle. Gibt den Text der ephemeren Abfuhr zurück -
+    // oder null, wenn losgespielt werden darf (dann ist der Cooldown gleich mit gesetzt).
+    // Der Cooldown ist absichtlich für beide Duell-Arten derselbe Key, sonst könnte man
+    // abwechselnd über zwei Befehle spammen.
+    async pruefeUndSetzeCooldown(herausfordererId: string, gegner: {id: string, bot: boolean}): Promise<string | null> {
+        if (gegner.id === herausfordererId) {
+            return 'Gegen dich selbst zu spielen ist auf Dauer langweilig. Such dir jemanden.';
+        }
+
+        if (gegner.bot) {
+            return 'Bots haben keine Hände. Fordere jemanden aus Fleisch und Blut heraus.';
+        }
+
+        const remaining = await redisService.getTimeToLive(KEYS.cooldown(herausfordererId));
+        if (remaining > 0) {
+            return `Kurz durchatmen – du kannst in **${remaining}s** wieder aufschlagen.`;
+        }
+
+        await redisService.setWithExpiry(KEYS.cooldown(herausfordererId), '1', COOLDOWN_SECONDS);
+        return null;
+    }
+
+    baueDuellButtons(annehmenId: string, ablehnenId: string): ActionRowBuilder<ButtonBuilder> {
+        const annehmen = new ButtonBuilder()
+            .setCustomId(annehmenId)
+            .setLabel('Annehmen')
+            .setStyle(ButtonStyle.Success);
+
+        const ablehnen = new ButtonBuilder()
+            .setCustomId(ablehnenId)
+            .setLabel('Ablehnen')
+            .setStyle(ButtonStyle.Secondary);
+
+        return new ActionRowBuilder<ButtonBuilder>().addComponents(annehmen, ablehnen);
+    }
+
+    // Einstiegspunkt für die Buttons beider Duell-Arten - sie unterscheiden sich nur darin, ob
+    // hinter der Gegner-ID noch eine Ansage in der customId steht.
     async handleDuellButton(interaction: ButtonInteraction) {
-        if (!interaction.customId.startsWith(DUELL_PREFIX)) return;
+        const prefix = [DUELL_PREFIX, ANSAGE_PREFIX].find(p => interaction.customId.startsWith(p));
+        if (!prefix) return;
 
         try {
-            const [aktion, herausfordererId, gegnerId] = interaction.customId.slice(DUELL_PREFIX.length).split(':');
+            const [aktion, herausfordererId, gegnerId, ansage] = interaction.customId.slice(prefix.length).split(':');
 
             // Nur der Herausgeforderte darf über die Herausforderung entscheiden.
             if (interaction.user.id !== gegnerId) {
@@ -182,21 +253,30 @@ class PingPongHandler {
             const siegerId = herausfordererGewinnt ? herausfordererId : gegnerId;
             const verliererId = herausfordererGewinnt ? gegnerId : herausfordererId;
 
+            // Der Bonus geht immer an den Herausforderer - nur er hat eine Ansage gemacht.
+            const ansageTrifft = istAnsageEingetroffen(ansage, herausfordererGewinnt);
+            const bonusFuerSieger = ansageTrifft && herausfordererGewinnt ? ANSAGE_BONUS : 0;
+            const bonusFuerVerlierer = ansageTrifft && !herausfordererGewinnt ? ANSAGE_BONUS : 0;
+
             const siegerScore = await this.getScore(siegerId);
             const verliererScore = await this.getScore(verliererId);
 
-            const neuerSiegerScore = await this.updateScore(siegerId, siegerScore + DUELL_WIN);
-            const neuerVerliererScore = await this.updateScore(verliererId, Math.max(0, verliererScore - DUELL_LOSS));
+            const neuerSiegerScore = await this.updateScore(siegerId, siegerScore + DUELL_WIN + bonusFuerSieger);
+            const neuerVerliererScore = await this.updateScore(verliererId,
+                Math.max(0, verliererScore - DUELL_LOSS) + bonusFuerVerlierer);
 
             const satz = herausfordererGewinnt
                 ? `${herausfordererPunkte}:${gegnerPunkte}`
                 : `${gegnerPunkte}:${herausfordererPunkte}`;
 
+            // Die Ansage ändert nichts am Spielausgang - die Serie zählt weiter nach Sieg/Niederlage.
             const serienZeile = formatSerie(await this.verarbeiteSerie(siegerId, verliererId));
+            const ansageZeile = formatAnsage(ansage, herausfordererId, herausfordererGewinnt);
 
             return interaction.update({
                 content: `**<@${siegerId}> gewinnt ${satz} gegen <@${verliererId}>.**\n`
                     + `${randomDuellFlavor()}\n`
+                    + (ansageZeile ? `${ansageZeile}\n` : '')
                     + `<@${siegerId}>: **${neuerSiegerScore}** Punkte · <@${verliererId}>: **${neuerVerliererScore}** Punkte`
                     + (serienZeile ? `\n${serienZeile}` : ''),
                 components: []
@@ -299,6 +379,8 @@ class PingPongHandler {
             `**Ping-Pong-Befehle**\n\n` +
             `**/pingpong herausfordern** – Duell gegen eine andere Person: sie nimmt per Button an, `
             + `gespielt wird auf ${POINTS_TO_WIN} gewonnene Ballwechsel (Sieg +${DUELL_WIN}, Niederlage -${DUELL_LOSS}, nie unter 0)\n` +
+            `**/pingpong ansageduell** – Wie das Duell, aber du sagst vorher an, ob du gewinnst oder verlierst: `
+            + `trifft die Ansage, gibt es **+${ANSAGE_BONUS}** Punkt extra (eine falsche Ansage kostet nichts)\n` +
             `**/pingpong bestenliste** – Die Top 10 nach Gesamtpunkten, mit laufender Siegesserie\n` +
             `**/pingpong hilfe** – Zeigt diese Übersicht`
         );
