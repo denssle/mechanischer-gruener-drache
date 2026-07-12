@@ -17,7 +17,8 @@ export const HELP_TEXT =
     `**Event** (Details: \`/event hilfe\`)\n` +
     `\`/event countdown\` – wie lange noch bis zum nächsten Community-Event?\n\n` +
     `**Spiel & Spaß**\n` +
-    `\`/pingpong herausfordern\` – jemanden zum Ping-Pong-Duell fordern, er nimmt per Button an (Details: \`/pingpong hilfe\`)\n` +
+    `\`/pingpong herausfordern\` – jemanden zum Ping-Pong-Duell fordern, er nimmt per Button an\n` +
+    `\`/pingpong ansageduell\` – Duell mit angesagtem Sieg · \`/pingpong taktikduell\` – Duell mit verdeckter Aktion (Details: \`/pingpong hilfe\`)\n` +
     `\`/blahaj\` – Euro-Beträge in Blåhajs umrechnen (reagiert auch automatisch auf €-Beträge im Chat)\n\n` +
     `\`/version\` – aktuelle Bot-Version · \`/hilfe\` – diese Übersicht`;
 
