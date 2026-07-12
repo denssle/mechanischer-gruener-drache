@@ -27,16 +27,21 @@ import redisService from "../services/redis.service.js";
 import userService from "../services/user.service.js";
 import pingPongHandler, {
     DUELL_FLAVORS,
+    entscheideTaktik,
     formatAnsage,
     formatSerie,
-    istAnsageEingetroffen,
     randomDuellFlavor,
-    spieleDuell
+    spieleDuell,
+    TAKTIK_AKTIONEN
 } from "./pingPong.handler.js";
 
 describe('PingPongHandler', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // clearAllMocks leert nur die Aufrufe, nicht die Implementierungen - die Defaults hier
+        // setzen, sonst schleppt ein Test seine mockRejectedValue/mockImplementation in den nächsten.
+        vi.mocked(redisService.get).mockResolvedValue(null);
+        vi.mocked(redisService.set).mockImplementation(async (_key: string, value: string) => value);
         // Standard: kein aktiver Cooldown (Redis liefert -2 wenn der Key nicht existiert).
         vi.mocked(redisService.getTimeToLive).mockResolvedValue(-2);
         // Standard: erste Siegesserie (INCR auf einem noch nicht existierenden Key gibt 1).
@@ -125,57 +130,43 @@ describe('PingPongHandler', () => {
         });
     });
 
-    describe('istAnsageEingetroffen / formatAnsage', () => {
-        it('trifft zu, wenn der angesagte Ausgang eintritt', () => {
-            expect(istAnsageEingetroffen('sieg', true)).toBe(true);
-            expect(istAnsageEingetroffen('niederlage', false)).toBe(true);
+    describe('formatAnsage', () => {
+        it('schweigt beim normalen Duell', () => {
+            expect(formatAnsage(false, 'user-a', true)).toBeNull();
         });
 
-        it('trifft nicht zu, wenn es anders ausgeht', () => {
-            expect(istAnsageEingetroffen('sieg', false)).toBe(false);
-            expect(istAnsageEingetroffen('niederlage', true)).toBe(false);
-        });
-
-        it('wertet ein Duell ohne Ansage nie als Treffer', () => {
-            expect(istAnsageEingetroffen(undefined, true)).toBe(false);
-            expect(formatAnsage(undefined, 'user-a', true)).toBeNull();
-        });
-
-        it('formuliert Treffer und Fehlschlag', () => {
-            expect(formatAnsage('niederlage', 'user-a', false)).toContain('Ansage getroffen');
-            expect(formatAnsage('niederlage', 'user-a', true)).toContain('Ansage daneben');
+        it('formuliert erfüllte und blamierte Ansage', () => {
+            expect(formatAnsage(true, 'user-a', true)).toContain('Ansage erfüllt');
+            expect(formatAnsage(true, 'user-a', false)).toContain('Große Klappe');
         });
     });
 
     describe('handleAnsageduell', () => {
-        const mockInteraction = (gegner: any, ansage: string) => ({
+        const mockInteraction = (gegner: any) => ({
             user: {id: 'user-a'},
-            options: {
-                getUser: vi.fn().mockReturnValue(gegner),
-                getString: vi.fn().mockReturnValue(ansage),
-            },
+            options: {getUser: vi.fn().mockReturnValue(gegner)},
             reply: vi.fn(),
         } as any);
 
-        it('postet die Herausforderung mit der Ansage in der customId', async () => {
-            const interaction = mockInteraction({id: 'user-b', bot: false}, 'niederlage');
+        it('postet die Herausforderung mit dem Ansage-Prefix in der customId', async () => {
+            const interaction = mockInteraction({id: 'user-b', bot: false});
 
             await pingPongHandler.handleAnsageduell(interaction);
 
             const reply = interaction.reply.mock.calls[0][0];
-            expect(reply.content).toContain('die eigene Niederlage');
+            expect(reply.content).toContain('eigenen Sieg');
 
             const buttons = reply.components[0].toJSON().components;
             expect(buttons.map((b: any) => b.custom_id)).toEqual([
-                'pingpong-ansage:annehmen:user-a:user-b:niederlage',
-                'pingpong-ansage:ablehnen:user-a:user-b:niederlage',
+                'pingpong-ansage:annehmen:user-a:user-b',
+                'pingpong-ansage:ablehnen:user-a:user-b',
             ]);
             expect(redisService.setWithExpiry).toHaveBeenCalledWith('PING_PONG:COOLDOWN:user-a', '1', 30);
         });
 
         it('teilt sich den Cooldown mit dem normalen Duell', async () => {
             vi.mocked(redisService.getTimeToLive).mockResolvedValue(12);
-            const interaction = mockInteraction({id: 'user-b', bot: false}, 'sieg');
+            const interaction = mockInteraction({id: 'user-b', bot: false});
 
             await pingPongHandler.handleAnsageduell(interaction);
 
@@ -186,8 +177,8 @@ describe('PingPongHandler', () => {
         });
 
         it('lehnt Bots und sich selbst ab', async () => {
-            await pingPongHandler.handleAnsageduell(mockInteraction({id: 'user-a', bot: false}, 'sieg'));
-            await pingPongHandler.handleAnsageduell(mockInteraction({id: 'bot-1', bot: true}, 'sieg'));
+            await pingPongHandler.handleAnsageduell(mockInteraction({id: 'user-a', bot: false}));
+            await pingPongHandler.handleAnsageduell(mockInteraction({id: 'bot-1', bot: true}));
 
             expect(redisService.setWithExpiry).not.toHaveBeenCalled();
         });
@@ -256,40 +247,41 @@ describe('PingPongHandler', () => {
             expect(update.components).toEqual([]);
         });
 
-        it('gibt dem Herausforderer einen Extra-Punkt, wenn er seinen Sieg angesagt hatte', async () => {
+        it('gibt dem Herausforderer einen Extra-Punkt, wenn seine Ansage aufgeht', async () => {
             vi.spyOn(Math, 'random').mockReturnValue(0.4); // Herausforderer gewinnt
             scoresInRedis({'user-aPING_PONG': '10', 'user-bPING_PONG': '4'});
-            const interaction = mockButton('pingpong-ansage:annehmen:user-a:user-b:sieg', 'user-b');
+            const interaction = mockButton('pingpong-ansage:annehmen:user-a:user-b', 'user-b');
 
             await pingPongHandler.handleDuellButton(interaction);
 
-            // 10 + 1 (Sieg) + 1 (getroffene Ansage)
+            // 10 + 1 (Sieg) + 1 (erfüllte Ansage)
             expect(redisService.set).toHaveBeenCalledWith('user-aPING_PONG', '12');
             expect(redisService.set).toHaveBeenCalledWith('user-bPING_PONG', '3');
-            expect(interaction.update.mock.calls[0][0].content).toContain('Ansage getroffen');
+            expect(interaction.update.mock.calls[0][0].content).toContain('Ansage erfüllt');
         });
 
-        it('gibt den Extra-Punkt auch für eine angesagte eigene Niederlage', async () => {
+        it('zieht dem Herausforderer bei blamierter Ansage einen zweiten Punkt ab', async () => {
             vi.spyOn(Math, 'random').mockReturnValue(0.9); // Gegner gewinnt
             scoresInRedis({'user-aPING_PONG': '10', 'user-bPING_PONG': '4'});
-            const interaction = mockButton('pingpong-ansage:annehmen:user-a:user-b:niederlage', 'user-b');
+            const interaction = mockButton('pingpong-ansage:annehmen:user-a:user-b', 'user-b');
 
             await pingPongHandler.handleDuellButton(interaction);
 
-            // 10 - 1 (Niederlage) + 1 (getroffene Ansage) = 10, der Gegner bekommt seinen Siegpunkt
-            expect(redisService.set).toHaveBeenCalledWith('user-aPING_PONG', '10');
+            // 10 - 1 (Niederlage) - 1 (blamierte Ansage) = 8
+            expect(redisService.set).toHaveBeenCalledWith('user-aPING_PONG', '8');
             expect(redisService.set).toHaveBeenCalledWith('user-bPING_PONG', '5');
+            expect(interaction.update.mock.calls[0][0].content).toContain('Große Klappe');
         });
 
-        it('kostet eine falsche Ansage nichts zusätzlich', async () => {
-            vi.spyOn(Math, 'random').mockReturnValue(0.9); // Gegner gewinnt, angesagt war der eigene Sieg
-            scoresInRedis({'user-aPING_PONG': '10', 'user-bPING_PONG': '4'});
-            const interaction = mockButton('pingpong-ansage:annehmen:user-a:user-b:sieg', 'user-b');
+        it('spielt auch mit dem Ansage-Malus niemanden ins Minus', async () => {
+            vi.spyOn(Math, 'random').mockReturnValue(0.9); // Gegner gewinnt
+            scoresInRedis({'user-aPING_PONG': '1', 'user-bPING_PONG': '0'});
+            const interaction = mockButton('pingpong-ansage:annehmen:user-a:user-b', 'user-b');
 
             await pingPongHandler.handleDuellButton(interaction);
 
-            expect(redisService.set).toHaveBeenCalledWith('user-aPING_PONG', '9');
-            expect(interaction.update.mock.calls[0][0].content).toContain('Ansage daneben');
+            // 1 - 1 - 1 wäre -1, der Clamp fängt das ab
+            expect(redisService.set).toHaveBeenCalledWith('user-aPING_PONG', '0');
         });
 
         it('erwähnt beim normalen Duell keine Ansage', async () => {
@@ -420,14 +412,156 @@ describe('PingPongHandler', () => {
         });
     });
 
+    describe('entscheideTaktik', () => {
+        it('lässt Schmetterball → Lupfer → Konter → Schmetterball übertrumpfen', () => {
+            expect(entscheideTaktik('schmetterball', 'lupfer')).toBe('herausforderer');
+            expect(entscheideTaktik('lupfer', 'konter')).toBe('herausforderer');
+            expect(entscheideTaktik('konter', 'schmetterball')).toBe('herausforderer');
+        });
+
+        it('gibt dem Gegner den Sieg in der Gegenrichtung', () => {
+            expect(entscheideTaktik('lupfer', 'schmetterball')).toBe('gegner');
+            expect(entscheideTaktik('konter', 'lupfer')).toBe('gegner');
+            expect(entscheideTaktik('schmetterball', 'konter')).toBe('gegner');
+        });
+
+        it('meldet ein Patt bei gleicher Aktion', () => {
+            TAKTIK_AKTIONEN.forEach(aktion => {
+                expect(entscheideTaktik(aktion, aktion)).toBe('gleich');
+            });
+        });
+    });
+
+    describe('handleTaktikduell', () => {
+        const mockInteraction = (gegner: any, aktion: string) => ({
+            user: {id: 'user-a'},
+            options: {
+                getUser: vi.fn().mockReturnValue(gegner),
+                getString: vi.fn().mockReturnValue(aktion),
+            },
+            reply: vi.fn(),
+        } as any);
+
+        it('postet drei Aktions-Buttons plus Ablehnen, mit der eigenen Aktion in der customId', async () => {
+            const interaction = mockInteraction({id: 'user-b', bot: false}, 'konter');
+
+            await pingPongHandler.handleTaktikduell(interaction);
+
+            const reply = interaction.reply.mock.calls[0][0];
+            const buttons = reply.components[0].toJSON().components;
+
+            expect(buttons.map((b: any) => b.custom_id)).toEqual([
+                'pingpong-taktik:schmetterball:user-a:user-b:konter',
+                'pingpong-taktik:konter:user-a:user-b:konter',
+                'pingpong-taktik:lupfer:user-a:user-b:konter',
+                'pingpong-taktik:ablehnen:user-a:user-b:konter',
+            ]);
+            // Die verdeckte Wahl darf nicht im sichtbaren Text stehen.
+            expect(reply.content).not.toContain('Konter**:');
+            expect(redisService.setWithExpiry).toHaveBeenCalledWith('PING_PONG:COOLDOWN:user-a', '1', 30);
+        });
+
+        it('lehnt Bots, sich selbst und aktive Cooldowns ab', async () => {
+            await pingPongHandler.handleTaktikduell(mockInteraction({id: 'user-a', bot: false}, 'konter'));
+            await pingPongHandler.handleTaktikduell(mockInteraction({id: 'bot-1', bot: true}, 'konter'));
+
+            vi.mocked(redisService.getTimeToLive).mockResolvedValue(7);
+            await pingPongHandler.handleTaktikduell(mockInteraction({id: 'user-b', bot: false}, 'konter'));
+
+            expect(redisService.setWithExpiry).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('handleTaktikButton', () => {
+        const mockButton = (customId: string, userId: string) => ({
+            customId,
+            user: {id: userId},
+            update: vi.fn(),
+            reply: vi.fn().mockResolvedValue(undefined),
+            replied: false,
+        } as any);
+
+        const scoresInRedis = (scores: Record<string, string>) => {
+            vi.mocked(redisService.get).mockImplementation(async (key: string) => scores[key] ?? null as any);
+            vi.mocked(redisService.set).mockImplementation(async (_key: string, value: string) => value as any);
+        };
+
+        it('ignoriert Buttons mit fremdem Prefix', async () => {
+            const interaction = mockButton('pingpong-duell:annehmen:user-a:user-b', 'user-b');
+
+            await pingPongHandler.handleTaktikButton(interaction);
+
+            expect(interaction.update).not.toHaveBeenCalled();
+        });
+
+        it('lässt nur den Herausgeforderten wählen', async () => {
+            const interaction = mockButton('pingpong-taktik:konter:user-a:user-b:lupfer', 'user-c');
+
+            await pingPongHandler.handleTaktikButton(interaction);
+
+            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
+            expect(interaction.update).not.toHaveBeenCalled();
+        });
+
+        it('entfernt beim Ablehnen die Buttons und vergibt keine Punkte', async () => {
+            const interaction = mockButton('pingpong-taktik:ablehnen:user-a:user-b:lupfer', 'user-b');
+
+            await pingPongHandler.handleTaktikButton(interaction);
+
+            expect(interaction.update).toHaveBeenCalledWith(expect.objectContaining({components: []}));
+            expect(redisService.set).not.toHaveBeenCalled();
+        });
+
+        it('lässt die stärkere Aktion gewinnen und deckt beide Wahlen auf', async () => {
+            scoresInRedis({'user-aPING_PONG': '5', 'user-bPING_PONG': '5'});
+            // Herausforderer: Lupfer, Gegner: Konter -> Lupfer übertrumpft Konter
+            const interaction = mockButton('pingpong-taktik:konter:user-a:user-b:lupfer', 'user-b');
+
+            await pingPongHandler.handleTaktikButton(interaction);
+
+            expect(redisService.set).toHaveBeenCalledWith('user-aPING_PONG', '6');
+            expect(redisService.set).toHaveBeenCalledWith('user-bPING_PONG', '4');
+
+            const content = interaction.update.mock.calls[0][0].content;
+            expect(content).toContain('<@user-a>: **Lupfer**');
+            expect(content).toContain('<@user-b>: **Konter**');
+            expect(content).toContain('**Lupfer** übertrumpft **Konter**');
+            expect(content).toContain('<@user-a> gewinnt gegen <@user-b>');
+        });
+
+        it('lässt bei gleicher Aktion den Ballwechsel entscheiden', async () => {
+            vi.spyOn(Math, 'random').mockReturnValue(0.4); // jeder Ballwechsel an den Herausforderer
+            scoresInRedis({'user-aPING_PONG': '5', 'user-bPING_PONG': '5'});
+            const interaction = mockButton('pingpong-taktik:konter:user-a:user-b:konter', 'user-b');
+
+            await pingPongHandler.handleTaktikButton(interaction);
+
+            const content = interaction.update.mock.calls[0][0].content;
+            expect(content).toContain('Dieselbe Aktion');
+            expect(content).toContain('3:0 für <@user-a>');
+            expect(redisService.set).toHaveBeenCalledWith('user-aPING_PONG', '6');
+        });
+
+        it('fängt Fehler ab', async () => {
+            vi.mocked(redisService.get).mockRejectedValue(new Error('Redis kaputt'));
+            const interaction = mockButton('pingpong-taktik:konter:user-a:user-b:lupfer', 'user-b');
+
+            await pingPongHandler.handleTaktikButton(interaction);
+
+            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
+        });
+    });
+
     describe('handleHilfe', () => {
-        it('nennt alle drei Ping-Pong-Befehle', async () => {
+        it('nennt alle Ping-Pong-Befehle', async () => {
             const interaction = {reply: vi.fn()} as any;
 
             await pingPongHandler.handleHilfe(interaction);
 
             const text = interaction.reply.mock.calls[0][0];
             expect(text).toContain('/pingpong herausfordern');
+            expect(text).toContain('/pingpong ansageduell');
+            expect(text).toContain('/pingpong taktikduell');
             expect(text).toContain('/pingpong bestenliste');
             expect(text).toContain('/pingpong hilfe');
         });

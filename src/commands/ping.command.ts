@@ -14,18 +14,26 @@ export default {
                 .setRequired(true)))
         .addSubcommand(sub => sub
             .setName('ansageduell')
-            .setDescription('Duell mit Ansage: sagst du den Ausgang richtig voraus, gibt es einen Extra-Punkt')
+            .setDescription('Duell mit angesagtem Sieg: gewinnst du, gibt es einen Punkt extra – verlierst du, kostet es einen')
+            .addUserOption(option => option
+                .setName('gegner')
+                .setDescription('Wen möchtest du herausfordern?')
+                .setRequired(true)))
+        .addSubcommand(sub => sub
+            .setName('taktikduell')
+            .setDescription('Duell mit verdeckter Aktion: Schmetterball schlaegt Lupfer schlaegt Konter schlaegt Schmetterball')
             .addUserOption(option => option
                 .setName('gegner')
                 .setDescription('Wen möchtest du herausfordern?')
                 .setRequired(true))
             .addStringOption(option => option
-                .setName('ansage')
-                .setDescription('Wie geht das Duell für dich aus?')
+                .setName('aktion')
+                .setDescription('Deine verdeckte Aktion – der Gegner sieht sie erst im Ergebnis')
                 .setRequired(true)
                 .addChoices(
-                    {name: 'Ich gewinne', value: 'sieg'},
-                    {name: 'Ich verliere', value: 'niederlage'},
+                    {name: 'Schmetterball (schlägt Lupfer)', value: 'schmetterball'},
+                    {name: 'Konter (schlägt Schmetterball)', value: 'konter'},
+                    {name: 'Lupfer (schlägt Konter)', value: 'lupfer'},
                 )))
         .addSubcommand(sub => sub
             .setName('bestenliste')
@@ -42,6 +50,8 @@ export default {
                 return pingPongHandler.handleHerausfordern(interaction);
             case 'ansageduell':
                 return pingPongHandler.handleAnsageduell(interaction);
+            case 'taktikduell':
+                return pingPongHandler.handleTaktikduell(interaction);
             case 'bestenliste':
                 return pingPongHandler.handlePingPongHighscore(interaction);
             case 'hilfe':

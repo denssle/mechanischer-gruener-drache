@@ -12,10 +12,11 @@ declare module 'discord.js' {
 }
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
-    // Beide Button-Handler prüfen anhand des customId-Prefix selbst, ob sie zuständig sind.
+    // Alle Button-Handler prüfen anhand des customId-Prefix selbst, ob sie zuständig sind.
     if (interaction.isButton()) {
         await buttonRoleHandler.handleButton(interaction);
         await pingPongHandler.handleDuellButton(interaction);
+        await pingPongHandler.handleTaktikButton(interaction);
         return;
     }
 

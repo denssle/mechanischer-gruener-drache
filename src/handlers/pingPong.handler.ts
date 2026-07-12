@@ -28,30 +28,53 @@ const DUELL_LOSS = 1;
 // Doppeltes Annehmen verhindert das Entfernen der Buttons beim ersten Klick.
 const DUELL_PREFIX = 'pingpong-duell:';
 
-// Ansage-Duell (eigener Befehl neben dem normalen Duell): der Herausforderer sagt vorher an, ob er
-// gewinnt oder verliert. Gespielt wird wie immer rein zufällig - trifft die Ansage, gibt es einen
-// Extra-Punkt. Die Ansage steckt (wie die User-IDs) hinten in der customId, also kein Redis-State.
+// Ansage-Duell (eigener Befehl neben dem normalen Duell): der Herausforderer sagt vorher den eigenen
+// Sieg an - der Befehl IST die Ansage, es gibt nichts zu wählen. Gespielt wird wie immer rein
+// zufällig: Prahlerei erfüllt bringt einen Punkt extra, Prahlerei blamiert kostet einen zusätzlich.
+// Bonus und Malus sind bewusst gleich groß (Erwartungswert null) - sonst wäre das Ansage-Duell
+// strikt besser als das normale und würde es verdrängen. Eine Ansage "ich verliere" gibt es
+// bewusst nicht: mit Bonus UND Malus käme sie rechnerisch immer auf 0 heraus (risikofreie
+// Versicherung), das wäre eine tote Option.
 const ANSAGE_PREFIX = 'pingpong-ansage:';
 const ANSAGE_BONUS = 1;
+const ANSAGE_MALUS = 1;
 
-export type Ansage = 'sieg' | 'niederlage';
+// Taktikduell (eigener Befehl): beide wählen verdeckt eine Aktion, die Kombination entscheidet -
+// Schere-Stein-Papier im Ringschluss. Die Wahl des Herausforderers steckt in der customId, die des
+// Herausgeforderten ist der Button, den er klickt: also ebenfalls kein Redis-State.
+// Bewusst hingenommen: technisch Versierte könnten die Wahl aus dem API-Payload lesen - im Client
+// ist sie unsichtbar, und für eine Community-Spielerei reicht das.
+const TAKTIK_PREFIX = 'pingpong-taktik:';
 
-// Ein Duell ohne Ansage (normales /pingpong herausfordern) hat hier undefined stehen.
-export function istAnsageEingetroffen(ansage: string | undefined, herausfordererGewinnt: boolean): boolean {
-    if (ansage === 'sieg') return herausfordererGewinnt;
-    if (ansage === 'niederlage') return !herausfordererGewinnt;
-    return false;
+export type TaktikAktion = 'schmetterball' | 'konter' | 'lupfer';
+
+export const TAKTIK_AKTIONEN: TaktikAktion[] = ['schmetterball', 'konter', 'lupfer'];
+
+export const TAKTIK_LABELS: Record<TaktikAktion, string> = {
+    schmetterball: 'Schmetterball',
+    konter: 'Konter',
+    lupfer: 'Lupfer',
+};
+
+// Ringschluss: Schmetterball schlägt Lupfer, Lupfer schlägt Konter, Konter schlägt Schmetterball.
+const SCHLAEGT: Record<TaktikAktion, TaktikAktion> = {
+    schmetterball: 'lupfer',
+    lupfer: 'konter',
+    konter: 'schmetterball',
+};
+
+export function entscheideTaktik(herausforderer: TaktikAktion, gegner: TaktikAktion): 'herausforderer' | 'gegner' | 'gleich' {
+    if (herausforderer === gegner) return 'gleich';
+    return SCHLAEGT[herausforderer] === gegner ? 'herausforderer' : 'gegner';
 }
 
-// Die Ansage-Zeile fürs Ergebnis - null beim normalen Duell (da gab es keine Ansage).
-export function formatAnsage(ansage: string | undefined, herausfordererId: string, herausfordererGewinnt: boolean): string | null {
-    if (ansage !== 'sieg' && ansage !== 'niederlage') return null;
+// Die Ansage-Zeile fürs Ergebnis - null beim normalen Duell (da wurde nichts angesagt).
+export function formatAnsage(istAnsageDuell: boolean, herausfordererId: string, herausfordererGewinnt: boolean): string | null {
+    if (!istAnsageDuell) return null;
 
-    const angesagt = ansage === 'sieg' ? 'den eigenen Sieg' : 'die eigene Niederlage';
-
-    return istAnsageEingetroffen(ansage, herausfordererGewinnt)
-        ? `Ansage getroffen: <@${herausfordererId}> hatte ${angesagt} angekündigt – **+${ANSAGE_BONUS}** Punkt extra.`
-        : `Ansage daneben: <@${herausfordererId}> hatte ${angesagt} angekündigt. Kein Extra-Punkt.`;
+    return herausfordererGewinnt
+        ? `Ansage erfüllt: <@${herausfordererId}> hatte den eigenen Sieg angekündigt – **+${ANSAGE_BONUS}** Punkt extra.`
+        : `Große Klappe: <@${herausfordererId}> hatte den eigenen Sieg angekündigt – **-${ANSAGE_MALUS}** Punkt zusätzlich.`;
 }
 
 // Siegesserie: laufender Zähler pro User (hoch bei Sieg, weg bei Niederlage) plus die längste
@@ -155,28 +178,28 @@ class PingPongHandler {
         }
     }
 
-    // Ansage-Duell: derselbe Zufalls-Match wie beim normalen Duell, aber der Herausforderer sagt
-    // vorher an, wie es ausgeht. Trifft er, gibt es einen Extra-Punkt obendrauf - eine falsche
-    // Ansage kostet bewusst nichts extra (Sieg/Niederlage regeln die Punkte, die Ansage kann nur belohnen).
+    // Ansage-Duell: derselbe Zufalls-Match wie beim normalen Duell, aber der Herausforderer sagt mit
+    // dem Befehl den eigenen Sieg an - va banque. Geht es auf, gibt es einen Punkt extra; geht es
+    // schief, kostet es einen zusätzlich (siehe ANSAGE_BONUS/ANSAGE_MALUS).
     async handleAnsageduell(interaction: ChatInputCommandInteraction) {
         try {
             const herausforderer = interaction.user;
             const gegner = interaction.options.getUser('gegner', true);
-            const ansage = interaction.options.getString('ansage', true) as Ansage;
 
             const abfuhr = await this.pruefeUndSetzeCooldown(herausforderer.id, gegner);
             if (abfuhr) {
                 return interaction.reply({content: abfuhr, flags: MessageFlags.Ephemeral});
             }
 
-            const row = this.baueDuellButtons(`${ANSAGE_PREFIX}annehmen:${herausforderer.id}:${gegner.id}:${ansage}`,
-                `${ANSAGE_PREFIX}ablehnen:${herausforderer.id}:${gegner.id}:${ansage}`);
+            const row = this.baueDuellButtons(`${ANSAGE_PREFIX}annehmen:${herausforderer.id}:${gegner.id}`,
+                `${ANSAGE_PREFIX}ablehnen:${herausforderer.id}:${gegner.id}`);
 
             return interaction.reply({
                 content: `<@${herausforderer.id}> fordert <@${gegner.id}> zu einem Ansage-Duell heraus `
-                    + `und sagt **${ansage === 'sieg' ? 'den eigenen Sieg' : 'die eigene Niederlage'}** an.\n`
+                    + `und kündigt schon mal den **eigenen Sieg** an.\n`
                     + `Gespielt wird auf **${POINTS_TO_WIN}** gewonnene Ballwechsel (Sieg **+${DUELL_WIN}**, `
-                    + `Niederlage **-${DUELL_LOSS}**, nie unter 0). Geht die Ansage auf, gibt es **+${ANSAGE_BONUS}** Punkt extra.`,
+                    + `Niederlage **-${DUELL_LOSS}**, nie unter 0). Geht die Ansage auf, gibt es **+${ANSAGE_BONUS}** Punkt extra – `
+                    + `geht sie daneben, kostet die große Klappe **${ANSAGE_MALUS}** Punkt zusätzlich.`,
                 components: [row]
             });
         } catch (error) {
@@ -231,7 +254,8 @@ class PingPongHandler {
         if (!prefix) return;
 
         try {
-            const [aktion, herausfordererId, gegnerId, ansage] = interaction.customId.slice(prefix.length).split(':');
+            const [aktion, herausfordererId, gegnerId] = interaction.customId.slice(prefix.length).split(':');
+            const istAnsageDuell = prefix === ANSAGE_PREFIX;
 
             // Nur der Herausgeforderte darf über die Herausforderung entscheiden.
             if (interaction.user.id !== gegnerId) {
@@ -253,36 +277,156 @@ class PingPongHandler {
             const siegerId = herausfordererGewinnt ? herausfordererId : gegnerId;
             const verliererId = herausfordererGewinnt ? gegnerId : herausfordererId;
 
-            // Der Bonus geht immer an den Herausforderer - nur er hat eine Ansage gemacht.
-            const ansageTrifft = istAnsageEingetroffen(ansage, herausfordererGewinnt);
-            const bonusFuerSieger = ansageTrifft && herausfordererGewinnt ? ANSAGE_BONUS : 0;
-            const bonusFuerVerlierer = ansageTrifft && !herausfordererGewinnt ? ANSAGE_BONUS : 0;
+            // Ansage-Duell: nur der Herausforderer hat angesagt. Erfüllt er sie, ist er der Sieger
+            // und bekommt den Bonus; verliert er, ist er der Verlierer und zahlt den Malus obendrauf.
+            const bonusFuerSieger = istAnsageDuell && herausfordererGewinnt ? ANSAGE_BONUS : 0;
+            const malusFuerVerlierer = istAnsageDuell && !herausfordererGewinnt ? ANSAGE_MALUS : 0;
 
-            const siegerScore = await this.getScore(siegerId);
-            const verliererScore = await this.getScore(verliererId);
-
-            const neuerSiegerScore = await this.updateScore(siegerId, siegerScore + DUELL_WIN + bonusFuerSieger);
-            const neuerVerliererScore = await this.updateScore(verliererId,
-                Math.max(0, verliererScore - DUELL_LOSS) + bonusFuerVerlierer);
+            const {punkteZeile, serienZeile} = await this.trageErgebnisEin(siegerId, verliererId,
+                bonusFuerSieger, -malusFuerVerlierer);
 
             const satz = herausfordererGewinnt
                 ? `${herausfordererPunkte}:${gegnerPunkte}`
                 : `${gegnerPunkte}:${herausfordererPunkte}`;
 
-            // Die Ansage ändert nichts am Spielausgang - die Serie zählt weiter nach Sieg/Niederlage.
-            const serienZeile = formatSerie(await this.verarbeiteSerie(siegerId, verliererId));
-            const ansageZeile = formatAnsage(ansage, herausfordererId, herausfordererGewinnt);
+            const ansageZeile = formatAnsage(istAnsageDuell, herausfordererId, herausfordererGewinnt);
 
             return interaction.update({
                 content: `**<@${siegerId}> gewinnt ${satz} gegen <@${verliererId}>.**\n`
                     + `${randomDuellFlavor()}\n`
                     + (ansageZeile ? `${ansageZeile}\n` : '')
-                    + `<@${siegerId}>: **${neuerSiegerScore}** Punkte · <@${verliererId}>: **${neuerVerliererScore}** Punkte`
+                    + punkteZeile
                     + (serienZeile ? `\n${serienZeile}` : ''),
                 components: []
             });
         } catch (error) {
             console.error('Fehler beim Austragen des Ping-Pong-Duells:', error);
+            if (!interaction.replied) {
+                await interaction.reply({
+                    content: 'Das Duell konnte nicht ausgetragen werden.',
+                    flags: MessageFlags.Ephemeral
+                }).catch(() => {});
+            }
+        }
+    }
+
+    // Punkte + Siegesserie nach einem entschiedenen Match - von allen drei Duell-Arten geteilt.
+    // `zusatzFuerVerlierer` ist der (negative) Ansage-Malus; der Clamp auf 0 greift erst danach,
+    // damit auch ein doppelter Abzug niemanden ins Minus spielt.
+    async trageErgebnisEin(siegerId: string, verliererId: string, bonusFuerSieger = 0, zusatzFuerVerlierer = 0)
+        : Promise<{punkteZeile: string, serienZeile: string | null}> {
+        const siegerScore = await this.getScore(siegerId);
+        const verliererScore = await this.getScore(verliererId);
+
+        const neuerSiegerScore = await this.updateScore(siegerId, siegerScore + DUELL_WIN + bonusFuerSieger);
+        const neuerVerliererScore = await this.updateScore(verliererId,
+            Math.max(0, verliererScore - DUELL_LOSS + zusatzFuerVerlierer));
+
+        const serienZeile = formatSerie(await this.verarbeiteSerie(siegerId, verliererId));
+
+        return {
+            punkteZeile: `<@${siegerId}>: **${neuerSiegerScore}** Punkte · <@${verliererId}>: **${neuerVerliererScore}** Punkte`,
+            serienZeile
+        };
+    }
+
+    // Taktikduell: eigener Befehl, bei dem beide Seiten verdeckt eine Aktion wählen. Die Wahl des
+    // Herausforderers steht schon in der customId der Buttons, die des Herausgeforderten ergibt sich
+    // daraus, welchen der drei Aktions-Buttons er klickt - dadurch bleibt auch das zustandslos.
+    async handleTaktikduell(interaction: ChatInputCommandInteraction) {
+        try {
+            const herausforderer = interaction.user;
+            const gegner = interaction.options.getUser('gegner', true);
+            const aktion = interaction.options.getString('aktion', true) as TaktikAktion;
+
+            const abfuhr = await this.pruefeUndSetzeCooldown(herausforderer.id, gegner);
+            if (abfuhr) {
+                return interaction.reply({content: abfuhr, flags: MessageFlags.Ephemeral});
+            }
+
+            const buttons = TAKTIK_AKTIONEN.map(a => new ButtonBuilder()
+                .setCustomId(`${TAKTIK_PREFIX}${a}:${herausforderer.id}:${gegner.id}:${aktion}`)
+                .setLabel(TAKTIK_LABELS[a])
+                .setStyle(ButtonStyle.Primary));
+
+            buttons.push(new ButtonBuilder()
+                .setCustomId(`${TAKTIK_PREFIX}ablehnen:${herausforderer.id}:${gegner.id}:${aktion}`)
+                .setLabel('Ablehnen')
+                .setStyle(ButtonStyle.Secondary));
+
+            const row = new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons);
+
+            return interaction.reply({
+                content: `<@${herausforderer.id}> fordert <@${gegner.id}> zu einem Taktikduell heraus `
+                    + `und hat sich verdeckt für eine Aktion entschieden.\n`
+                    + `<@${gegner.id}>, wähle deine Antwort: **Schmetterball** übertrumpft den Lupfer, `
+                    + `der **Lupfer** übertrumpft den Konter, der **Konter** übertrumpft den Schmetterball. `
+                    + `Wählt ihr dasselbe, entscheidet ein Ballwechsel.\n`
+                    + `Der Sieg bringt **+${DUELL_WIN}** Punkt, die Niederlage kostet **${DUELL_LOSS}** (nie unter 0).`,
+                components: [row]
+            });
+        } catch (error) {
+            console.error('Fehler beim Erstellen des Ping-Pong-Taktikduells:', error);
+            return interaction.reply({
+                content: 'Es gab einen Fehler beim Ausführen des Befehls.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+    }
+
+    async handleTaktikButton(interaction: ButtonInteraction) {
+        if (!interaction.customId.startsWith(TAKTIK_PREFIX)) return;
+
+        try {
+            const [gegnerAktion, herausfordererId, gegnerId, herausfordererAktion] =
+                interaction.customId.slice(TAKTIK_PREFIX.length).split(':');
+
+            if (interaction.user.id !== gegnerId) {
+                return interaction.reply({
+                    content: 'Diese Herausforderung gilt nicht dir.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            if (gegnerAktion === 'ablehnen') {
+                return interaction.update({
+                    content: `<@${gegnerId}> lehnt die Herausforderung von <@${herausfordererId}> ab. Kein Duell heute.`,
+                    components: []
+                });
+            }
+
+            const ausgang = entscheideTaktik(herausfordererAktion as TaktikAktion, gegnerAktion as TaktikAktion);
+
+            // Gleiche Aktion = Patt: dann entscheidet wie beim normalen Duell der Zufall.
+            const {herausfordererPunkte, gegnerPunkte} = spieleDuell();
+            const herausfordererGewinnt = ausgang === 'gleich'
+                ? herausfordererPunkte > gegnerPunkte
+                : ausgang === 'herausforderer';
+
+            const siegerId = herausfordererGewinnt ? herausfordererId : gegnerId;
+            const verliererId = herausfordererGewinnt ? gegnerId : herausfordererId;
+
+            const {punkteZeile, serienZeile} = await this.trageErgebnisEin(siegerId, verliererId);
+
+            const wahlZeile = `<@${herausfordererId}>: **${TAKTIK_LABELS[herausfordererAktion as TaktikAktion]}** `
+                + `· <@${gegnerId}>: **${TAKTIK_LABELS[gegnerAktion as TaktikAktion]}**`;
+
+            const entscheidung = ausgang === 'gleich'
+                ? `Dieselbe Aktion – der Ballwechsel entscheidet, ${herausfordererGewinnt ? herausfordererPunkte : gegnerPunkte}:`
+                    + `${herausfordererGewinnt ? gegnerPunkte : herausfordererPunkte} für <@${siegerId}>.`
+                : `**${TAKTIK_LABELS[(herausfordererGewinnt ? herausfordererAktion : gegnerAktion) as TaktikAktion]}** `
+                    + `übertrumpft **${TAKTIK_LABELS[(herausfordererGewinnt ? gegnerAktion : herausfordererAktion) as TaktikAktion]}**.`;
+
+            return interaction.update({
+                content: `${wahlZeile}\n`
+                    + `${entscheidung}\n`
+                    + `**<@${siegerId}> gewinnt gegen <@${verliererId}>.**\n`
+                    + punkteZeile
+                    + (serienZeile ? `\n${serienZeile}` : ''),
+                components: []
+            });
+        } catch (error) {
+            console.error('Fehler beim Austragen des Ping-Pong-Taktikduells:', error);
             if (!interaction.replied) {
                 await interaction.reply({
                     content: 'Das Duell konnte nicht ausgetragen werden.',
@@ -379,8 +523,10 @@ class PingPongHandler {
             `**Ping-Pong-Befehle**\n\n` +
             `**/pingpong herausfordern** – Duell gegen eine andere Person: sie nimmt per Button an, `
             + `gespielt wird auf ${POINTS_TO_WIN} gewonnene Ballwechsel (Sieg +${DUELL_WIN}, Niederlage -${DUELL_LOSS}, nie unter 0)\n` +
-            `**/pingpong ansageduell** – Wie das Duell, aber du sagst vorher an, ob du gewinnst oder verlierst: `
-            + `trifft die Ansage, gibt es **+${ANSAGE_BONUS}** Punkt extra (eine falsche Ansage kostet nichts)\n` +
+            `**/pingpong ansageduell** – Wie das Duell, aber du sagst den eigenen Sieg vorher an: `
+            + `gewinnst du, gibt es **+${ANSAGE_BONUS}** Punkt extra – verlierst du, kostet die große Klappe **${ANSAGE_MALUS}** Punkt zusätzlich\n` +
+            `**/pingpong taktikduell** – Duell mit verdeckter Aktion: Schmetterball schlägt Lupfer, `
+            + `Lupfer schlägt Konter, Konter schlägt Schmetterball (bei gleicher Wahl entscheidet der Ballwechsel)\n` +
             `**/pingpong bestenliste** – Die Top 10 nach Gesamtpunkten, mit laufender Siegesserie\n` +
             `**/pingpong hilfe** – Zeigt diese Übersicht`
         );
