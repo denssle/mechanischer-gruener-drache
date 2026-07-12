@@ -28,10 +28,17 @@ const DUELL_LOSS = 1;
 // Doppeltes Annehmen verhindert das Entfernen der Buttons beim ersten Klick.
 const DUELL_PREFIX = 'pingpong-duell:';
 
+// Siegesserie: laufender Zähler pro User (hoch bei Sieg, weg bei Niederlage) plus die längste
+// je erreichte Serie als persönlicher Rekord. Erwähnt wird sie erst ab MIN_SERIE - eine "Serie"
+// von einem einzelnen Duell ist keine.
+const MIN_SERIE = 2;
+
 const KEYS = {
     score: (userId: string) => userId + REDIS_KEYS.PING_PONG,
     highscore: REDIS_KEYS.PING_PONG,
     cooldown: (userId: string) => `PING_PONG:COOLDOWN:${userId}`,
+    serie: (userId: string) => `PING_PONG:SERIE:${userId}`,
+    rekord: (userId: string) => `PING_PONG:REKORD:${userId}`,
 };
 
 // Abschluss-Zeilen fürs Duell, aus Sicht des Siegers formuliert (der Handler setzt die Namen davor).
@@ -63,6 +70,33 @@ export function spieleDuell(): { herausfordererPunkte: number; gegnerPunkte: num
     }
 
     return {herausfordererPunkte, gegnerPunkte};
+}
+
+export interface SerienStand {
+    siegerId: string;
+    verliererId: string;
+    serie: number;
+    istNeuerRekord: boolean;
+    beendeteSerie: number;
+}
+
+// Baut die Serien-Zeile fürs Duell-Ergebnis - oder null, wenn es nichts zu erzählen gibt
+// (erster Sieg des Siegers, Verlierer hatte auch nichts laufen). Exportiert + getestet.
+export function formatSerie({siegerId, verliererId, serie, istNeuerRekord, beendeteSerie}: SerienStand): string | null {
+    const saetze: string[] = [];
+
+    if (serie >= MIN_SERIE) {
+        saetze.push(`<@${siegerId}> ist jetzt **${serie} Duelle in Folge** ungeschlagen.`);
+        if (istNeuerRekord) {
+            saetze.push('Das ist ein neuer persönlicher Rekord.');
+        }
+    }
+
+    if (beendeteSerie >= MIN_SERIE) {
+        saetze.push(`Die Serie von <@${verliererId}> endet nach **${beendeteSerie} Siegen**.`);
+    }
+
+    return saetze.length > 0 ? saetze.join(' ') : null;
 }
 
 class PingPongHandler {
@@ -158,10 +192,13 @@ class PingPongHandler {
                 ? `${herausfordererPunkte}:${gegnerPunkte}`
                 : `${gegnerPunkte}:${herausfordererPunkte}`;
 
+            const serienZeile = formatSerie(await this.verarbeiteSerie(siegerId, verliererId));
+
             return interaction.update({
                 content: `**<@${siegerId}> gewinnt ${satz} gegen <@${verliererId}>.**\n`
                     + `${randomDuellFlavor()}\n`
-                    + `<@${siegerId}>: **${neuerSiegerScore}** Punkte · <@${verliererId}>: **${neuerVerliererScore}** Punkte`,
+                    + `<@${siegerId}>: **${neuerSiegerScore}** Punkte · <@${verliererId}>: **${neuerVerliererScore}** Punkte`
+                    + (serienZeile ? `\n${serienZeile}` : ''),
                 components: []
             });
         } catch (error) {
@@ -173,6 +210,30 @@ class PingPongHandler {
                 }).catch(() => {});
             }
         }
+    }
+
+    // Schreibt die Siegesserie beider Seiten fort: der Sieger zählt hoch (INCR legt den Key bei
+    // Bedarf selbst an), die Serie des Verlierers ist beendet und wird gelöscht. Den Rekord halten
+    // wir separat, damit er die abgerissene Serie überdauert.
+    async verarbeiteSerie(siegerId: string, verliererId: string): Promise<SerienStand> {
+        const beendeteSerie = this.convertScoreToNumber(await redisService.get(KEYS.serie(verliererId)) ?? 0);
+        if (beendeteSerie > 0) {
+            await redisService.delete(KEYS.serie(verliererId));
+        }
+
+        const serie = await redisService.increment(KEYS.serie(siegerId));
+        const bisherigerRekord = this.convertScoreToNumber(await redisService.get(KEYS.rekord(siegerId)) ?? 0);
+        const istNeuerRekord = serie > bisherigerRekord;
+
+        if (istNeuerRekord) {
+            await redisService.set(KEYS.rekord(siegerId), serie.toString());
+        }
+
+        return {siegerId, verliererId, serie, istNeuerRekord: istNeuerRekord && serie >= MIN_SERIE, beendeteSerie};
+    }
+
+    async getSerie(userId: string): Promise<number> {
+        return this.convertScoreToNumber(await redisService.get(KEYS.serie(userId)) ?? 0);
     }
 
     async getScore(userId: string): Promise<number> {
@@ -213,12 +274,16 @@ class PingPongHandler {
             const users = await Promise.all(
                 highscore.map(item => userService.getUser(item.value))
             );
+            const serien = await Promise.all(
+                highscore.map(item => this.getSerie(item.value))
+            );
 
             const message = highscore
                 .map((item, index) => {
                     const user = users[index];
                     const displayName = user?.displayName ?? item.value;
-                    return `${index + 1}. ${displayName} - ${item.score}`;
+                    const serie = serien[index] >= MIN_SERIE ? ` (${serien[index]} in Folge)` : '';
+                    return `${index + 1}. ${displayName} - ${item.score}${serie}`;
                 })
                 .join('\n');
 
@@ -234,7 +299,7 @@ class PingPongHandler {
             `**Ping-Pong-Befehle**\n\n` +
             `**/pingpong herausfordern** – Duell gegen eine andere Person: sie nimmt per Button an, `
             + `gespielt wird auf ${POINTS_TO_WIN} gewonnene Ballwechsel (Sieg +${DUELL_WIN}, Niederlage -${DUELL_LOSS}, nie unter 0)\n` +
-            `**/pingpong bestenliste** – Die Top 10 nach Gesamtpunkten\n` +
+            `**/pingpong bestenliste** – Die Top 10 nach Gesamtpunkten, mit laufender Siegesserie\n` +
             `**/pingpong hilfe** – Zeigt diese Übersicht`
         );
     }

@@ -9,6 +9,8 @@ vi.mock("../services/redis.service.js", () => ({
         setSortedSet: vi.fn(),
         getTimeToLive: vi.fn(),
         setWithExpiry: vi.fn(),
+        increment: vi.fn(),
+        delete: vi.fn(),
     },
     REDIS_KEYS: {
         PING_PONG: "PING_PONG"
@@ -23,13 +25,15 @@ vi.mock("../services/user.service.js", () => ({
 
 import redisService from "../services/redis.service.js";
 import userService from "../services/user.service.js";
-import pingPongHandler, {DUELL_FLAVORS, randomDuellFlavor, spieleDuell} from "./pingPong.handler.js";
+import pingPongHandler, {DUELL_FLAVORS, formatSerie, randomDuellFlavor, spieleDuell} from "./pingPong.handler.js";
 
 describe('PingPongHandler', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         // Standard: kein aktiver Cooldown (Redis liefert -2 wenn der Key nicht existiert).
         vi.mocked(redisService.getTimeToLive).mockResolvedValue(-2);
+        // Standard: erste Siegesserie (INCR auf einem noch nicht existierenden Key gibt 1).
+        vi.mocked(redisService.increment).mockResolvedValue(1);
     });
 
     describe('Flavor-Text', () => {
@@ -177,6 +181,17 @@ describe('PingPongHandler', () => {
             expect(update.components).toEqual([]);
         });
 
+        it('hängt die Siegesserie ans Ergebnis, sobald sie läuft', async () => {
+            vi.spyOn(Math, 'random').mockReturnValue(0.4);
+            scoresInRedis({'user-aPING_PONG': '10', 'user-bPING_PONG': '4'});
+            vi.mocked(redisService.increment).mockResolvedValue(3);
+            const interaction = mockButton('pingpong-duell:annehmen:user-a:user-b', 'user-b');
+
+            await pingPongHandler.handleDuellButton(interaction);
+
+            expect(interaction.update.mock.calls[0][0].content).toContain('**3 Duelle in Folge**');
+        });
+
         it('zieht den Verlierer nicht unter 0 Punkte', async () => {
             vi.spyOn(Math, 'random').mockReturnValue(0.4);
             scoresInRedis({'user-aPING_PONG': '1', 'user-bPING_PONG': '0'});
@@ -194,6 +209,93 @@ describe('PingPongHandler', () => {
             await pingPongHandler.handleDuellButton(interaction);
 
             expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
+        });
+    });
+
+    describe('formatSerie', () => {
+        const stand = (overrides: any) => ({
+            siegerId: 'user-a',
+            verliererId: 'user-b',
+            serie: 1,
+            istNeuerRekord: false,
+            beendeteSerie: 0,
+            ...overrides,
+        });
+
+        it('schweigt beim ersten Sieg ohne beendete Gegenserie', () => {
+            expect(formatSerie(stand({}))).toBeNull();
+        });
+
+        it('nennt die laufende Serie ab zwei Siegen', () => {
+            expect(formatSerie(stand({serie: 3}))).toBe('<@user-a> ist jetzt **3 Duelle in Folge** ungeschlagen.');
+        });
+
+        it('weist auf einen neuen persönlichen Rekord hin', () => {
+            expect(formatSerie(stand({serie: 4, istNeuerRekord: true}))).toContain('neuer persönlicher Rekord');
+        });
+
+        it('erwähnt die abgerissene Serie des Verlierers', () => {
+            const text = formatSerie(stand({serie: 2, beendeteSerie: 5}));
+
+            expect(text).toContain('<@user-a> ist jetzt **2 Duelle in Folge** ungeschlagen.');
+            expect(text).toContain('Die Serie von <@user-b> endet nach **5 Siegen**.');
+        });
+
+        it('ignoriert eine beendete Serie von nur einem Sieg', () => {
+            expect(formatSerie(stand({beendeteSerie: 1}))).toBeNull();
+        });
+    });
+
+    describe('verarbeiteSerie', () => {
+        it('zählt den Sieger hoch, löscht die Serie des Verlierers und schreibt den Rekord fort', async () => {
+            vi.mocked(redisService.increment).mockResolvedValue(3);
+            vi.mocked(redisService.get).mockImplementation(async (key: string) => ({
+                'PING_PONG:SERIE:user-b': '5',
+                'PING_PONG:REKORD:user-a': '2',
+            } as Record<string, string>)[key] ?? null);
+
+            const stand = await pingPongHandler.verarbeiteSerie('user-a', 'user-b');
+
+            expect(redisService.increment).toHaveBeenCalledWith('PING_PONG:SERIE:user-a');
+            expect(redisService.delete).toHaveBeenCalledWith('PING_PONG:SERIE:user-b');
+            expect(redisService.set).toHaveBeenCalledWith('PING_PONG:REKORD:user-a', '3');
+            expect(stand).toEqual({
+                siegerId: 'user-a',
+                verliererId: 'user-b',
+                serie: 3,
+                istNeuerRekord: true,
+                beendeteSerie: 5,
+            });
+        });
+
+        it('lässt einen bestehenden höheren Rekord unangetastet', async () => {
+            vi.mocked(redisService.increment).mockResolvedValue(2);
+            vi.mocked(redisService.get).mockImplementation(async (key: string) =>
+                key === 'PING_PONG:REKORD:user-a' ? '7' : null);
+
+            const stand = await pingPongHandler.verarbeiteSerie('user-a', 'user-b');
+
+            expect(stand.istNeuerRekord).toBe(false);
+            expect(redisService.set).not.toHaveBeenCalledWith('PING_PONG:REKORD:user-a', expect.anything());
+        });
+
+        it('meldet den ersten Sieg nicht als Rekord', async () => {
+            vi.mocked(redisService.increment).mockResolvedValue(1);
+            vi.mocked(redisService.get).mockResolvedValue(null);
+
+            const stand = await pingPongHandler.verarbeiteSerie('user-a', 'user-b');
+
+            // Gespeichert wird die 1 trotzdem, nur erzählt wird sie nicht.
+            expect(redisService.set).toHaveBeenCalledWith('PING_PONG:REKORD:user-a', '1');
+            expect(stand.istNeuerRekord).toBe(false);
+        });
+
+        it('löscht nichts, wenn der Verlierer gar keine Serie hatte', async () => {
+            vi.mocked(redisService.get).mockResolvedValue(null);
+
+            await pingPongHandler.verarbeiteSerie('user-a', 'user-b');
+
+            expect(redisService.delete).not.toHaveBeenCalled();
         });
     });
 
@@ -279,6 +381,26 @@ describe('PingPongHandler', () => {
             await pingPongHandler.handlePingPongHighscore(interaction);
 
             expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral }));
+        });
+
+        it('zeigt eine laufende Siegesserie hinter den Punkten', async () => {
+            vi.mocked(redisService.getSortedSet).mockResolvedValue([
+                { value: 'user-1', score: 42 },
+                { value: 'user-2', score: 10 },
+            ] as any);
+            vi.mocked(userService.getUser)
+                .mockResolvedValueOnce({ displayName: 'Erster' } as any)
+                .mockResolvedValueOnce({ displayName: 'Zweiter' } as any);
+            // user-1 hat eine Serie von 4, user-2 nur einen einzelnen Sieg (wird nicht gezeigt).
+            vi.mocked(redisService.get).mockImplementation(async (key: string) => ({
+                'PING_PONG:SERIE:user-1': '4',
+                'PING_PONG:SERIE:user-2': '1',
+            } as Record<string, string>)[key] ?? null);
+            const interaction = mockInteraction();
+
+            await pingPongHandler.handlePingPongHighscore(interaction);
+
+            expect(interaction.reply).toHaveBeenCalledWith('1. Erster - 42 (4 in Folge)\n2. Zweiter - 10');
         });
     });
 });
