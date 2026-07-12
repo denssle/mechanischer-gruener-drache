@@ -100,6 +100,14 @@ class RedisService {
         await this.#client.hDel(key, field);
     }
 
+    async addToSet(key: string, value: string): Promise<void> {
+        await this.#client.sAdd(key, value);
+    }
+
+    async getSetMembers(key: string): Promise<string[]> {
+        return this.#client.sMembers(key);
+    }
+
     // Erhöht einen Zähler um einen (auch gebrochenen) Betrag und gibt den neuen Wert zurück.
     // node-redis liefert das Ergebnis als String, daher parseFloat.
     async incrementFloat(key: string, amount: number): Promise<number> {

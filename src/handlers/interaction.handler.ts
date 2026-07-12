@@ -39,6 +39,12 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
 // erfolgreich ausgeführten Befehl niemals nachträglich scheitern lassen.
 async function zeigeGelegentlichEinenTipp(interaction: ChatInputCommandInteraction): Promise<void> {
     try {
+        // Vor allen Abbruchbedingungen, damit jede Ausführung zählt (auch ephemere und
+        // /hilfe): Der Set der benutzten Befehle entscheidet, welche Tipps noch in Frage
+        // kommen - eine Lücke hier hieße, dass jemand Tipps zu Befehlen bekommt, die er
+        // längst kennt.
+        await tippService.merkeBenutztenBefehl(interaction.user.id, interaction.commandName);
+
         if (!interaction.replied && !interaction.deferred) return;
         if (!kommtTippInFrage(interaction.commandName, interaction.ephemeral === true)) return;
 
