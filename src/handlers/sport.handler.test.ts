@@ -30,7 +30,7 @@ vi.mock('../client.js', () => ({
 
 import sportService from '../services/sport.service.js';
 import client from '../client.js';
-import sportHandler, { EINTRAG_FLAVORS, randomEintragFlavor } from './sport.handler.js';
+import sportHandler from './sport.handler.js';
 
 const mockEntry = (overrides = {}) => ({
     id: 'entry-1',
@@ -77,14 +77,6 @@ describe('SportHandler', () => {
             expect(json.description).toContain('250 km');
             // Eintrags-ID bleibt sichtbar (für /sport loeschen bzw. bearbeiten).
             expect(json.footer.text).toContain('entry-1');
-        });
-    });
-
-    describe('Eintrag-Flavor', () => {
-        it('randomEintragFlavor liefert immer eine Zeile aus EINTRAG_FLAVORS', () => {
-            for (let i = 0; i < 50; i++) {
-                expect(EINTRAG_FLAVORS).toContain(randomEintragFlavor());
-            }
         });
     });
 
