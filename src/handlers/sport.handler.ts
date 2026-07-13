@@ -44,19 +44,17 @@ class SportHandler {
     }
 
     async handleBearbeiten(interaction: ChatInputCommandInteraction) {
-        const entryId = interaction.options.getString('eintrag-id', true);
         const kilometer = interaction.options.getNumber('kilometer', true);
 
-        const entry = await sportService.editEntry(interaction.user.id, entryId, kilometer);
+        const entry = await sportService.editLastEntry(interaction.user.id, kilometer);
 
         if (!entry) {
-            return interaction.reply('Eintrag nicht gefunden oder gehört dir nicht.');
+            return interaction.reply('Du hast noch keinen Eintrag, den ich korrigieren könnte.');
         }
 
         const aktivitaetLabel = SportActivities[entry.activity as SportActivity];
         await interaction.reply(
-            `Eintrag aktualisiert!\n` +
-            `${aktivitaetLabel} – jetzt **${kilometer} km**`
+            `Letzter Eintrag korrigiert: ${aktivitaetLabel} – jetzt **${kilometer} km**.`
         );
         await this.announceReachedMilestones();
     }
@@ -92,7 +90,7 @@ class SportHandler {
             `**Sport-Befehle**\n\n` +
             `**/sport eintragen** – Neue sportliche Aktivität eintragen\n` +
             `**/sport loeschen** – Eintrag anhand der ID löschen\n` +
-            `**/sport bearbeiten** – Kilometeranzahl eines Eintrags korrigieren\n` +
+            `**/sport bearbeiten** – Kilometer deines letzten Eintrags korrigieren\n` +
             `**/sport gesamt** – Gesamtkilometer aller Sportler\n` +
             `**/sport statistik** – Deine persönliche Übersicht pro Aktivität\n` +
             `**/sport meilenstein setzen** – Einen Meilenstein für die gemeinsame Gesamtdistanz anlegen\n` +

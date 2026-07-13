@@ -5,6 +5,7 @@ vi.mock('../services/sport.service.js', () => ({
         addEntry: vi.fn(),
         deleteEntry: vi.fn(),
         editEntry: vi.fn(),
+        editLastEntry: vi.fn(),
         getUserEntries: vi.fn(),
         setKilometer: vi.fn(),
         getGesamtKilometer: vi.fn(),
@@ -242,12 +243,11 @@ describe('SportHandler', () => {
     });
 
     describe('handleBearbeiten', () => {
-        it('meldet wenn der Eintrag nicht gefunden wird', async () => {
-            vi.mocked(sportService.editEntry).mockResolvedValue(null);
+        it('meldet wenn der User noch keinen Eintrag hat', async () => {
+            vi.mocked(sportService.editLastEntry).mockResolvedValue(null);
             const interaction = {
                 user: { id: 'user-123' },
                 options: {
-                    getString: vi.fn().mockReturnValue('entry-1'),
                     getNumber: vi.fn().mockReturnValue(15),
                 },
                 reply: vi.fn(),
@@ -255,15 +255,15 @@ describe('SportHandler', () => {
 
             await sportHandler.handleBearbeiten(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('nicht gefunden'));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('noch keinen Eintrag'));
         });
 
-        it('bestätigt die Aktualisierung bei Erfolg', async () => {
-            vi.mocked(sportService.editEntry).mockResolvedValue(mockEntry({ kilometers: 15 }));
+        // Keine Eintrags-ID mehr - korrigiert wird immer der zuletzt eingetragene Eintrag.
+        it('korrigiert den letzten Eintrag und bestätigt ihn', async () => {
+            vi.mocked(sportService.editLastEntry).mockResolvedValue(mockEntry({ kilometers: 15 }));
             const interaction = {
                 user: { id: 'user-123' },
                 options: {
-                    getString: vi.fn().mockReturnValue('entry-1'),
                     getNumber: vi.fn().mockReturnValue(15),
                 },
                 reply: vi.fn(),
@@ -271,6 +271,7 @@ describe('SportHandler', () => {
 
             await sportHandler.handleBearbeiten(interaction);
 
+            expect(sportService.editLastEntry).toHaveBeenCalledWith('user-123', 15);
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('15 km'));
         });
     });

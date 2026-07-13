@@ -71,6 +71,29 @@ describe('SportService', () => {
         });
     });
 
+    describe('editLastEntry', () => {
+        it('bearbeitet den zuletzt eingetragenen Eintrag (letztes Listenelement, rPush)', async () => {
+            const entry = mockEntry({ id: 'neuester', kilometers: 10 });
+            vi.mocked(redisService.getList).mockResolvedValue(['aeltester', 'mittlerer', 'neuester']);
+            vi.mocked(redisService.get).mockResolvedValue(JSON.stringify(entry));
+
+            const result = await sportService.editLastEntry('user-123', 15);
+
+            expect(redisService.get).toHaveBeenCalledWith('SPORT:ENTRY:neuester');
+            expect(result?.kilometers).toBe(15);
+            expect(redisService.incrementSortedSet).toHaveBeenCalledWith('SPORT:HIGHSCORE', 'user-123', 5);
+        });
+
+        it('gibt null zurück wenn der User noch keinen Eintrag hat', async () => {
+            vi.mocked(redisService.getList).mockResolvedValue([]);
+
+            const result = await sportService.editLastEntry('user-123', 15);
+
+            expect(result).toBeNull();
+            expect(redisService.incrementSortedSet).not.toHaveBeenCalled();
+        });
+    });
+
     describe('getUserEntries', () => {
         it('filtert null-Einträge heraus wenn ein Entry in Redis fehlt', async () => {
             const entry = mockEntry();

@@ -33,11 +33,7 @@ export default {
                 .setRequired(true)))
         .addSubcommand(sub => sub
             .setName('bearbeiten')
-            .setDescription('Sport Eintrag bearbeiten')
-            .addStringOption(option => option
-                .setName('eintrag-id')
-                .setDescription('ID des Eintrags')
-                .setRequired(true))
+            .setDescription('Kilometer deines letzten Eintrags korrigieren')
             .addNumberOption(option => option
                 .setName('kilometer')
                 .setDescription('Neue Kilometeranzahl')

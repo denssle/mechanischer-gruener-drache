@@ -59,6 +59,16 @@ class SportService {
         return entry;
     }
 
+    // Korrigiert den zuletzt eingetragenen Eintrag des Users. Die Eintrags-Liste ist per rPush
+    // gefüllt, der letzte Listeneintrag ist also der neueste. null = der User hat noch nichts eingetragen.
+    async editLastEntry(userId: string, newKilometers: number): Promise<SportEntry | null> {
+        const entryIds = await redisService.getList(KEYS.userEntries(userId));
+        const lastId = entryIds?.at(-1);
+        if (!lastId) return null;
+
+        return this.editEntry(userId, lastId, newKilometers);
+    }
+
     async getUserEntries(userId: string): Promise<SportEntry[]> {
         const entryIds = await redisService.getList(KEYS.userEntries(userId));
         if (!entryIds?.length) return [];
