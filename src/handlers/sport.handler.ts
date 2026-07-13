@@ -64,12 +64,11 @@ class SportHandler {
         if (kilometer === null) return;
 
         const aktivitaet = erkenneAktivitaet(message.content);
-        const entry = await sportService.addEntry(message.author.id, aktivitaet, kilometer);
+        await sportService.addEntry(message.author.id, aktivitaet, kilometer);
         const gesamtKilometer = await sportService.getGesamtKilometer();
 
         await message.reply(
-            `${SportActivities[aktivitaet]} – **${kilometer} km** eingetragen, gemeinsam schon **${gesamtKilometer} km**. ` +
-            `(Eintrags-ID: ${entry.id})`
+            `${SportActivities[aktivitaet]} – **${kilometer} km** eingetragen, gemeinsam schon **${gesamtKilometer} km**.`
         );
         await this.announceReachedMilestones();
     }
@@ -78,7 +77,7 @@ class SportHandler {
         const aktivitaet = interaction.options.getString('aktivitaet', true) as SportActivity;
         const kilometer = interaction.options.getNumber('kilometer', true);
 
-        const entry = await sportService.addEntry(interaction.user.id, aktivitaet, kilometer);
+        await sportService.addEntry(interaction.user.id, aktivitaet, kilometer);
         const aktivitaetLabel = SportActivities[aktivitaet];
 
         // Direkt nach dem Eintrag die neue gemeinsame Gesamtdistanz zeigen - passt zum
@@ -86,7 +85,8 @@ class SportHandler {
         const gesamtKilometer = await sportService.getGesamtKilometer();
 
         // Persönlicher: der eintragende User steht mit Name + Profilbild oben im Embed, damit
-        // sich jede/r im Post wiederfindet. Eintrags-ID bleibt im Footer sichtbar (für loeschen/bearbeiten).
+        // sich jede/r im Post wiederfindet. Die Eintrags-ID braucht seit 2026-07-13 niemand mehr
+        // (loeschen/bearbeiten nehmen immer den letzten Eintrag), deshalb kein Footer.
         const embed = new EmbedBuilder()
             .setColor(0x57F287)
             .setAuthor({
@@ -95,22 +95,24 @@ class SportHandler {
             })
             .setDescription(
                 `${aktivitaetLabel} – **${kilometer} km**, gemeinsam schon **${gesamtKilometer} km**.`
-            )
-            .setFooter({text: `Eintrags-ID: ${entry.id}`});
+            );
 
         await interaction.reply({embeds: [embed]});
         await this.announceReachedMilestones();
     }
 
     async handleLoeschen(interaction: ChatInputCommandInteraction) {
-        const entryId = interaction.options.getString('eintrag-id', true);
-        const success = await sportService.deleteEntry(interaction.user.id, entryId);
+        const entry = await sportService.deleteLastEntry(interaction.user.id);
 
-        if (!success) {
-            return interaction.reply('Eintrag nicht gefunden oder gehört dir nicht.');
+        if (!entry) {
+            return interaction.reply('Du hast keinen Eintrag, den ich löschen könnte.');
         }
 
-        return interaction.reply('Eintrag erfolgreich gelöscht.');
+        // Nennt Aktivität + Distanz, damit sichtbar ist, was tatsächlich gelöscht wurde.
+        const aktivitaetLabel = SportActivities[entry.activity as SportActivity];
+        return interaction.reply(
+            `Letzter Eintrag gelöscht: ${aktivitaetLabel} – **${entry.kilometers} km**.`
+        );
     }
 
     async handleBearbeiten(interaction: ChatInputCommandInteraction) {
@@ -159,7 +161,7 @@ class SportHandler {
         return interaction.reply(
             `**Sport-Befehle**\n\n` +
             `**/sport eintragen** – Neue sportliche Aktivität eintragen\n` +
-            `**/sport loeschen** – Eintrag anhand der ID löschen\n` +
+            `**/sport loeschen** – Deinen letzten Eintrag löschen\n` +
             `**/sport bearbeiten** – Kilometer deines letzten Eintrags korrigieren\n` +
             `**/sport gesamt** – Gesamtkilometer aller Sportler\n` +
             `**/sport statistik** – Deine persönliche Übersicht pro Aktivität\n` +

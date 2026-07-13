@@ -26,11 +26,7 @@ export default {
                 .setMinValue(0)))
         .addSubcommand(sub => sub
             .setName('loeschen')
-            .setDescription('Sport Eintrag löschen')
-            .addStringOption(option => option
-                .setName('eintrag-id')
-                .setDescription('ID des Eintrags')
-                .setRequired(true)))
+            .setDescription('Deinen letzten Eintrag löschen'))
         .addSubcommand(sub => sub
             .setName('bearbeiten')
             .setDescription('Kilometer deines letzten Eintrags korrigieren')

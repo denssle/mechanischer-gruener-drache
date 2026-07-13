@@ -69,6 +69,23 @@ class SportService {
         return this.editEntry(userId, lastId, newKilometers);
     }
 
+    // Löscht den zuletzt eingetragenen Eintrag des Users (siehe editLastEntry). Gibt den
+    // gelöschten Eintrag zurück, damit der Handler Aktivität/Distanz nennen kann - so sieht
+    // man in der Bestätigung, was tatsächlich weg ist. null = nichts zu löschen.
+    async deleteLastEntry(userId: string): Promise<SportEntry | null> {
+        const entryIds = await redisService.getList(KEYS.userEntries(userId));
+        const lastId = entryIds?.at(-1);
+        if (!lastId) return null;
+
+        const entryString = await redisService.get(KEYS.entry(lastId));
+        if (!entryString) return null;
+
+        const entry: SportEntry = JSON.parse(entryString);
+        const deleted = await this.deleteEntry(userId, lastId);
+
+        return deleted ? entry : null;
+    }
+
     async getUserEntries(userId: string): Promise<SportEntry[]> {
         const entryIds = await redisService.getList(KEYS.userEntries(userId));
         if (!entryIds?.length) return [];

@@ -6,6 +6,7 @@ vi.mock('../services/sport.service.js', () => ({
         deleteEntry: vi.fn(),
         editEntry: vi.fn(),
         editLastEntry: vi.fn(),
+        deleteLastEntry: vi.fn(),
         getUserEntries: vi.fn(),
         setKilometer: vi.fn(),
         getGesamtKilometer: vi.fn(),
@@ -76,8 +77,8 @@ describe('SportHandler', () => {
             expect(json.author.icon_url).toBe('https://cdn/avatar.png');
             expect(json.description).toContain('10 km');
             expect(json.description).toContain('250 km');
-            // Eintrags-ID bleibt sichtbar (für /sport loeschen bzw. bearbeiten).
-            expect(json.footer.text).toContain('entry-1');
+            // Kein Eintrags-ID-Footer mehr: loeschen/bearbeiten nehmen immer den letzten Eintrag.
+            expect(json.footer).toBeUndefined();
         });
     });
 
@@ -325,30 +326,32 @@ describe('SportHandler', () => {
     });
 
     describe('handleLoeschen', () => {
-        it('meldet wenn der Eintrag nicht gefunden wird', async () => {
-            vi.mocked(sportService.deleteEntry).mockResolvedValue(false);
+        it('meldet wenn der User keinen Eintrag hat', async () => {
+            vi.mocked(sportService.deleteLastEntry).mockResolvedValue(null);
             const interaction = {
                 user: { id: 'user-123' },
-                options: { getString: vi.fn().mockReturnValue('entry-1') },
+                options: {},
                 reply: vi.fn(),
             } as any;
 
             await sportHandler.handleLoeschen(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('nicht gefunden'));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('keinen Eintrag'));
         });
 
-        it('bestätigt das Löschen bei Erfolg', async () => {
-            vi.mocked(sportService.deleteEntry).mockResolvedValue(true);
+        // Keine Eintrags-ID mehr - gelöscht wird immer der zuletzt eingetragene Eintrag.
+        it('löscht den letzten Eintrag und nennt Aktivität + Distanz', async () => {
+            vi.mocked(sportService.deleteLastEntry).mockResolvedValue(mockEntry({ kilometers: 12 }));
             const interaction = {
                 user: { id: 'user-123' },
-                options: { getString: vi.fn().mockReturnValue('entry-1') },
+                options: {},
                 reply: vi.fn(),
             } as any;
 
             await sportHandler.handleLoeschen(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('erfolgreich gelöscht'));
+            expect(sportService.deleteLastEntry).toHaveBeenCalledWith('user-123');
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('12 km'));
         });
     });
 
