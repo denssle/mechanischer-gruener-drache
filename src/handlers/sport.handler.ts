@@ -1,9 +1,79 @@
-import {ChatInputCommandInteraction, EmbedBuilder, MessageFlags, PermissionFlagsBits, TextChannel} from 'discord.js';
+import {
+    ChatInputCommandInteraction,
+    EmbedBuilder,
+    Message,
+    MessageFlags,
+    OmitPartialGroupDMChannel,
+    PermissionFlagsBits,
+    TextChannel
+} from 'discord.js';
 import sportService from '../services/sport.service.js';
 import {SportActivities, SportActivity} from '../types/sport.js';
 import client from '../client.js';
 
+// Ohne Schlüsselwort im Text wird Laufen angenommen (bewusst: lieber ein Eintrag mit der
+// häufigsten Aktivität als gar keiner - die Distanz zählt fürs kooperative Gesamtziel).
+export const DEFAULT_AKTIVITAET: SportActivity = 'laufen';
+
+// Schlüsselwörter je Aktivität für den Auto-Listener. Bewusst am WORTANFANG verankert (\b) statt
+// als simples includes: "rad" steckt sonst in "Grad" ("12 km bei 30 Grad") und "gerad" in "gerade"
+// ("ich bin gerade 12 km") - beides würde fälschlich als Radfahren eingetragen.
+const AKTIVITAET_PATTERNS: Record<SportActivity, RegExp> = {
+    laufen: /\b(lauf|gelaufen|renn|gerannt|jogg)/i,
+    radfahren: /\b(rad|fahrrad|geradelt|bike|velo)/i,
+    schwimmen: /\b(schwimm|geschwommen|schwomm)/i,
+    wandern: /\b(wander|gewandert)/i,
+    skifahren: /\b(ski|langlauf)/i,
+};
+
+// Zieht die erste Kilometer-Angabe aus einem Text: "12 km", "12km", "12,5 km", "12 Kilometer".
+// Bewusst nur die ERSTE (anders als beim Blåhaj-Rechner, der alle Beträge summiert): eine
+// versehentlich doppelt gezählte Distanz verfälscht die gemeinsame Gesamtstrecke dauerhaft.
+// Exportiert + getestet.
+export function parseKilometer(text: string): number | null {
+    const match = /(\d+(?:[.,]\d+)?)\s*(?:km\b|kilometer\b)/i.exec(text);
+    if (!match) return null;
+
+    const value = parseFloat(match[1].replace(',', '.'));
+    return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+// Rät die Aktivität anhand von Schlüsselwörtern; ohne Treffer DEFAULT_AKTIVITAET. Exportiert + getestet.
+export function erkenneAktivitaet(text: string): SportActivity {
+    for (const [aktivitaet, pattern] of Object.entries(AKTIVITAET_PATTERNS) as [SportActivity, RegExp][]) {
+        if (pattern.test(text)) {
+            return aktivitaet;
+        }
+    }
+
+    return DEFAULT_AKTIVITAET;
+}
+
 class SportHandler {
+    // Auto-Listener: erfasst Kilometer aus normalen Chat-Nachrichten - aber NUR im konfigurierten
+    // Sport-Kanal (anders als der serverweite Blåhaj-Listener). Serverweit würde jedes beiläufige
+    // "noch 3 km bis zum Bahnhof" die gemeinsame Gesamtdistanz verfälschen.
+    // Bot-Nachrichten werden ignoriert, sonst triggert die eigene Bestätigung ("12 km") sich selbst.
+    async handleMessage(message: OmitPartialGroupDMChannel<Message<boolean>>): Promise<void> {
+        if (message.author.bot) return;
+
+        const kanalId = await sportService.getAnnouncementChannel();
+        if (!kanalId || message.channelId !== kanalId) return;
+
+        const kilometer = parseKilometer(message.content);
+        if (kilometer === null) return;
+
+        const aktivitaet = erkenneAktivitaet(message.content);
+        const entry = await sportService.addEntry(message.author.id, aktivitaet, kilometer);
+        const gesamtKilometer = await sportService.getGesamtKilometer();
+
+        await message.reply(
+            `${SportActivities[aktivitaet]} – **${kilometer} km** eingetragen, gemeinsam schon **${gesamtKilometer} km**. ` +
+            `(Eintrags-ID: ${entry.id})`
+        );
+        await this.announceReachedMilestones();
+    }
+
     async handleEintragen(interaction: ChatInputCommandInteraction) {
         const aktivitaet = interaction.options.getString('aktivitaet', true) as SportActivity;
         const kilometer = interaction.options.getNumber('kilometer', true);
@@ -94,7 +164,9 @@ class SportHandler {
             `**/sport gesamt** – Gesamtkilometer aller Sportler\n` +
             `**/sport statistik** – Deine persönliche Übersicht pro Aktivität\n` +
             `**/sport meilenstein setzen** – Einen Meilenstein für die gemeinsame Gesamtdistanz anlegen\n` +
-            `**/sport hilfe** – Zeigt diese Übersicht`
+            `**/sport hilfe** – Zeigt diese Übersicht\n\n` +
+            `Im Sport-Kanal genügt auch eine normale Nachricht: Wer „12 km gelaufen" schreibt, ` +
+            `bekommt den Eintrag automatisch. Ohne erkennbare Sportart wird Laufen angenommen.`
         );
     }
 
@@ -227,7 +299,8 @@ class SportHandler {
         await sportService.setAnnouncementChannel(channel.id);
 
         return interaction.reply(
-            `Meilenstein-Ankündigungen werden ab jetzt in <#${channel.id}> gepostet.`
+            `<#${channel.id}> ist ab jetzt der Sport-Kanal: Meilensteine werden dort angekündigt, ` +
+            `und Kilometer-Angaben in normalen Nachrichten werden dort automatisch eingetragen.`
         );
     }
 

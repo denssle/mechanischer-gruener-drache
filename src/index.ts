@@ -11,6 +11,7 @@ import config from "../config.json" with {type: "json"};
 import webhookServer from './server/twitch.webhook.server.js';
 import twitchHandler from "./handlers/twitch.handler.js";
 import blahajHandler from "./handlers/blahaj.handler.js";
+import sportHandler from "./handlers/sport.handler.js";
 
 webhookServer.onNotification((twitchUserId, streamData) => {
     twitchHandler.handleStreamOnline(twitchUserId, streamData).catch((error) => {
@@ -31,6 +32,13 @@ client.on(Events.MessageCreate, messageHandler.messageCreate);
 client.on(Events.MessageCreate, (message) => {
     blahajHandler.handleMessage(message).catch((error) => {
         console.error('Fehler im Blåhaj-Handler:', error);
+    });
+});
+// Sport-Auto-Erfassung: km-Angaben im Sport-Kanal werden automatisch eingetragen (der Handler
+// prüft den Kanal selbst). Eigene Zuständigkeit, deshalb eine eigene MessageCreate-Registrierung.
+client.on(Events.MessageCreate, (message) => {
+    sportHandler.handleMessage(message).catch((error) => {
+        console.error('Fehler im Sport-Handler (MessageCreate):', error);
     });
 });
 // Nachrichten-Cache fürs Logging (alter Inhalt beim Löschen/Bearbeiten) - eigene Zuständigkeit,

@@ -31,7 +31,7 @@ vi.mock('../client.js', () => ({
 
 import sportService from '../services/sport.service.js';
 import client from '../client.js';
-import sportHandler from './sport.handler.js';
+import sportHandler, { parseKilometer, erkenneAktivitaet, DEFAULT_AKTIVITAET } from './sport.handler.js';
 
 const mockEntry = (overrides = {}) => ({
     id: 'entry-1',
@@ -78,6 +78,116 @@ describe('SportHandler', () => {
             expect(json.description).toContain('250 km');
             // Eintrags-ID bleibt sichtbar (für /sport loeschen bzw. bearbeiten).
             expect(json.footer.text).toContain('entry-1');
+        });
+    });
+
+    describe('parseKilometer', () => {
+        it.each([
+            ['12 km gelaufen', 12],
+            ['12km', 12],
+            ['heute 12,5 km geradelt', 12.5],
+            ['12.5 km', 12.5],
+            ['ich bin 7 Kilometer gewandert', 7],
+        ])('erkennt %s als %s km', (text, erwartet) => {
+            expect(parseKilometer(text)).toBe(erwartet);
+        });
+
+        it.each([
+            ['Nachricht ganz ohne Zahl'],
+            ['ich habe 12 Punkte'],
+            ['0 km'],
+        ])('gibt null zurück für "%s"', (text) => {
+            expect(parseKilometer(text)).toBeNull();
+        });
+
+        // Bewusst nur die erste Angabe (nicht wie beim Blåhaj-Rechner alle summiert):
+        // eine doppelt gezählte Distanz würde die gemeinsame Gesamtstrecke dauerhaft verfälschen.
+        it('nimmt nur die erste Kilometer-Angabe', () => {
+            expect(parseKilometer('5 km gelaufen und 7 km geradelt')).toBe(5);
+        });
+    });
+
+    describe('erkenneAktivitaet', () => {
+        it.each([
+            ['12 km gelaufen', 'laufen'],
+            ['12 km gerannt', 'laufen'],
+            ['12 km mit dem Fahrrad', 'radfahren'],
+            ['12 km geschwommen', 'schwimmen'],
+            ['12 km gewandert', 'wandern'],
+            ['12 km Ski', 'skifahren'],
+        ])('erkennt in "%s" die Aktivität %s', (text, erwartet) => {
+            expect(erkenneAktivitaet(text)).toBe(erwartet);
+        });
+
+        it('nimmt ohne Schlüsselwort die Standard-Aktivität', () => {
+            expect(erkenneAktivitaet('heute 12 km geschafft')).toBe(DEFAULT_AKTIVITAET);
+        });
+
+        // "rad" steckt in "Grad", "gerad" in "gerade" - ohne Wortgrenze wäre beides Radfahren.
+        it.each([
+            ['12 km bei 30 Grad geschafft'],
+            ['ich bin gerade 12 km unterwegs gewesen'],
+        ])('verwechselt "%s" nicht mit Radfahren', (text) => {
+            expect(erkenneAktivitaet(text)).toBe(DEFAULT_AKTIVITAET);
+        });
+    });
+
+    describe('handleMessage (Auto-Erfassung im Sport-Kanal)', () => {
+        const mockMessage = (content: string, overrides = {}) => ({
+            author: { id: 'user-123', bot: false },
+            channelId: 'sport-kanal',
+            content,
+            reply: vi.fn(),
+            ...overrides,
+        }) as any;
+
+        it('trägt eine km-Angabe im Sport-Kanal automatisch ein', async () => {
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
+            vi.mocked(sportService.addEntry).mockResolvedValue(mockEntry());
+            vi.mocked(sportService.getGesamtKilometer).mockResolvedValue(250);
+            const message = mockMessage('heute 12 km geradelt');
+
+            await sportHandler.handleMessage(message);
+
+            expect(sportService.addEntry).toHaveBeenCalledWith('user-123', 'radfahren', 12);
+            expect(message.reply).toHaveBeenCalledWith(expect.stringContaining('12 km'));
+        });
+
+        // Sonst würde jedes beiläufige "noch 3 km bis zum Bahnhof" die Gesamtdistanz verfälschen.
+        it('ignoriert Nachrichten außerhalb des Sport-Kanals', async () => {
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
+            const message = mockMessage('noch 3 km bis zum Bahnhof', { channelId: 'anderer-kanal' });
+
+            await sportHandler.handleMessage(message);
+
+            expect(sportService.addEntry).not.toHaveBeenCalled();
+            expect(message.reply).not.toHaveBeenCalled();
+        });
+
+        it('ignoriert alles, solange kein Sport-Kanal konfiguriert ist', async () => {
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue(null);
+
+            await sportHandler.handleMessage(mockMessage('12 km gelaufen'));
+
+            expect(sportService.addEntry).not.toHaveBeenCalled();
+        });
+
+        // Ohne das würde die eigene Bestätigung ("12 km") den Listener endlos neu triggern.
+        it('ignoriert Bot-Nachrichten', async () => {
+            const message = mockMessage('12 km gelaufen', { author: { id: 'bot-1', bot: true } });
+
+            await sportHandler.handleMessage(message);
+
+            expect(sportService.getAnnouncementChannel).not.toHaveBeenCalled();
+            expect(sportService.addEntry).not.toHaveBeenCalled();
+        });
+
+        it('ignoriert Nachrichten ohne km-Angabe', async () => {
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
+
+            await sportHandler.handleMessage(mockMessage('Moin zusammen'));
+
+            expect(sportService.addEntry).not.toHaveBeenCalled();
         });
     });
 

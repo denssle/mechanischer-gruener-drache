@@ -78,10 +78,10 @@ export default {
                 .setMinValue(0)))
         .addSubcommand(sub => sub
             .setName('ankuendigungskanal')
-            .setDescription('Kanal für Meilenstein-Ankündigungen festlegen (nur Admins)')
+            .setDescription('Sport-Kanal festlegen: Meilenstein-Ankündigungen + Auto-Erfassung (nur Admins)')
             .addChannelOption(option => option
                 .setName('kanal')
-                .setDescription('Ziel-Kanal für die Ankündigungen')
+                .setDescription('Sport-Kanal (Ankündigungen landen hier, km-Angaben werden hier erfasst)')
                 .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
                 .setRequired(true)))
         .addSubcommandGroup(group => group
