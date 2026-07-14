@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MessageFlags } from 'discord.js';
 
 vi.mock('../services/sport.service.js', () => ({
     default: {
@@ -32,7 +33,7 @@ vi.mock('../client.js', () => ({
 
 import sportService from '../services/sport.service.js';
 import client from '../client.js';
-import sportHandler, { parseKilometer, erkenneAktivitaet, DEFAULT_AKTIVITAET } from './sport.handler.js';
+import sportHandler, { parseKilometer, erkenneAktivitaet, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION } from './sport.handler.js';
 
 const mockEntry = (overrides = {}) => ({
     id: 'entry-1',
@@ -79,6 +80,28 @@ describe('SportHandler', () => {
             expect(json.description).toContain('250 km');
             // Kein Eintrags-ID-Footer mehr: loeschen/bearbeiten nehmen immer den letzten Eintrag.
             expect(json.footer).toBeUndefined();
+        });
+
+        // User-Wunsch: die Bestätigung sieht nur, wer eingetragen hat.
+        it('antwortet ephemer', async () => {
+            vi.mocked(sportService.addEntry).mockResolvedValue(mockEntry());
+            vi.mocked(sportService.getGesamtKilometer).mockResolvedValue(250);
+            const interaction = {
+                user: {
+                    id: 'user-123',
+                    displayName: 'Testläufer',
+                    displayAvatarURL: vi.fn().mockReturnValue('https://cdn/avatar.png'),
+                },
+                options: {
+                    getString: vi.fn().mockReturnValue('laufen'),
+                    getNumber: vi.fn().mockReturnValue(10),
+                },
+                reply: vi.fn(),
+            } as any;
+
+            await sportHandler.handleEintragen(interaction);
+
+            expect(interaction.reply.mock.calls[0][0].flags).toBe(MessageFlags.Ephemeral);
         });
     });
 
@@ -146,20 +169,30 @@ describe('SportHandler', () => {
             author: { id: 'user-123', bot: false },
             channelId: 'sport-kanal',
             content,
-            reply: vi.fn(),
+            react: vi.fn(),
             ...overrides,
         }) as any;
 
         it('trägt eine km-Angabe im Sport-Kanal automatisch ein', async () => {
             vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
             vi.mocked(sportService.addEntry).mockResolvedValue(mockEntry());
-            vi.mocked(sportService.getGesamtKilometer).mockResolvedValue(250);
             const message = mockMessage('heute +12 km geradelt');
 
             await sportHandler.handleMessage(message);
 
             expect(sportService.addEntry).toHaveBeenCalledWith('user-123', 'radfahren', 12);
-            expect(message.reply).toHaveBeenCalledWith(expect.stringContaining('12 km'));
+        });
+
+        // Quittiert wird nur per Reaktion: eine Antwort wäre ein Post im Kanal, den alle sehen,
+        // und ephemer geht hier nicht (keine Interaction, kein Interaction-Token).
+        it('bestätigt per Reaktion statt mit einer Antwort im Kanal', async () => {
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
+            vi.mocked(sportService.addEntry).mockResolvedValue(mockEntry());
+            const message = mockMessage('heute +12 km geradelt');
+
+            await sportHandler.handleMessage(message);
+
+            expect(message.react).toHaveBeenCalledWith(BESTAETIGUNGS_REAKTION);
         });
 
         // Ohne "+" ist die Angabe keine bewusste Eintrags-Geste, sondern nur Gerede über Kilometer.
@@ -170,7 +203,7 @@ describe('SportHandler', () => {
             await sportHandler.handleMessage(message);
 
             expect(sportService.addEntry).not.toHaveBeenCalled();
-            expect(message.reply).not.toHaveBeenCalled();
+            expect(message.react).not.toHaveBeenCalled();
         });
 
         // Sonst würde jedes beiläufige "noch 3 km bis zum Bahnhof" die Gesamtdistanz verfälschen.
@@ -181,7 +214,7 @@ describe('SportHandler', () => {
             await sportHandler.handleMessage(message);
 
             expect(sportService.addEntry).not.toHaveBeenCalled();
-            expect(message.reply).not.toHaveBeenCalled();
+            expect(message.react).not.toHaveBeenCalled();
         });
 
         it('ignoriert alles, solange kein Sport-Kanal konfiguriert ist', async () => {

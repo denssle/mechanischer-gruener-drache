@@ -15,6 +15,10 @@ import client from '../client.js';
 // häufigsten Aktivität als gar keiner - die Distanz zählt fürs kooperative Gesamtziel).
 export const DEFAULT_AKTIVITAET: SportActivity = 'laufen';
 
+// Quittung der Auto-Erfassung. Funktionaler Statusmarker (wie im Audit-Log), keine Deko - er ist
+// die einzige Rückmeldung, die ohne eigenen Post im Kanal auskommt.
+export const BESTAETIGUNGS_REAKTION = '✅';
+
 // Schlüsselwörter je Aktivität für den Auto-Listener. Bewusst am WORTANFANG verankert (\b) statt
 // als simples includes: "rad" steckt sonst in "Grad" ("12 km bei 30 Grad") und "gerad" in "gerade"
 // ("ich bin gerade 12 km") - beides würde fälschlich als Radfahren eingetragen.
@@ -56,7 +60,14 @@ class SportHandler {
     // Sport-Kanal (anders als der serverweite Blåhaj-Listener). Serverweit würde jedes beiläufige
     // "noch 3 km bis zum Bahnhof" die gemeinsame Gesamtdistanz verfälschen; zusätzlich muss die
     // Angabe seit 2026-07-14 mit "+" markiert sein (siehe parseKilometer).
-    // Bot-Nachrichten werden ignoriert, sonst triggert die eigene Bestätigung ("12 km") sich selbst.
+    // Bot-Nachrichten werden ignoriert (die frühere Antwort enthielt "12 km" und hätte sich selbst
+    // getriggert - bleibt als Schutz bestehen, falls je wieder geantwortet wird).
+    //
+    // Bestätigt wird seit 2026-07-14 nur noch per REAKTION auf die Nachricht, nicht mehr mit einer
+    // eigenen Antwort im Kanal (User-Wunsch: die Bestätigung soll nicht alle im Kanal behelligen).
+    // Eine wirklich private Antwort ist hier technisch unmöglich - ephemere Nachrichten hängen bei
+    // Discord an einem Interaction-Token, den eine normale Chat-Nachricht nicht hat. Die Reaktion
+    // ist der geräuschloseste Weg, der bleibt; die neue Gesamtdistanz nennt dafür /sport gesamt.
     async handleMessage(message: OmitPartialGroupDMChannel<Message<boolean>>): Promise<void> {
         if (message.author.bot) return;
 
@@ -68,11 +79,8 @@ class SportHandler {
 
         const aktivitaet = erkenneAktivitaet(message.content);
         await sportService.addEntry(message.author.id, aktivitaet, kilometer);
-        const gesamtKilometer = await sportService.getGesamtKilometer();
 
-        await message.reply(
-            `${SportActivities[aktivitaet]} – **${kilometer} km** eingetragen, gemeinsam schon **${gesamtKilometer} km**.`
-        );
+        await message.react(BESTAETIGUNGS_REAKTION);
         await this.announceReachedMilestones();
     }
 
@@ -87,9 +95,10 @@ class SportHandler {
         // kooperativen Design (jeder Eintrag zahlt sichtbar auf die Gruppensumme ein).
         const gesamtKilometer = await sportService.getGesamtKilometer();
 
-        // Persönlicher: der eintragende User steht mit Name + Profilbild oben im Embed, damit
-        // sich jede/r im Post wiederfindet. Die Eintrags-ID braucht seit 2026-07-13 niemand mehr
-        // (loeschen/bearbeiten nehmen immer den letzten Eintrag), deshalb kein Footer.
+        // Persönlicher: der eintragende User steht mit Name + Profilbild oben im Embed. Die Antwort
+        // ist seit 2026-07-14 ephemer (User-Wunsch: nur die eintragende Person sieht sie), das Embed
+        // bleibt trotzdem - der Meilenstein bleibt der einzige Sport-Post, den alle im Kanal sehen.
+        // Die Eintrags-ID braucht seit 2026-07-13 niemand mehr, deshalb kein Footer.
         const embed = new EmbedBuilder()
             .setColor(0x57F287)
             .setAuthor({
@@ -100,7 +109,7 @@ class SportHandler {
                 `${aktivitaetLabel} – **${kilometer} km**, gemeinsam schon **${gesamtKilometer} km**.`
             );
 
-        await interaction.reply({embeds: [embed]});
+        await interaction.reply({embeds: [embed], flags: MessageFlags.Ephemeral});
         await this.announceReachedMilestones();
     }
 
@@ -171,7 +180,8 @@ class SportHandler {
             `**/sport meilenstein setzen** – Einen Meilenstein für die gemeinsame Gesamtdistanz anlegen\n` +
             `**/sport hilfe** – Zeigt diese Übersicht\n\n` +
             `Im Sport-Kanal genügt auch eine normale Nachricht: Wer „+12 km gelaufen" schreibt, ` +
-            `bekommt den Eintrag automatisch. Das „+" vor den Kilometern ist nötig, ` +
+            `bekommt den Eintrag automatisch – erkennbar an der Reaktion ${BESTAETIGUNGS_REAKTION} ` +
+            `an der Nachricht. Das „+" vor den Kilometern ist nötig, ` +
             `ohne erkennbare Sportart wird Laufen angenommen.`
         );
     }
