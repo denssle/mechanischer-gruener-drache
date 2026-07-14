@@ -4,6 +4,7 @@ import {
     Message,
     MessageFlags,
     OmitPartialGroupDMChannel,
+    PartialMessage,
     PermissionFlagsBits,
     TextChannel
 } from 'discord.js';
@@ -69,6 +70,30 @@ class SportHandler {
     // Discord an einem Interaction-Token, den eine normale Chat-Nachricht nicht hat. Die Reaktion
     // ist der geräuschloseste Weg, der bleibt; die neue Gesamtdistanz nennt dafür /sport gesamt.
     async handleMessage(message: OmitPartialGroupDMChannel<Message<boolean>>): Promise<void> {
+        await this.erfasseKilometerAusNachricht(message);
+    }
+
+    // Auch BEARBEITETE Nachrichten werden erfasst: seit das "+" Pflicht ist, ist "Marker vergessen,
+    // Nachricht nachträglich korrigiert" der wahrscheinlichste Weg zum Eintrag.
+    //
+    // Der Doppel-Eintrag ist hier die eigentliche Gefahr - Discord feuert MessageUpdate bei JEDER
+    // Bearbeitung, "+5 km" → "+5 km, war schön" würde die 5 km sonst ein zweites Mal eintragen und
+    // die gemeinsame Gesamtdistanz dauerhaft verfälschen. Schutz ist die eigene ✅-Reaktion an der
+    // Nachricht (siehe hatBereitsQuittung): hängt sie dran, wurde schon erfasst. Bewusst KEIN
+    // zusätzlicher Redis-State - die Quittung, die der Bot ohnehin setzt, ist die Markierung.
+    // Bewusst hingenommen: nimmt jemand die Reaktion von Hand weg und bearbeitet erneut, kann er
+    // doppelt eintragen. Das muss man absichtlich tun; für einen Community-Bot vertretbar.
+    async handleMessageUpdate(message: Message | PartialMessage): Promise<void> {
+        // Nicht (mehr) gecachte Nachrichten kommen partial rein - ohne fetch() wären content und
+        // reactions leer, die Erfassung würde also nie greifen bzw. die Quittung nicht sehen.
+        const vollstaendig = message.partial ? await message.fetch() : message;
+        await this.erfasseKilometerAusNachricht(vollstaendig);
+    }
+
+    // Gemeinsamer Kern von handleMessage/handleMessageUpdate.
+    // Bot-Nachrichten werden ignoriert (die frühere Antwort enthielt "12 km" und hätte sich selbst
+    // getriggert - bleibt als Schutz bestehen, falls je wieder geantwortet wird).
+    private async erfasseKilometerAusNachricht(message: Message): Promise<void> {
         if (message.author.bot) return;
 
         const kanalId = await sportService.getAnnouncementChannel();
@@ -77,11 +102,19 @@ class SportHandler {
         const kilometer = parseKilometer(message.content);
         if (kilometer === null) return;
 
+        if (this.hatBereitsQuittung(message)) return;
+
         const aktivitaet = erkenneAktivitaet(message.content);
         await sportService.addEntry(message.author.id, aktivitaet, kilometer);
 
         await message.react(BESTAETIGUNGS_REAKTION);
         await this.announceReachedMilestones();
+    }
+
+    // Hat der Bot diese Nachricht schon quittiert? `me` = "diese Reaktion stammt (auch) von mir" -
+    // eine ✅ von einem anderen Mitglied zählt also nicht als Quittung.
+    private hatBereitsQuittung(message: Message): boolean {
+        return message.reactions.cache.get(BESTAETIGUNGS_REAKTION)?.me === true;
     }
 
     async handleEintragen(interaction: ChatInputCommandInteraction) {
@@ -181,8 +214,8 @@ class SportHandler {
             `**/sport hilfe** – Zeigt diese Übersicht\n\n` +
             `Im Sport-Kanal genügt auch eine normale Nachricht: Wer „+12 km gelaufen" schreibt, ` +
             `bekommt den Eintrag automatisch – erkennbar an der Reaktion ${BESTAETIGUNGS_REAKTION} ` +
-            `an der Nachricht. Das „+" vor den Kilometern ist nötig, ` +
-            `ohne erkennbare Sportart wird Laufen angenommen.`
+            `an der Nachricht. Das „+" vor den Kilometern ist nötig; vergessen? Nachricht einfach ` +
+            `bearbeiten, das zählt auch. Ohne erkennbare Sportart wird Laufen angenommen.`
         );
     }
 

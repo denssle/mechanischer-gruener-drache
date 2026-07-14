@@ -50,6 +50,13 @@ client.on(Events.MessageCreate, (message) => {
 });
 client.on(Events.MessageDelete, (message) => loggingHandler.handleMessageDelete(message));
 client.on(Events.MessageUpdate, (oldMessage, newMessage) => loggingHandler.handleMessageUpdate(oldMessage, newMessage));
+// Sport-Auto-Erfassung auch für nachträglich bearbeitete Nachrichten (typischer Fall: das "+" wurde
+// vergessen und wird nachgetragen). Der Handler schützt sich per eigener Reaktion gegen Doppel-Einträge.
+client.on(Events.MessageUpdate, (_oldMessage, newMessage) => {
+    sportHandler.handleMessageUpdate(newMessage).catch((error) => {
+        console.error('Fehler im Sport-Handler (MessageUpdate):', error);
+    });
+});
 client.on(Events.GuildMemberAdd, (member) => loggingHandler.handleGuildMemberAdd(member));
 client.on(Events.GuildMemberRemove, (member) => loggingHandler.handleGuildMemberRemove(member));
 client.on(Events.GuildMemberUpdate, (oldMember, newMember) => loggingHandler.handleGuildMemberUpdate(oldMember, newMember));

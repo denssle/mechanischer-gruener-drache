@@ -165,11 +165,15 @@ describe('SportHandler', () => {
     });
 
     describe('handleMessage (Auto-Erfassung im Sport-Kanal)', () => {
-        const mockMessage = (content: string, overrides = {}) => ({
+        // quittiert = der Bot hat schon eine ✅ an die Nachricht gehängt (me: true).
+        const mockMessage = (content: string, overrides: Record<string, unknown> = {}, quittiert = false) => ({
             author: { id: 'user-123', bot: false },
             channelId: 'sport-kanal',
             content,
             react: vi.fn(),
+            reactions: {
+                cache: new Map(quittiert ? [[BESTAETIGUNGS_REAKTION, { me: true }]] : []),
+            },
             ...overrides,
         }) as any;
 
@@ -239,6 +243,75 @@ describe('SportHandler', () => {
             vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
 
             await sportHandler.handleMessage(mockMessage('Moin zusammen'));
+
+            expect(sportService.addEntry).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('handleMessageUpdate (nachträglich bearbeitete Nachrichten)', () => {
+        const mockMessage = (content: string, overrides: Record<string, unknown> = {}, quittiert = false) => ({
+            author: { id: 'user-123', bot: false },
+            channelId: 'sport-kanal',
+            content,
+            partial: false,
+            react: vi.fn(),
+            reactions: {
+                cache: new Map(quittiert ? [[BESTAETIGUNGS_REAKTION, { me: true }]] : []),
+            },
+            ...overrides,
+        }) as any;
+
+        beforeEach(() => {
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
+            vi.mocked(sportService.addEntry).mockResolvedValue(mockEntry());
+        });
+
+        // Der Hauptfall: das "+" wurde vergessen und nachgetragen.
+        it('trägt eine nachträglich ergänzte km-Angabe ein', async () => {
+            const message = mockMessage('heute +12 km geradelt');
+
+            await sportHandler.handleMessageUpdate(message);
+
+            expect(sportService.addEntry).toHaveBeenCalledWith('user-123', 'radfahren', 12);
+            expect(message.react).toHaveBeenCalledWith(BESTAETIGUNGS_REAKTION);
+        });
+
+        // Discord feuert MessageUpdate bei JEDER Bearbeitung. Ohne diesen Schutz würde ein Nachsatz
+        // an "+5 km" die Kilometer ein zweites Mal eintragen und die Gesamtdistanz verfälschen.
+        it('trägt nichts erneut ein, wenn die Nachricht schon quittiert ist', async () => {
+            const message = mockMessage('+5 km gelaufen, war schön', {}, true);
+
+            await sportHandler.handleMessageUpdate(message);
+
+            expect(sportService.addEntry).not.toHaveBeenCalled();
+            expect(message.react).not.toHaveBeenCalled();
+        });
+
+        // Eine ✅ von einem anderen Mitglied ist keine Quittung des Bots.
+        it('lässt sich von einer fremden Reaktion nicht abhalten', async () => {
+            const message = mockMessage('+12 km gelaufen');
+            message.reactions.cache.set(BESTAETIGUNGS_REAKTION, { me: false });
+
+            await sportHandler.handleMessageUpdate(message);
+
+            expect(sportService.addEntry).toHaveBeenCalled();
+        });
+
+        // Ohne fetch() wären content und reactions einer nicht gecachten Nachricht leer.
+        it('lädt partielle Nachrichten nach', async () => {
+            const vollstaendig = mockMessage('+8 km gelaufen');
+            const partiell = { partial: true, fetch: vi.fn().mockResolvedValue(vollstaendig) } as any;
+
+            await sportHandler.handleMessageUpdate(partiell);
+
+            expect(partiell.fetch).toHaveBeenCalled();
+            expect(sportService.addEntry).toHaveBeenCalledWith('user-123', 'laufen', 8);
+        });
+
+        it('ignoriert Bearbeitungen außerhalb des Sport-Kanals', async () => {
+            const message = mockMessage('+3 km bis zum Bahnhof', { channelId: 'anderer-kanal' });
+
+            await sportHandler.handleMessageUpdate(message);
 
             expect(sportService.addEntry).not.toHaveBeenCalled();
         });
