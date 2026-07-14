@@ -84,27 +84,35 @@ describe('SportHandler', () => {
 
     describe('parseKilometer', () => {
         it.each([
-            ['12 km gelaufen', 12],
-            ['12km', 12],
-            ['heute 12,5 km geradelt', 12.5],
-            ['12.5 km', 12.5],
-            ['ich bin 7 Kilometer gewandert', 7],
+            ['+12 km gelaufen', 12],
+            ['+12km', 12],
+            ['heute +12,5 km geradelt', 12.5],
+            ['+ 12.5 km', 12.5],
+            ['ich bin +7 Kilometer gewandert', 7],
         ])('erkennt %s als %s km', (text, erwartet) => {
             expect(parseKilometer(text)).toBe(erwartet);
         });
 
         it.each([
             ['Nachricht ganz ohne Zahl'],
-            ['ich habe 12 Punkte'],
-            ['0 km'],
+            ['ich habe +12 Punkte'],
+            ['+0 km'],
         ])('gibt null zurück für "%s"', (text) => {
+            expect(parseKilometer(text)).toBeNull();
+        });
+
+        // Das "+" ist der bewusste Eintrags-Marker: ohne ihn wird gar nichts erfasst.
+        it.each([
+            ['12 km gelaufen'],
+            ['die Strecke sind 12,5 Kilometer'],
+        ])('gibt null zurück ohne "+" vor der Zahl: "%s"', (text) => {
             expect(parseKilometer(text)).toBeNull();
         });
 
         // Bewusst nur die erste Angabe (nicht wie beim Blåhaj-Rechner alle summiert):
         // eine doppelt gezählte Distanz würde die gemeinsame Gesamtstrecke dauerhaft verfälschen.
         it('nimmt nur die erste Kilometer-Angabe', () => {
-            expect(parseKilometer('5 km gelaufen und 7 km geradelt')).toBe(5);
+            expect(parseKilometer('+5 km gelaufen und +7 km geradelt')).toBe(5);
         });
     });
 
@@ -146,7 +154,7 @@ describe('SportHandler', () => {
             vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
             vi.mocked(sportService.addEntry).mockResolvedValue(mockEntry());
             vi.mocked(sportService.getGesamtKilometer).mockResolvedValue(250);
-            const message = mockMessage('heute 12 km geradelt');
+            const message = mockMessage('heute +12 km geradelt');
 
             await sportHandler.handleMessage(message);
 
@@ -154,10 +162,21 @@ describe('SportHandler', () => {
             expect(message.reply).toHaveBeenCalledWith(expect.stringContaining('12 km'));
         });
 
+        // Ohne "+" ist die Angabe keine bewusste Eintrags-Geste, sondern nur Gerede über Kilometer.
+        it('ignoriert km-Angaben ohne "+"', async () => {
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
+            const message = mockMessage('bin heute 12 km gelaufen, war anstrengend');
+
+            await sportHandler.handleMessage(message);
+
+            expect(sportService.addEntry).not.toHaveBeenCalled();
+            expect(message.reply).not.toHaveBeenCalled();
+        });
+
         // Sonst würde jedes beiläufige "noch 3 km bis zum Bahnhof" die Gesamtdistanz verfälschen.
         it('ignoriert Nachrichten außerhalb des Sport-Kanals', async () => {
             vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
-            const message = mockMessage('noch 3 km bis zum Bahnhof', { channelId: 'anderer-kanal' });
+            const message = mockMessage('+3 km bis zum Bahnhof', { channelId: 'anderer-kanal' });
 
             await sportHandler.handleMessage(message);
 
@@ -168,14 +187,14 @@ describe('SportHandler', () => {
         it('ignoriert alles, solange kein Sport-Kanal konfiguriert ist', async () => {
             vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue(null);
 
-            await sportHandler.handleMessage(mockMessage('12 km gelaufen'));
+            await sportHandler.handleMessage(mockMessage('+12 km gelaufen'));
 
             expect(sportService.addEntry).not.toHaveBeenCalled();
         });
 
         // Ohne das würde die eigene Bestätigung ("12 km") den Listener endlos neu triggern.
         it('ignoriert Bot-Nachrichten', async () => {
-            const message = mockMessage('12 km gelaufen', { author: { id: 'bot-1', bot: true } });
+            const message = mockMessage('+12 km gelaufen', { author: { id: 'bot-1', bot: true } });
 
             await sportHandler.handleMessage(message);
 
