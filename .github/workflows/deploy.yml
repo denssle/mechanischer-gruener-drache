@@ -39,6 +39,12 @@ jobs:
       - name: Run tests
         run: npm test
 
+      # Type-Check inklusive der Testdateien: die sind seit dem tsconfig-exclude nicht mehr
+      # Teil von npm run build, Typfehler dort wuerden sonst nirgends auffallen (vitest/esbuild
+      # prueft keine Typen, siehe CLAUDE.md-Stolperfalle zu type-only Imports).
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Build
         run: npm run build
 

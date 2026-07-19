@@ -1,6 +1,6 @@
 {
   "name": "mechanischer-gruener-drache",
-  "version": "1.40.0",
+  "version": "1.41.0",
   "description": "",
   "license": "MIT",
   "main": "dist/index.js",
@@ -10,13 +10,18 @@
     "start-server": "npm ci && npm run build && npm start",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "build:scripts": "tsc -p tsconfig.scripts.json",
     "test:twitch": "npm run build:scripts && node dist-scripts/run-integration-test.js",
     "test:modul": "npm run build:scripts && node dist-scripts/test-modul-api.js"
   },
   "type": "module",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "discord.js": "^14.26.4",
     "express": "^5.2.1",
@@ -25,6 +30,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.5.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.0",

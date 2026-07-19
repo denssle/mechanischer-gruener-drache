@@ -4,7 +4,6 @@ import client from "./client.js";
 import redisService from "./services/redis.service.js";
 import {deployCommands} from "./deploy-commands.js";
 import memberHandler from "./handlers/member.handler.js";
-import messageHandler from "./handlers/message.handler.js";
 import "./handlers/interaction.handler.js";
 import loggingHandler from "./handlers/logging.handler.js";
 import config from "../config.json" with {type: "json"};
@@ -27,7 +26,6 @@ webhookServer.onRevocation((subscriptionId, reason) => {
 
 webhookServer.start(3000);
 
-client.on(Events.MessageCreate, messageHandler.messageCreate);
 // Async void-Callback: braucht .catch, sonst killt eine unhandled rejection den Prozess (siehe CLAUDE.md).
 client.on(Events.MessageCreate, (message) => {
     blahajHandler.handleMessage(message).catch((error) => {
@@ -42,7 +40,7 @@ client.on(Events.MessageCreate, (message) => {
     });
 });
 // Nachrichten-Cache fürs Logging (alter Inhalt beim Löschen/Bearbeiten) - eigene Zuständigkeit,
-// deshalb eine eigene MessageCreate-Registrierung neben messageHandler/blahajHandler.
+// deshalb eine eigene MessageCreate-Registrierung neben blahajHandler/sportHandler.
 client.on(Events.MessageCreate, (message) => {
     loggingHandler.handleMessageCreate(message).catch((error) => {
         console.error('Fehler im Logging-Handler (MessageCreate):', error);

@@ -2,6 +2,7 @@
 /.idea/
 /dist/
 /dist-scripts/
+/coverage/
 config.json
 *.js.map
 *.d.ts

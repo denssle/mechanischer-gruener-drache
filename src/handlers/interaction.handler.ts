@@ -11,7 +11,9 @@ declare module 'discord.js' {
     }
 }
 
-client.on(Events.InteractionCreate, async (interaction: Interaction) => {
+// Exportiert (statt inline im client.on-Callback), damit die Dispatch-Logik testbar ist -
+// der zentrale Verteiler für alle Interactions soll nicht die einzige ungetestete Stelle sein.
+export async function handleInteractionCreate(interaction: Interaction): Promise<void> {
     // Alle Button-Handler prüfen anhand des customId-Prefix selbst, ob sie zuständig sind.
     if (interaction.isButton()) {
         await buttonRoleHandler.handleButton(interaction);
@@ -32,13 +34,21 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     } catch (error) {
         console.error("command execution error", error);
     }
+}
+
+// Async void-Callback: braucht .catch, sonst killt eine unhandled rejection den Prozess (siehe
+// CLAUDE.md) - z.B. wenn ein Button-Handler wirft, der Command-Pfad fängt selbst.
+client.on(Events.InteractionCreate, (interaction: Interaction) => {
+    handleInteractionCreate(interaction).catch((error) => {
+        console.error('Fehler im Interaction-Handler:', error);
+    });
 });
 
 // Hängt selten (siehe tipp.service) eine Tipp- oder Nettigkeits-Zeile an eine ohnehin
 // ausgelöste Antwort - als ephemeres followUp, damit im Channel keine zusätzliche
 // Nachricht für alle anderen entsteht. Bewusst fehlertolerant: ein Tipp darf einen
 // erfolgreich ausgeführten Befehl niemals nachträglich scheitern lassen.
-async function zeigeGelegentlichEinenTipp(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function zeigeGelegentlichEinenTipp(interaction: ChatInputCommandInteraction): Promise<void> {
     try {
         // Vor allen Abbruchbedingungen, damit jede Ausführung zählt (auch ephemere und
         // /hilfe): Der Set der benutzten Befehle entscheidet, welche Tipps noch in Frage

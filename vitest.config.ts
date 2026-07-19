@@ -8,5 +8,11 @@ import {defineConfig} from 'vitest/config';
 export default defineConfig({
     test: {
         include: ['src/**/*.test.ts'],
+        // coverage.include sorgt dafür, dass auch nie importierte Quelldateien im Bericht
+        // auftauchen (mit 0 %) - sonst wären genau die ungetesteten Dateien unsichtbar.
+        coverage: {
+            include: ['src/**/*.ts'],
+            exclude: ['src/**/*.test.ts', 'src/types/**'],
+        },
     },
 });
