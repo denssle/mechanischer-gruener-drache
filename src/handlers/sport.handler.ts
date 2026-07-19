@@ -20,6 +20,17 @@ export const DEFAULT_AKTIVITAET: SportActivity = 'laufen';
 // die einzige Rückmeldung, die ohne eigenen Post im Kanal auskommt.
 export const BESTAETIGUNGS_REAKTION = '✅';
 
+// Lokales Datum als YYYY-MM-DD (Host läuft auf Europe/Berlin, wie beim Event-Feature).
+// Bewusst aus den lokalen Datumsteilen gebaut statt toISOString(), das in UTC umrechnet und
+// dadurch um Mitternacht auf den falschen Tag fallen würde. Dient als Tagesmarker für die
+// tägliche Kilometerstand-Meldung (Doppelpost-Schutz).
+export function formatTag(date: Date): string {
+    const jahr = date.getFullYear();
+    const monat = String(date.getMonth() + 1).padStart(2, '0');
+    const tag = String(date.getDate()).padStart(2, '0');
+    return `${jahr}-${monat}-${tag}`;
+}
+
 // Schlüsselwörter je Aktivität für den Auto-Listener. Bewusst am WORTANFANG verankert (\b) statt
 // als simples includes: "rad" steckt sonst in "Grad" ("12 km bei 30 Grad") und "gerad" in "gerade"
 // ("ich bin gerade 12 km") - beides würde fälschlich als Radfahren eingetragen.
@@ -359,14 +370,8 @@ class SportHandler {
     // nachgeholt, sobald ein Kanal existiert und die Summe erneut steigt.
     private async announceReachedMilestones(): Promise<void> {
         try {
-            const channelId = await sportService.getAnnouncementChannel();
-            if (!channelId) {
-                return;
-            }
-
-            const channel = await client.channels.fetch(channelId).catch(() => null) as TextChannel | null;
+            const channel = await this.holeAnkuendigungskanal();
             if (!channel) {
-                console.warn(`⚠️ Sport-Ankündigungskanal ${channelId} nicht abrufbar - Meilenstein-Meldung(en) werden verworfen.`);
                 return;
             }
 
@@ -380,6 +385,63 @@ class SportHandler {
             }
         } catch (error) {
             console.error('Fehler beim Prüfen/Posten der Sport-Meilensteine:', error);
+        }
+    }
+
+    // Holt den konfigurierten Ankündigungskanal oder null (kein Kanal gesetzt bzw. nicht abrufbar).
+    // Geteilt von der Meilenstein-Ankündigung und der täglichen Kilometerstand-Meldung.
+    private async holeAnkuendigungskanal(): Promise<TextChannel | null> {
+        const channelId = await sportService.getAnnouncementChannel();
+        if (!channelId) {
+            return null;
+        }
+
+        const channel = await client.channels.fetch(channelId).catch(() => null) as TextChannel | null;
+        if (!channel) {
+            console.warn(`⚠️ Sport-Ankündigungskanal ${channelId} nicht abrufbar - Meldung wird verworfen.`);
+            return null;
+        }
+        return channel;
+    }
+
+    // Beim Start einmal aufrufen: Ist noch nie ein Kilometerstand gepostet worden (frischer Deploy),
+    // wird der Tagesmarker ohne Post auf heute gesetzt. So kommt die erste Meldung erst zur nächsten
+    // Mitternacht statt direkt beim Deploy. Ist der Marker bereits gesetzt (auch von einem früheren
+    // Tag), bleibt er unangetastet - die Ausfall-Nachholung in posteTaeglichenKilometerstand greift dann.
+    async initTaeglicherPost(): Promise<void> {
+        try {
+            const letzterTag = await sportService.getLastDailyPostDay();
+            if (letzterTag === null) {
+                await sportService.setLastDailyPostDay(formatTag(new Date()));
+            }
+        } catch (error) {
+            console.error('Fehler beim Initialisieren des täglichen Kilometerstand-Posts:', error);
+        }
+    }
+
+    // Postet den gemeinsamen Kilometerstand einmal pro Tag in den Ankündigungskanal. Idempotent über
+    // den Tagesmarker: heute schon gepostet -> nichts. War der Bot um Mitternacht aus, wird beim ersten
+    // Lauf des neuen Tages nachgeholt. Der Marker wird NUR nach erfolgreichem Post gesetzt - ohne
+    // abrufbaren Kanal bleibt er stehen, damit die Meldung nachgeholt wird, sobald ein Kanal existiert.
+    // Bewusst fehlertolerant (wie die Meilenstein-Ankündigung).
+    async posteTaeglichenKilometerstand(): Promise<void> {
+        try {
+            const heute = formatTag(new Date());
+            const letzterTag = await sportService.getLastDailyPostDay();
+            if (letzterTag === heute) {
+                return;
+            }
+
+            const channel = await this.holeAnkuendigungskanal();
+            if (!channel) {
+                return;
+            }
+
+            const gesamtKilometer = await sportService.getGesamtKilometer();
+            await channel.send(`Kilometerstand um Mitternacht: gemeinsam **${gesamtKilometer} km**.`);
+            await sportService.setLastDailyPostDay(heute);
+        } catch (error) {
+            console.error('Fehler beim Posten des täglichen Kilometerstands:', error);
         }
     }
 }

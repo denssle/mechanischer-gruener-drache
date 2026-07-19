@@ -64,12 +64,24 @@ client.on(Events.GuildBanAdd, (ban) => loggingHandler.handleGuildBanAdd(ban));
 client.on(Events.GuildBanRemove, (ban) => loggingHandler.handleGuildBanRemove(ban));
 client.on(Events.MessageBulkDelete, (messages, channel) => loggingHandler.handleMessageBulkDelete(messages, channel));
 
+// Prüfintervall für den täglichen Kilometerstand-Post. Der Handler entscheidet selbst per
+// Tagesmarker, ob wirklich gepostet wird - der Timer stupst nur regelmäßig an (jede Minute reicht
+// für eine "um Mitternacht"-Meldung und holt einen verpassten Tag nach dem Neustart nach).
+const TAEGLICHER_POST_INTERVALL_MS = 60 * 1000;
+
 client.once(Events.ClientReady, async () => {
     console.log(`Eingeloggt als ${client.user?.tag} - Version ${pjson.version}`);
     try {
         await redisService.connect();
         await deployCommands();
         await memberHandler.loadAllMembers();
+        // Erst nach der Redis-Verbindung: verhindert einen Überraschungs-Post beim ersten Deploy.
+        await sportHandler.initTaeglicherPost();
+        setInterval(() => {
+            sportHandler.posteTaeglichenKilometerstand().catch((error) => {
+                console.error('Fehler im täglichen Kilometerstand-Post:', error);
+            });
+        }, TAEGLICHER_POST_INTERVALL_MS);
     } catch (error) {
         console.error('Fehler beim Initialisieren nach dem Discord-Login:', error);
     }

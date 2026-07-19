@@ -8,6 +8,7 @@ const KEYS = {
     highscore: 'SPORT:HIGHSCORE',
     milestones: 'SPORT:MILESTONES',
     announcementChannel: 'SPORT:ANNOUNCEMENT_CHANNEL',
+    lastDailyPost: 'SPORT:LAST_DAILY_POST',
 };
 
 const DUMMY_USER_ID = 'LEGACY_KILOMETERS';
@@ -173,6 +174,16 @@ class SportService {
 
     async getAnnouncementChannel(): Promise<string | null> {
         return redisService.get(KEYS.announcementChannel);
+    }
+
+    // Tag (YYYY-MM-DD) des zuletzt geposteten täglichen Kilometerstands. Dient als
+    // Doppelpost-Schutz für die Mitternachts-Meldung: gepostet wird nur, wenn heute noch nicht.
+    async getLastDailyPostDay(): Promise<string | null> {
+        return redisService.get(KEYS.lastDailyPost);
+    }
+
+    async setLastDailyPostDay(day: string): Promise<void> {
+        await redisService.set(KEYS.lastDailyPost, day);
     }
 }
 

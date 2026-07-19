@@ -20,6 +20,8 @@ vi.mock('../services/sport.service.js', () => ({
         checkAndMarkReachedMilestones: vi.fn().mockResolvedValue([]),
         getAnnouncementChannel: vi.fn().mockResolvedValue(null),
         setAnnouncementChannel: vi.fn(),
+        getLastDailyPostDay: vi.fn().mockResolvedValue(null),
+        setLastDailyPostDay: vi.fn(),
     }
 }));
 
@@ -33,7 +35,7 @@ vi.mock('../client.js', () => ({
 
 import sportService from '../services/sport.service.js';
 import client from '../client.js';
-import sportHandler, { parseKilometer, erkenneAktivitaet, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION } from './sport.handler.js';
+import sportHandler, { parseKilometer, erkenneAktivitaet, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, formatTag } from './sport.handler.js';
 
 const mockEntry = (overrides = {}) => ({
     id: 'entry-1',
@@ -447,6 +449,73 @@ describe('SportHandler', () => {
             await sportHandler.handleEintragen(eintragenInteraction());
 
             expect(sportService.checkAndMarkReachedMilestones).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('formatTag', () => {
+        // Aus lokalen Datumsteilen (nicht toISOString) - sonst kippt der Tag um Mitternacht in UTC.
+        it.each([
+            [new Date(2026, 6, 9), '2026-07-09'],
+            [new Date(2026, 11, 1), '2026-12-01'],
+            [new Date(2026, 0, 31, 23, 59), '2026-01-31'],
+        ])('formatiert %s als %s', (date, erwartet) => {
+            expect(formatTag(date as Date)).toBe(erwartet);
+        });
+    });
+
+    describe('initTaeglicherPost', () => {
+        // Frischer Deploy: Marker auf heute setzen, aber NICHT posten - erste Meldung erst nächste Nacht.
+        it('setzt den Tagesmarker auf heute, wenn noch keiner existiert', async () => {
+            vi.mocked(sportService.getLastDailyPostDay).mockResolvedValue(null);
+
+            await sportHandler.initTaeglicherPost();
+
+            expect(sportService.setLastDailyPostDay).toHaveBeenCalledWith(formatTag(new Date()));
+        });
+
+        // Ist der Marker (auch von einem früheren Tag) gesetzt, bleibt er stehen - die
+        // Ausfall-Nachholung in posteTaeglichenKilometerstand übernimmt dann.
+        it('lässt einen bestehenden Marker unangetastet', async () => {
+            vi.mocked(sportService.getLastDailyPostDay).mockResolvedValue('2026-07-01');
+
+            await sportHandler.initTaeglicherPost();
+
+            expect(sportService.setLastDailyPostDay).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('posteTaeglichenKilometerstand', () => {
+        it('postet den Kilometerstand und setzt den Tagesmarker, wenn heute noch nicht gepostet', async () => {
+            vi.mocked(sportService.getLastDailyPostDay).mockResolvedValue('2026-07-01');
+            vi.mocked(sportService.getGesamtKilometer).mockResolvedValue(1234);
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('chan-1');
+            const send = vi.fn();
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await sportHandler.posteTaeglichenKilometerstand();
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('1234 km'));
+            expect(sportService.setLastDailyPostDay).toHaveBeenCalledWith(formatTag(new Date()));
+        });
+
+        // Doppelpost-Schutz: heute schon gepostet -> nichts tun (der Timer stupst jede Minute an).
+        it('postet nicht, wenn heute bereits gepostet wurde', async () => {
+            vi.mocked(sportService.getLastDailyPostDay).mockResolvedValue(formatTag(new Date()));
+
+            await sportHandler.posteTaeglichenKilometerstand();
+
+            expect(sportService.getAnnouncementChannel).not.toHaveBeenCalled();
+            expect(sportService.setLastDailyPostDay).not.toHaveBeenCalled();
+        });
+
+        // Ohne abrufbaren Kanal bleibt der Marker stehen -> wird nachgeholt, sobald ein Kanal existiert.
+        it('setzt den Marker nicht, wenn kein Kanal konfiguriert ist', async () => {
+            vi.mocked(sportService.getLastDailyPostDay).mockResolvedValue('2026-07-01');
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue(null);
+
+            await sportHandler.posteTaeglichenKilometerstand();
+
+            expect(sportService.setLastDailyPostDay).not.toHaveBeenCalled();
         });
     });
 
