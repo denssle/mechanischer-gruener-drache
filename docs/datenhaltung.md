@@ -78,3 +78,7 @@ es ist eine Entscheidung, keine Nebensache. Wer sie zurücknehmen will: `MESSAGE
 - **Keine Spieldaten auf Vorrat.** Roster, News, Online-Liste werden live gescrapt; das Roster liegt
   maximal 10 Minuten im RAM (nicht in Redis), damit `/charakter` nicht 7 Seiten pro Aufruf lädt.
 - **Kein Verlauf beim Blåhaj-Zähler.** Nur die Gesamtsumme, nicht wer wann wie viel erwähnt hat.
+- **Keine Nachrichteninhalte in den Prozess-Logs.** Die `console.log`-Ausgaben des Bots werden vom
+  Hoster (Uberspace/Supervisor) persistiert – dorthin gehören deshalb keine Chat-Inhalte. Ein alter
+  Debug-Handler, der jede Nachricht samt Inhalt und Autor loggte, wurde am 2026-07-19 genau deshalb
+  ersatzlos entfernt; neue Message-Listener dürfen kein pauschales Content-Logging einführen.

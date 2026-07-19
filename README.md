@@ -4,14 +4,14 @@ Ein Discord-Bot für den Discord-Server von [LotgD](http://www.lotgd.de/), gesch
 
 ## 🚀 Features
 
-- **Ping-Pong-Duell**: Man fordert eine andere Person heraus (`/pingpong herausfordern`), sie nimmt per Button an, dann wird gespielt – Sieg bringt einen Punkt, Niederlage kostet einen. Wer mehrere Duelle am Stück gewinnt, hat eine **Siegesserie** (mit persönlichem Rekord). Dazu ein Anti-Spam-Cooldown und eine Bestenliste (`/pingpong bestenliste`), gespeichert in Redis.
+- **Ping-Pong-Duell**: Man fordert eine andere Person heraus (`/pingpong herausfordern`), sie nimmt per Button an, dann wird gespielt – Sieg bringt einen Punkt, Niederlage kostet einen. Wer mehrere Duelle am Stück gewinnt, hat eine **Siegesserie** (mit persönlichem Rekord). Dazu zwei Varianten: das **Ansage-Duell** (angesagter eigener Sieg – geht er auf, ein Punkt extra, sonst einer weniger) und das **Taktikduell** (verdeckte Aktionen im Schere-Stein-Papier-Prinzip: Schmetterball/Konter/Lupfer). Anti-Spam-Cooldown und Bestenliste (`/pingpong bestenliste`) inklusive, gespeichert in Redis.
 - **Twitch-Integration**: User verknüpfen ihren eigenen Twitch-Kanal (`/twitch verknuepfen`); der Bot meldet per Webhook, wenn sie live gehen – inkl. Stream-Titel und Spiel/Kategorie. Admin-Diagnose via `/twitch diagnose`.
-- **Sport-Tracking**: Bewusst kooperativ – alle tragen ihre Kilometer zu einer gemeinsamen Gesamtsumme bei (`/sport gesamt`), keine Rangliste.
+- **Sport-Tracking**: Bewusst kooperativ – alle tragen ihre Kilometer zu einer gemeinsamen Gesamtsumme bei (`/sport gesamt`), keine Rangliste. Eingetragen wird per `/sport eintragen` oder **automatisch**: eine Nachricht wie „+12 km gelaufen" im Sport-Kanal wird erkannt und still per Reaktion quittiert. **Meilensteine** (von Usern angelegt) werden beim Überschreiten der Schwelle im Ankündigungskanal gefeiert, und um Mitternacht postet der Bot täglich den gemeinsamen Kilometerstand.
 - **User-Daten-Tracking**: Hält intern Namen und Rollen der Mitglieder aktuell (z.B. damit Live-Meldungen den richtigen Namen zeigen).
 - **Nachrichten-Logging**: Postet bearbeitete/gelöschte Nachrichten (inkl. Massen-Löschungen), Server-Beitritte/-Austritte, Rollen- und Nickname-Änderungen, Timeouts/Mutes sowie Bans/Unbans in einen konfigurierbaren Log-Channel (`/protokoll`). Wer den Server verlässt und wiederkommt, wird gezählt – die Beitritts-Meldung sagt dann, das wievielte Mal es ist.
 - **Rollen-Selbstvergabe**: Ein Admin postet mit `/rollenbutton` eine Nachricht mit einem Button; per Klick geben sich User selbst eine Rolle (nochmal klicken entfernt sie wieder), z.B. für die Regelakzeptanz oder Twitch-Benachrichtigungen. Der Bot braucht dafür "Rollen verwalten"-Rechte und muss in der Rollen-Hierarchie über der zu vergebenden Rolle stehen.
 - **Event-Countdown**: Ein Admin legt den Termin des nächsten Community-Events fest (`/event setzen`); alle können per `/event countdown` fragen, wie lange es noch dauert.
-- **Spiel-News**: `/news` holt die neueste News von [lotgd.de](https://www.lotgd.de/news.php) live ab und postet sie im Chat.
+- **Spielwelt-Anbindung**: `/news` holt die neueste Spiel-News von [lotgd.de](https://www.lotgd.de/news.php), `/ereignisse` das Ingame-Ereignislog (wer wurde von wem getötet, wiederbelebt, blamiert …), `/online` zeigt, wer gerade im Spiel eingeloggt ist. Mit `/charakter` verknüpft man den eigenen LotGD-Charakter (nur der öffentliche Name, **keine Zugangsdaten**) – verknüpfte Charaktere werden in `/online` und `/ereignisse` hervorgehoben und dem Discord-User zugeordnet. Alles live per Scraping, ohne Login.
 - **Blåhaj-Rechner**: Erwähnt jemand einen Euro-Betrag im Chat, rechnet der Bot aus, wie viele Blåhajs (IKEA-Hai, 28 €/Stück) man dafür bekäme, und summiert alle je erwähnten Beträge zu einer „Blåhaj-Fläche" in Hektar. Auf Abruf per `/blahaj`.
 - **Tipps & Nettigkeiten**: Selten (~15 %, höchstens einmal pro Person und Tag) hängt der Bot an eine ohnehin ausgelöste Antwort eine kleine, **nur für dich sichtbare** Zeile – meist ein Tipp zu einem Befehl, den man vielleicht noch nicht kennt, manchmal einfach ein netter Gruß.
 
@@ -32,6 +32,9 @@ Alle Befehle, Subcommands und Optionen sind deutsch benannt. Umlaute in den Name
 | `/sport setzen` | Kilometerstand eines Mitglieds direkt setzen (Admin) |
 | `/sport altkilometer` | Bestandskilometer ohne zugeordnetes Mitglied addieren (Admin) |
 | `/sport altkilometer-setzen` | Bestandskilometer auf einen Wert setzen; `0` entfernt sie (Admin) |
+| `/sport meilenstein setzen` | Meilenstein für die gemeinsame Gesamtdistanz anlegen (für alle offen) |
+| `/sport meilenstein liste` · `/sport meilenstein entfernen` | Meilensteine anzeigen bzw. entfernen (Admin) |
+| `/sport ankuendigungskanal` | Kanal für Meilensteine, Mitternachts-Post & Auto-Erfassung festlegen (Admin) |
 | `/twitch verknuepfen` · `/twitch entfernen` · `/twitch status` | Eigenen Twitch-Kanal verknüpfen, entfernen, anzeigen |
 | `/twitch benachrichtigungskanal` · `/twitch benachrichtigungsrolle` | Ziel-Kanal & Ping-Rolle für Live-Meldungen (Admin) |
 | `/twitch diagnose` | Kanal, Rolle & EventSub-Subscriptions prüfen + Testnachricht (Admin) |
@@ -40,11 +43,15 @@ Alle Befehle, Subcommands und Optionen sind deutsch benannt. Umlaute in den Name
 | `/event setzen` · `/event entfernen` | Termin des Community-Events festlegen/entfernen (Admin) |
 | `/event countdown` | Zeigt, wie lange es noch bis zum Event dauert |
 | `/news` | Holt die neueste Spiel-News von lotgd.de und postet sie |
+| `/ereignisse` | Zeigt die neuesten Ingame-Ereignisse aus dem Spielgeschehen |
+| `/online` | Zeigt, wer gerade im Spiel eingeloggt ist (plus die letzten 30 Minuten) |
+| `/charakter verknuepfen` · `/charakter anzeigen` · `/charakter entfernen` | Eigenen LotGD-Charakter verknüpfen und dessen öffentliche Infos abrufen |
+| `/spielwelt` | Detail-Hilfe zu den Spielwelt-Befehlen (`/news`, `/ereignisse`, `/online`) |
 | `/blahaj` | Rechnet einen Euro-Betrag (oder die Server-Gesamtsumme) in Blåhajs & Fläche um |
 | `/hilfe` | Gesamtübersicht über alle Befehle des Bots |
 | `/version` | Zeigt die aktuelle Bot-Version |
 
-`/sport`, `/twitch` und `/event` haben zusätzlich je einen `hilfe`-Subcommand, der alle zugehörigen Befehle auflistet. `/hilfe` gibt eine Gesamtübersicht über alle Bereiche und Befehle.
+`/pingpong`, `/sport`, `/twitch`, `/event` und `/charakter` haben zusätzlich je einen `hilfe`-Subcommand, der alle zugehörigen Befehle auflistet. `/hilfe` gibt eine Gesamtübersicht über alle Bereiche und Befehle.
 
 ## 🛠 Architektur
 
@@ -96,6 +103,17 @@ Wir nutzen **Vitest** für Unit- und Integrationstests. Diese werden auch bei je
 npm test
 ```
 
+Testabdeckung anzeigen (via `@vitest/coverage-v8`):
+```bash
+npm run test:coverage
+```
+
+### Typecheck
+Type-Check inklusive der Testdateien – die sind bewusst nicht Teil von `npm run build` (keine `*.test.js` in `dist/`), Typfehler dort fallen also **nur** hier auf. Läuft in der CI als eigener Step:
+```bash
+npm run typecheck
+```
+
 ### Twitch Integrationstest (automatisiert)
 Um den Twitch-Webhook-Ablauf lokal automatisiert zu testen (startet intern den Server, sendet einen Test-Webhook und beendet den Server wieder):
 ```bash
@@ -120,7 +138,7 @@ Um den Webhook-Server lokal manuell zu testen:
   - [x] **Stufe 1 – öffentliche Spielinfos (read-only):** `/news`, `/ereignisse`, `/online`, `/charakter` – alles per Scraping ohne Login, keiner der Auth-/Schreib-Blocker greift
   - [ ] ~~**Stufe 2 – persönliche Leseabfragen pro User (eingeloggt)**~~ – **geprüft und verworfen (2026-07-11).** Es gibt bei lotgd.de kein Token, das hinterlegbar, langlebig *und* harmlos ist: das Passwort bzw. sein md5-Hash ist login-äquivalent, der `lgi`-Cookie ist bloß eine Browser-Kennung (wird auch anonymen Besuchern gesetzt, enthält keine Session), und `PHPSESSID` verfällt nach **15 Minuten Leerlauf** (`LOGINTIMEOUT`). Es künstlich am Leben zu halten würde den User dauerhaft als „online" im Spiel erscheinen lassen und mit seiner echten Browser-Sitzung kollidieren. Sauber ginge nur ein vom Betreiber ausgestelltes Read-Only-Token – das existiert nicht. Herleitung: `docs/spiel-interaktion-idee.md`
   - [ ] **Stufe 3 – Aktionen im Spiel (schreibend, pro User):** Session **und** Nonce/CSRF-Handling **und** echter Spielschaden bei Fehlern (Kämpfe/Käufe/verbrauchte Züge) – der teuerste, riskanteste Teil, nur sehr vorsichtig
-- [ ] Beobachtungsliste für Spiel-Charaktere: Man kann eine Liste von LotGD-Charakternamen hinterlegen; geht einer davon im Spiel online, kommt eine Benachrichtigung. Datenquelle ist die schon gescrapte `/online`-Liste (`list.php`), es gibt keine Push-API – also braucht es ein periodisches Polling (im gewählten Intervall den Roster/Online-Stand abrufen, Neu-Erscheinungen gegen die hinterlegte Liste abgleichen, nur beim Übergang offline→online melden, nicht wiederholt). **Setzt dieselbe noch nicht existierende Scheduling-Grundlage voraus wie der Mitternachts-Post** (kein `setInterval`/`cron` im Projekt – Polling-Intervall + Mechanismus dort einmal entscheiden, dann für beide nutzen). **Zwei offene Design-Punkte:** (1) wohin die Benachrichtigung geht (fester Kanal per Admin-Command vs. DM an die Person, die den Namen hinterlegt hat) und (2) Scope (serverweite Liste vs. pro User) – beides vor dem Bau festlegen. Übergangs-State (wer war zuletzt online) muss in Redis liegen, sonst meldet jeder Poll-Durchlauf denselben Spieler erneut
+- [ ] Beobachtungsliste für Spiel-Charaktere: Man kann eine Liste von LotGD-Charakternamen hinterlegen; geht einer davon im Spiel online, kommt eine Benachrichtigung. Datenquelle ist die schon gescrapte `/online`-Liste (`list.php`), es gibt keine Push-API – also braucht es ein periodisches Polling (im gewählten Intervall den Roster/Online-Stand abrufen, Neu-Erscheinungen gegen die hinterlegte Liste abgleichen, nur beim Übergang offline→online melden, nicht wiederholt). **Die Scheduling-Grundlage existiert seit dem Mitternachts-Post** (`setInterval` 60 s in `index.ts`, Handler entscheidet selbst per Redis-Marker – siehe „Erledigt") – fürs Polling wiederverwenden, keinen zweiten Mechanismus bauen. **Zwei offene Design-Punkte:** (1) wohin die Benachrichtigung geht (fester Kanal per Admin-Command vs. DM an die Person, die den Namen hinterlegt hat) und (2) Scope (serverweite Liste vs. pro User) – beides vor dem Bau festlegen. Übergangs-State (wer war zuletzt online) muss in Redis liegen, sonst meldet jeder Poll-Durchlauf denselben Spieler erneut
 - [ ] Verwaltungs-/Einstellungsseite: Eine (Web-)Oberfläche, über die man die Einstellungen vornehmen kann, die aktuell nur über Admin-Befehle gehen (u.a. `/twitch benachrichtigungskanal`/`benachrichtigungsrolle`, `/sport ankuendigungskanal`/`setzen`/`altkilometer`/`altkilometer-setzen`, `/sport meilenstein` (Admin-Teile: `liste`/`entfernen`), `/protokoll kanal`, `/event setzen`/`entfernen`). Vermutlich als Erweiterung des schon existierenden Webhook-Servers (`src/server/`, Port 3000, Express 5) – die Werte liegen ohnehin alle in Redis, es bräuchte v.a. Lese-/Schreib-Views darauf. Zusätzliche Routen sind unkritisch, aber **zwei Infra-Details beachten:** (1) die `express.raw`-Middleware ist aktuell nur auf `/twitch` gemountet – eine HTML/Form-Seite braucht eigene Routen samt Body-Parser, ohne den Twitch-Raw-Pfad anzufassen; (2) auf Uberspace braucht der neue Pfad ein **eigenes Web-Backend-Mapping** (`uberspace web backend`, analog zu `/twitch`), sonst ist er von außen nicht erreichbar. **Offen und heikel:** Authentifizierung (der Server ist öffentlich erreichbar – für den Hobby-Scope zuerst prüfen, ob ein geteiltes Secret reicht, bevor Discord-OAuth erwogen wird; auf Server-Admins beschränken) und ob sich der Zusatzaufwand für einen kleinen Privatserver lohnt, auf dem die Admins die Slash-Befehle kennen. Proportionalität prüfen, bevor gebaut wird
 - [ ] Idee (aus der Wyrmland-Erkundungstour 2026-07-12): `/online` nach **Stadt gruppieren** („Romar: … · Glorfindal: …") – die Ort-Spalte der Kriegerliste wird schon geparst, aber nicht genutzt; mit 9 Städten hat „wer ist wo" echten Informationswert und kostet keinen zusätzlichen Fetch
 - [ ] Idee (Tour 2026-07-12): **Drachentötungs-Gratulation ohne Polling.** Einen Dragonkill-Zähler gibt es öffentlich **nicht** (die Kriegerliste hat nur Gilde/Name/Ort/Level/Rasse/Geschlecht/Lebt/„Zuletzt da"), aber einen sauberen Proxy: nach einer Drachentötung fällt der Charakter von Level 15 (Max-Level, danach ist der Drache fällig) auf **Level 1** zurück – ein Level-**Sturz** ist also praktisch immer ein Drachenkill. Umsetzung: pro verknüpftem Charakter das zuletzt gesehene Level in Redis merken und beim ohnehin stattfindenden Abruf vergleichen (`/charakter` = volles Roster, `/online` hat ebenfalls eine Level-Spalte und erhöht die Trigger-Häufigkeit; **bestätigt: beide Services parsen die Level-Spalte bereits** – `cells[3]` in `online.service.ts`/`character.service.ts`, kommt aber als String, also `parseInt` nötig); Sturz → Gratulation posten. **Schwellenlogik vorab festlegen:** „Sturz auf genau Level 1" ist eindeutiger als „irgendein Rückgang" (Level kann auch durch Tod/andere Effekte schwanken) – der Drachenkill setzt von Level 15 auf 1 zurück. Opportunistische Erkennung statt Cron, Verzögerung von Stunden/Tagen ist bei einer Gratulation egal. Randfall bewusst hingenommen: gelöschter + neu erstellter Charakter mit gleichem Namen würde fälschlich gefeiert. Offen: welcher Kanal (eigener Admin-Subcommand `/charakter ankuendigungskanal` oder den Sport-Ankündigungskanal mitbenutzen? – das entscheidet den halben Aufwand)
