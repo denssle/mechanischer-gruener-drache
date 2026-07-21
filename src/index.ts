@@ -11,6 +11,7 @@ import webhookServer from './server/twitch.webhook.server.js';
 import twitchHandler from "./handlers/twitch.handler.js";
 import blahajHandler from "./handlers/blahaj.handler.js";
 import sportHandler from "./handlers/sport.handler.js";
+import greetingHandler from "./handlers/greeting.handler.js";
 
 webhookServer.onNotification((twitchUserId, streamData) => {
     twitchHandler.handleStreamOnline(twitchUserId, streamData).catch((error) => {
@@ -44,6 +45,13 @@ client.on(Events.MessageCreate, (message) => {
 client.on(Events.MessageCreate, (message) => {
     loggingHandler.handleMessageCreate(message).catch((error) => {
         console.error('Fehler im Logging-Handler (MessageCreate):', error);
+    });
+});
+// Morgengruß: die erste Nachricht des Tages im konfigurierten Kanal wird per Reaktion begrüßt
+// (der Handler prüft Kanal und Tagesmarker selbst). Eigene Zuständigkeit, eigene Registrierung.
+client.on(Events.MessageCreate, (message) => {
+    greetingHandler.handleMessage(message).catch((error) => {
+        console.error('Fehler im Morgengruß-Handler:', error);
     });
 });
 client.on(Events.MessageDelete, (message) => loggingHandler.handleMessageDelete(message));

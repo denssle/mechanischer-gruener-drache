@@ -12,6 +12,7 @@ import spielwelt from "./spielwelt.command.js";
 import charakter from "./character.command.js";
 import hilfe from "./hilfe.command.js";
 import blahaj from "./blahaj.command.js";
+import morgengruss from "./morgengruss.command.js";
 
 export default [
     ping,
@@ -27,5 +28,6 @@ export default [
     spielwelt,
     charakter,
     hilfe,
-    blahaj
+    blahaj,
+    morgengruss
 ];

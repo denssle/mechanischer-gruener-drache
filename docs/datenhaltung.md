@@ -39,6 +39,9 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `MEMBER:JOIN_COUNT:<userId>` | Zahl: wie oft die Person dem Server schon beigetreten ist | dauerhaft | Beitritts-Meldung im Audit-Log |
 | `BLAHAJ:TOTAL_EUR` | eine einzige Zahl (Summe aller je erwähnten Euro-Beträge) | dauerhaft | `/blahaj` |
 | `EVENT:NEXT` | Timestamp + optionaler Titel des nächsten Community-Events | bis `/event entfernen` | `/event countdown` |
+| `GREETING:CHANNEL` | Channel-ID des Morgengruß-Kanals | bis zum Überschreiben | Morgengruß-Tradition (`/morgengruss`) |
+| `GREETING:LAST_DAY` | Tag (YYYY-MM-DD) der zuletzt begrüßten ersten Nachricht | bis zum Überschreiben | Doppelgruß-Schutz (nur einmal pro Tag) |
+| `GREETING:EMOJI` (Hash userId→Emoji) | persönliches Morgengruß-Emoji, aus der Chat-Historie gelernt (nur die Emoji-Kennung, keine Nachrichten) | bis zum Überschreiben (`/morgengruss lernen`) | persönlicher Morgengruß |
 
 ## Nachrichteninhalte (seit 2026-07-11)
 
