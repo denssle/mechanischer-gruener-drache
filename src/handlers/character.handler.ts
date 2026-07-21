@@ -1,6 +1,19 @@
 import {ChatInputCommandInteraction, EmbedBuilder} from 'discord.js';
 import characterService, {CharacterEntry, findInRoster} from '../services/character.service.js';
 
+// Lore-Flavor für tote Charaktere: statt nur "tot" eine LotGD-stimmige Zeile. Wiederauferstehung
+// geschieht beim Anbruch des neuen Tages oder über Gefallen beim Totengott Ramius - beides steckt hier drin.
+export const TOTEN_FLAVORS = [
+    'wartet im Land der Schatten auf den Anbruch des neuen Tages',
+    'ruht im Land der Schatten und sammelt Gefallen bei Ramius, dem Totengott',
+    'harrt im Reich des Todes der Wiederauferstehung',
+    'ist gefallen und wartet auf den neuen Tag, der die Toten zurückholt',
+];
+
+export function randomTotenFlavor(): string {
+    return TOTEN_FLAVORS[Math.floor(Math.random() * TOTEN_FLAVORS.length)];
+}
+
 export const CHARAKTER_HELP =
     `**Charakter-Befehle**\n\n` +
     `\`/charakter verknuepfen name:<Name>\` – deinen LotGD-Charakter hinterlegen (nur der öffentliche Name).\n` +
@@ -16,7 +29,12 @@ function buildCard(entry: CharacterEntry): EmbedBuilder {
     if (entry.gilde) {
         lines.push(`Gilde: ${entry.gilde}`);
     }
-    lines.push(`${entry.lebt ? 'lebendig' : 'tot'} · zuletzt gesehen: ${entry.zuletztDa}`);
+    if (entry.lebt) {
+        lines.push(`lebendig · zuletzt gesehen: ${entry.zuletztDa}`);
+    } else {
+        lines.push(`tot – ${randomTotenFlavor()}`);
+        lines.push(`zuletzt gesehen: ${entry.zuletztDa}`);
+    }
 
     return new EmbedBuilder()
         .setColor(entry.lebt ? 0x2ecc71 : 0x992d22)

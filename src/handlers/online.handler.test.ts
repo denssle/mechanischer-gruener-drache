@@ -11,7 +11,7 @@ vi.mock('../services/redis.service.js', () => ({
 }));
 
 import characterService from '../services/character.service.js';
-import onlineHandler from './online.handler.js';
+import onlineHandler, {groupByCity} from './online.handler.js';
 
 const getAllLinks = vi.spyOn(characterService, 'getAllLinks');
 
@@ -29,7 +29,7 @@ describe('OnlineHandler', () => {
         getAllLinks.mockResolvedValue([]);
     });
 
-    it('formatiert die eingeloggten Spieler mit Stufe, Rasse und Ort', async () => {
+    it('formatiert die eingeloggten Spieler mit Stufe und Rasse, gruppiert nach Stadt', async () => {
         getOnline.mockResolvedValue({
             players: [
                 { gilde: '', name: 'Cvetanka', ort: 'Glorfindal', level: '14', rasse: 'Echse', lebt: true },
@@ -43,8 +43,32 @@ describe('OnlineHandler', () => {
 
         const reply = content(interaction);
         expect(reply).toContain('Gerade im Wyrmland unterwegs (2):');
-        expect(reply).toContain('Cvetanka — Stufe 14 Echse, in Glorfindal');
-        expect(reply).toContain('<CdF> Danjun — Stufe 11 Mensch, in Romar');
+        expect(reply).toContain('__Glorfindal__ (1)');
+        expect(reply).toContain('Cvetanka — Stufe 14 Echse');
+        expect(reply).toContain('__Romar__ (1)');
+        expect(reply).toContain('<CdF> Danjun — Stufe 11 Mensch');
+        // Der Ort steht nur noch als Überschrift, nicht mehr in jeder Zeile.
+        expect(reply).not.toContain(', in Glorfindal');
+    });
+
+    it('gruppiert mehrere Spieler derselben Stadt unter eine Überschrift', async () => {
+        getOnline.mockResolvedValue({
+            players: [
+                { gilde: '', name: 'Cvetanka', ort: 'Glorfindal', level: '14', rasse: 'Echse', lebt: true },
+                { gilde: '', name: 'Danjun', ort: 'Romar', level: '11', rasse: 'Mensch', lebt: true },
+                { gilde: '', name: 'Bora', ort: 'Romar', level: '8', rasse: 'Elf', lebt: true },
+            ],
+            recent: [],
+        });
+        const interaction = makeInteraction();
+
+        await onlineHandler.handleOnline(interaction);
+
+        const reply = content(interaction);
+        // Romar hat zwei Spieler -> steht als größere Gruppe zuerst und nur einmal als Überschrift.
+        expect(reply.match(/__Romar__/g)).toHaveLength(1);
+        expect(reply).toContain('__Romar__ (2)');
+        expect(reply.indexOf('__Romar__')).toBeLessThan(reply.indexOf('__Glorfindal__'));
     });
 
     it('markiert tote Charaktere mit (tot)', async () => {
@@ -56,7 +80,7 @@ describe('OnlineHandler', () => {
 
         await onlineHandler.handleOnline(interaction);
 
-        expect(content(interaction)).toContain('Outremer — Stufe 12 Mensch, in Romar (tot)');
+        expect(content(interaction)).toContain('Outremer — Stufe 12 Mensch (tot)');
     });
 
     it('hebt verknüpfte Charaktere hervor - auch mit Titel-Präfix im Spielnamen', async () => {
@@ -73,7 +97,7 @@ describe('OnlineHandler', () => {
         await onlineHandler.handleOnline(interaction);
 
         const reply = content(interaction);
-        expect(reply).toContain('**Centurio Acaine** (<@42>)');
+        expect(reply).toContain('**Centurio Acaine** (<@42>) — Stufe 9 Elf');
         expect(reply).toContain('Cvetanka — Stufe 14');
         // Niemand soll von einem /online angepingt werden.
         expect(interaction.editReply.mock.calls[0][0].allowedMentions).toEqual({ parse: [] });
@@ -99,7 +123,7 @@ describe('OnlineHandler', () => {
 
         await onlineHandler.handleOnline(interaction);
 
-        expect(content(interaction)).toContain('Cvetanka — Stufe 14 Echse, in Glorfindal');
+        expect(content(interaction)).toContain('Cvetanka — Stufe 14 Echse');
     });
 
     it('hängt 30-Minuten-Namen an, aber nur die nicht ohnehin Eingeloggten', async () => {
@@ -136,5 +160,26 @@ describe('OnlineHandler', () => {
         expect(interaction.editReply).toHaveBeenCalledWith(
             'Konnte die Kriegerliste gerade nicht abrufen. Versuch es später nochmal.'
         );
+    });
+});
+
+describe('groupByCity', () => {
+    const p = (name: string, ort: string) =>
+        ({ gilde: '', name, ort, level: '1', rasse: 'Mensch', lebt: true });
+
+    it('sortiert größere Gruppen nach vorne, bei Gleichstand alphabetisch', () => {
+        const gruppen = groupByCity([
+            p('A', 'Zwergenhort'),
+            p('B', 'Romar'),
+            p('C', 'Romar'),
+            p('D', 'Aravir'),
+        ]);
+        expect(gruppen.map(g => g.ort)).toEqual(['Romar', 'Aravir', 'Zwergenhort']);
+        expect(gruppen[0].spieler).toHaveLength(2);
+    });
+
+    it('fängt eine leere Ort-Angabe als "Unbekannt" auf', () => {
+        const gruppen = groupByCity([p('A', '')]);
+        expect(gruppen[0].ort).toBe('Unbekannt');
     });
 });

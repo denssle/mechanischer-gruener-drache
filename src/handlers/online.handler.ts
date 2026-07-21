@@ -11,11 +11,27 @@ function markLinked(name: string, link: CharacterLink | null): string {
     return link ? `**${name}** (<@${link.discordUserId}>)` : name;
 }
 
+// Ort fällt hier bewusst raus - er steht als Gruppen-Überschrift über den Zeilen (siehe groupByCity).
 function formatPlayer(player: OnlinePlayer, links: CharacterLink[]): string {
     const gilde = player.gilde ? `${player.gilde} ` : '';
     const tot = player.lebt ? '' : ' (tot)';
     const name = markLinked(player.name, findLinkForName(links, player.name));
-    return `${gilde}${name} — Stufe ${player.level} ${player.rasse}, in ${player.ort}${tot}`;
+    return `${gilde}${name} — Stufe ${player.level} ${player.rasse}${tot}`;
+}
+
+// Gruppiert die eingeloggten Spieler nach Ort. Reihenfolge: nach Gruppengröße absteigend
+// (die belebten Städte zuerst - dort ist "was los"), bei Gleichstand alphabetisch, damit die
+// Ausgabe stabil bleibt. Leere Ort-Angabe (sollte nicht vorkommen) wird zu "Unbekannt".
+export function groupByCity(players: OnlinePlayer[]): Array<{ ort: string; spieler: OnlinePlayer[] }> {
+    const map = new Map<string, OnlinePlayer[]>();
+    for (const player of players) {
+        const ort = player.ort || 'Unbekannt';
+        const bucket = map.get(ort) ?? map.set(ort, []).get(ort)!;
+        bucket.push(player);
+    }
+    return [...map.entries()]
+        .map(([ort, spieler]) => ({ort, spieler}))
+        .sort((a, b) => b.spieler.length - a.spieler.length || a.ort.localeCompare(b.ort, 'de'));
 }
 
 class OnlineHandler {
@@ -47,11 +63,22 @@ class OnlineHandler {
             parts.push(header);
             length += header.length + 1;
 
-            for (const player of players) {
-                const line = formatPlayer(player, links);
-                if (length + line.length + 1 > MAX_LENGTH) break;
-                parts.push(line);
-                length += line.length + 1;
+            let voll = false;
+            for (const {ort, spieler} of groupByCity(players)) {
+                if (voll) break;
+                const stadtZeile = `__${ort}__ (${spieler.length})`;
+                if (length + stadtZeile.length + 1 > MAX_LENGTH) break;
+                parts.push(stadtZeile);
+                length += stadtZeile.length + 1;
+                for (const player of spieler) {
+                    const line = formatPlayer(player, links);
+                    if (length + line.length + 1 > MAX_LENGTH) {
+                        voll = true;
+                        break;
+                    }
+                    parts.push(line);
+                    length += line.length + 1;
+                }
             }
         }
 

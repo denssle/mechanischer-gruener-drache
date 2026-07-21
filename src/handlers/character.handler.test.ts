@@ -12,7 +12,7 @@ vi.mock('../services/character.service.js', async (importOriginal) => {
     return { ...actual, default: svc };
 });
 
-import characterHandler, { CHARAKTER_HELP } from './character.handler.js';
+import characterHandler, { CHARAKTER_HELP, TOTEN_FLAVORS, randomTotenFlavor } from './character.handler.js';
 
 const ACAINE = {
     name: 'Centurio Acaine', gilde: '', ort: 'Im Haus', level: '5',
@@ -106,6 +106,17 @@ describe('CharacterHandler', () => {
 
             expect(interaction.editReply.mock.calls[0][0]).toContain('keinen Charakter verknüpft');
         });
+
+        it('gibt toten Charakteren eine Lore-Flavor-Zeile statt nur "tot"', async () => {
+            svc.getRoster.mockResolvedValue([{ ...ACAINE, lebt: false }]);
+            const interaction = makeInteraction('acaine');
+
+            await characterHandler.handleAnzeigen(interaction);
+
+            const beschreibung = interaction.editReply.mock.calls[0][0].embeds[0].data.description;
+            expect(beschreibung).toMatch(/tot – /);
+            expect(TOTEN_FLAVORS.some((flavor) => beschreibung.includes(flavor))).toBe(true);
+        });
     });
 
     describe('entfernen', () => {
@@ -126,6 +137,12 @@ describe('CharacterHandler', () => {
 
             expect(interaction.reply).toHaveBeenCalledWith('Du hast keinen Charakter verknüpft.');
         });
+    });
+
+    it('liefert immer einen der definierten Toten-Flavors', () => {
+        for (let i = 0; i < 20; i++) {
+            expect(TOTEN_FLAVORS).toContain(randomTotenFlavor());
+        }
     });
 
     it('hilfe erklärt die drei Charakter-Befehle', async () => {
