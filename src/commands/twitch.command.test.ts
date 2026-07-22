@@ -8,7 +8,6 @@ vi.mock('../handlers/twitch.handler.js', () => ({
         handleBenachrichtigungskanal: vi.fn(),
         handleHilfe: vi.fn(),
         handleBenachrichtigungsrolle: vi.fn(),
-        handleDiagnose: vi.fn(),
     }
 }));
 
@@ -31,7 +30,6 @@ describe('twitch.command', () => {
         ['benachrichtigungskanal', 'handleBenachrichtigungskanal'],
         ['hilfe', 'handleHilfe'],
         ['benachrichtigungsrolle', 'handleBenachrichtigungsrolle'],
-        ['diagnose', 'handleDiagnose'],
     ] as const)('leitet Subcommand "%s" an twitchHandler.%s weiter', async (subcommand, handlerMethod) => {
         const interaction = mockInteraction(subcommand);
 
@@ -41,7 +39,7 @@ describe('twitch.command', () => {
         for (const [otherName] of Object.entries({
             handleVerknuepfen: 'verknuepfen', handleEntfernen: 'entfernen', handleStatus: 'status',
             handleBenachrichtigungskanal: 'benachrichtigungskanal', handleHilfe: 'hilfe',
-            handleBenachrichtigungsrolle: 'benachrichtigungsrolle', handleDiagnose: 'diagnose',
+            handleBenachrichtigungsrolle: 'benachrichtigungsrolle',
         })) {
             if (otherName !== handlerMethod) {
                 expect(twitchHandler[otherName as keyof typeof twitchHandler]).not.toHaveBeenCalled();
@@ -60,12 +58,11 @@ describe('twitch.command', () => {
         expect(twitchHandler.handleBenachrichtigungskanal).not.toHaveBeenCalled();
         expect(twitchHandler.handleHilfe).not.toHaveBeenCalled();
         expect(twitchHandler.handleBenachrichtigungsrolle).not.toHaveBeenCalled();
-        expect(twitchHandler.handleDiagnose).not.toHaveBeenCalled();
     });
 
     it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
         const definedSubcommands = twitchCommand.data.options.map((option) => option.toJSON().name);
-        const dispatchedSubcommands = ['verknuepfen', 'entfernen', 'status', 'benachrichtigungskanal', 'hilfe', 'benachrichtigungsrolle', 'diagnose'];
+        const dispatchedSubcommands = ['verknuepfen', 'entfernen', 'status', 'benachrichtigungskanal', 'hilfe', 'benachrichtigungsrolle'];
 
         expect(definedSubcommands.sort()).toEqual(dispatchedSubcommands.sort());
     });
