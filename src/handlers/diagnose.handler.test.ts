@@ -10,6 +10,7 @@ const sport = vi.hoisted(() => ({ getAnnouncementChannel: vi.fn() }));
 const logging = vi.hoisted(() => ({ getLogChannel: vi.fn() }));
 const greeting = vi.hoisted(() => ({ getChannel: vi.fn() }));
 const event = vi.hoisted(() => ({ getEvent: vi.fn() }));
+const character = vi.hoisted(() => ({ getAllLinks: vi.fn(), getRoster: vi.fn() }));
 const channelsFetch = vi.hoisted(() => vi.fn());
 
 vi.mock('../client.js', () => ({ default: { channels: { fetch: channelsFetch } } }));
@@ -19,6 +20,11 @@ vi.mock('../services/sport.service.js', () => ({ default: sport }));
 vi.mock('../services/logging.service.js', () => ({ default: logging }));
 vi.mock('../services/greeting.service.js', () => ({ default: greeting }));
 vi.mock('../services/event.service.js', () => ({ default: event }));
+// findInRoster (rein) real lassen, nur den Service-Default mocken.
+vi.mock('../services/character.service.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../services/character.service.js')>();
+    return { ...actual, default: character };
+});
 
 import diagnoseHandler from './diagnose.handler.js';
 
@@ -35,7 +41,7 @@ const report = (interaction: any) => interaction.editReply.mock.calls[0][0] as s
 
 describe('DiagnoseHandler', () => {
     beforeEach(() => {
-        [twitchUser, twitch, sport, logging, greeting, event].forEach(svc =>
+        [twitchUser, twitch, sport, logging, greeting, event, character].forEach(svc =>
             Object.values(svc).forEach(fn => (fn as any).mockReset())
         );
         channelsFetch.mockReset();
@@ -48,6 +54,8 @@ describe('DiagnoseHandler', () => {
         logging.getLogChannel.mockResolvedValue(null);
         greeting.getChannel.mockResolvedValue(null);
         event.getEvent.mockResolvedValue(null);
+        character.getAllLinks.mockResolvedValue([]);
+        character.getRoster.mockResolvedValue([]);
         channelsFetch.mockResolvedValue({ id: 'ok' });
     });
 
@@ -133,5 +141,62 @@ describe('DiagnoseHandler', () => {
         expect(text).toContain('EventSub-Subscriptions konnten nicht abgefragt werden');
         // Die restliche Diagnose (weitere Kanäle) läuft trotzdem durch.
         expect(text).toContain('Morgengruß-Kanal:');
+    });
+
+    describe('verknüpfte Charaktere', () => {
+        it('zählt die Verknüpfungen und meldet 0, wenn keine da sind', async () => {
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            const text = report(interaction);
+            expect(text).toContain('**Verknüpfte Charaktere**');
+            expect(text).toContain('Anzahl: 0');
+        });
+
+        it('markiert einen im Roster gefundenen Charakter mit ✅ (Titel-Präfix egal)', async () => {
+            character.getAllLinks.mockResolvedValue([{ discordUserId: 'd1', name: 'Acaine' }]);
+            character.getRoster.mockResolvedValue([{ name: 'Centurio Acaine' }]);
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            const text = report(interaction);
+            expect(text).toContain('✅ **Acaine** (<@d1>)');
+            expect(text).toContain('Centurio Acaine');
+        });
+
+        it('markiert eine verwaiste Verknüpfung als ⚠️ und fasst sie zusammen', async () => {
+            character.getAllLinks.mockResolvedValue([{ discordUserId: 'd1', name: 'Weg' }]);
+            character.getRoster.mockResolvedValue([{ name: 'Centurio Acaine' }]);
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            const text = report(interaction);
+            expect(text).toContain('⚠️ **Weg** (<@d1>) – nicht (mehr) im Roster gefunden');
+            expect(text).toContain('1 Verknüpfung(en) ohne Roster-Treffer');
+        });
+
+        it('meldet, wenn das Roster nicht abrufbar ist (Links trotzdem gezählt)', async () => {
+            character.getAllLinks.mockResolvedValue([{ discordUserId: 'd1', name: 'Acaine' }]);
+            character.getRoster.mockResolvedValue(null);
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            const text = report(interaction);
+            expect(text).toContain('Anzahl: 1');
+            expect(text).toContain('Roster nicht abrufbar');
+        });
+
+        it('übersteht ein Redis-Problem bei den Verknüpfungen', async () => {
+            character.getAllLinks.mockRejectedValue(new Error('Redis weg'));
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Verknüpfungen konnten nicht geladen werden');
+        });
     });
 });
