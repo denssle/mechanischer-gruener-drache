@@ -8,6 +8,7 @@ import "./handlers/interaction.handler.js";
 import loggingHandler from "./handlers/logging.handler.js";
 import config from "../config.json" with {type: "json"};
 import webhookServer from './server/twitch.webhook.server.js';
+import configRouter from './server/config.router.js';
 import twitchHandler from "./handlers/twitch.handler.js";
 import blahajHandler from "./handlers/blahaj.handler.js";
 import sportHandler from "./handlers/sport.handler.js";
@@ -24,6 +25,11 @@ webhookServer.onRevocation((subscriptionId, reason) => {
         console.error('Fehler bei der Verarbeitung des Twitch-Subscription-Widerrufs:', error);
     });
 });
+
+// Verwaltungsseite (erster "Hello World"-Entwurf) an dieselbe Express-App wie der Twitch-Webhook
+// haengen - ein Port, ein Server. Muss vor start() passieren. /config matcht nicht /twitch, der
+// Twitch-Raw-Body-Parser bleibt also unberuehrt.
+webhookServer.app.use(configRouter);
 
 webhookServer.start(3000);
 

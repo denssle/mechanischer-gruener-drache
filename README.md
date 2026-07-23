@@ -84,6 +84,22 @@ Das Projekt folgt dem Prinzip der *Separation of Concerns*:
    ```
    `TWITCH_WEBHOOK_CALLBACK_URL` ist optional und muss nur gesetzt werden, wenn der Webhook nicht unter der Standard-URL in `twitch.service.ts` erreichbar ist.
 
+   **Optional – Web-Konfigurationsseite (`/config`) mit Discord-Login:** Nur nötig, wenn die
+   Verwaltungsseite genutzt werden soll. Drei zusätzliche Felder in der `config.json`:
+   ```json
+   {
+     "DISCORD_CLIENT_SECRET": "OAUTH2_CLIENT_SECRET_AUS_DEM_PORTAL",
+     "CONFIG_SESSION_SECRET": "ZUFALLSSTRING_ZUM_COOKIE_SIGNIEREN",
+     "CONFIG_BASE_URL": "http://localhost:3000"
+   }
+   ```
+   - `DISCORD_CLIENT_SECRET`: im [Discord Developer Portal](https://discord.com/developers/applications) unter **OAuth2 → Client Secret** generieren (nicht das Bot-Token!).
+   - `CONFIG_SESSION_SECRET`: ein zufälliger String, z.B. `openssl rand -hex 32`.
+   - `CONFIG_BASE_URL`: die öffentliche Basis-URL des Servers (Default `http://localhost:3000`); der Redirect ist `<CONFIG_BASE_URL>/config/callback`.
+   - Im Portal unter **OAuth2 → Redirects** die Callback-URLs eintragen (lokal **und** produktiv), z.B. `http://localhost:3000/config/callback` und `https://enzlor.uber.space/config/callback`.
+   - Nur wer auf dem Server **Administrator** ist, kommt auf `/config`. Fehlen die beiden Secrets, bleibt die Seite gesperrt (fail-closed).
+   - Deployment-Hinweis (Uberspace): `/config` braucht ein eigenes Web-Backend-Mapping (`uberspace web backend`, analog zu `/twitch`), sonst ist der Pfad von außen nicht erreichbar.
+
 3. **Befehle registrieren:**
    ```bash
    npm run build

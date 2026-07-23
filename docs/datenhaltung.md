@@ -65,6 +65,25 @@ Redis. Auf einem privaten Server mit einem Audit-Log, von dem alle wissen, ist d
 es ist eine Entscheidung, keine Nebensache. Wer sie zurücknehmen will: `MESSAGE_CACHE_SECONDS` in
 `logging.service.ts` senken oder die `MessageCreate`-Registrierung in `index.ts` entfernen.
 
+## Web-Konfigurationsseite / Discord-Login (seit 2026-07-23)
+
+Die Verwaltungsseite `/config` schützt sich per **Discord OAuth2** (Scope nur `identify` –
+Benutzername/ID, sonst nichts; keine DMs, keine anderen Server, keine E-Mail). Bewusst
+datensparsam und **komplett ohne serverseitigen Zustand**:
+
+- **Kein Redis, keine Datenbank.** Die Session ist ein **signiertes Cookie im Browser des Admins**
+  (`config_session` = `<discord-user-id>.<ablauf>.<HMAC>`, 7 Tage gültig, `HttpOnly`/`SameSite=Lax`,
+  `Secure` bei https). Der Server speichert davon nichts – er verifiziert das Cookie bei jedem
+  Aufruf per HMAC (`CONFIG_SESSION_SECRET`). Gleiche zustandslose Philosophie wie die Button-`customId`s.
+- **Das Discord-Access-Token wird nicht gespeichert.** Es wird im Callback **einmal transient**
+  benutzt, um die User-ID abzufragen (`GET /users/@me`), und danach verworfen. Kein Refresh-Token,
+  keine Persistenz.
+- **Die Admin-Prüfung macht der eigene Bot**, nicht Discord: `guild.members.fetch(id)` →
+  `permissions.has(Administrator)` auf der ohnehin gecachten Guild. Es wird nichts Zusätzliches
+  über die Person geholt oder abgelegt.
+- **Secrets** (`DISCORD_CLIENT_SECRET`, `CONFIG_SESSION_SECRET`) liegen wie alle anderen in der
+  `config.json`, **nicht in Redis**. Fehlen sie, bleibt die Seite gesperrt (fail-closed).
+
 ## Was bewusst NICHT gespeichert wird
 
 - **Keine LotGD-Zugangsdaten.** lotgd.de hasht das Passwort client-seitig per md5 und akzeptiert
@@ -78,6 +97,8 @@ es ist eine Entscheidung, keine Nebensache. Wer sie zurücknehmen will: `MESSAGE
   `spiel-interaktion-idee.md`.
 - **Keine Twitch-Tokens von Usern.** Der Bot nutzt nur seine eigenen App-Credentials (aus der
   `config.json`, nicht in Redis).
+- **Keine Discord-OAuth-Tokens serverseitig.** Der `/config`-Login hält keinen Access-/Refresh-Token
+  vor und keine Session in Redis – nur ein signiertes Cookie beim Admin selbst (siehe Abschnitt oben).
 - **Keine Spieldaten auf Vorrat.** Roster, News, Online-Liste werden live gescrapt; das Roster liegt
   maximal 10 Minuten im RAM (nicht in Redis), damit `/charakter` nicht 7 Seiten pro Aufruf lädt.
 - **Kein Verlauf beim Blåhaj-Zähler.** Nur die Gesamtsumme, nicht wer wann wie viel erwähnt hat.
