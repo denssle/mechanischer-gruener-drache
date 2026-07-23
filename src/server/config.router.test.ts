@@ -23,14 +23,22 @@ vi.mock('../services/discordOAuth.service.js', () => ({
     fetchDiscordUserId: vi.fn()
 }));
 
+vi.mock('./config.settings.js', () => ({
+    sammleEinstellungen: vi.fn(() => Promise.resolve([
+        {label: 'Protokoll-Kanal', wert: '#log', status: 'ok'}
+    ]))
+}));
+
 import client from '../client.js';
 import * as oauth from '../services/discordOAuth.service.js';
 import {signSession, SESSION_COOKIE, STATE_COOKIE} from './config.session.js';
 import {
+    escapeHtml,
     handleCallback,
     handleConfigPage,
     handleLogin,
     handleLogout,
+    renderEinstellungen,
     requireConfigAuth
 } from './config.router.js';
 
@@ -131,12 +139,28 @@ describe('config.router', () => {
         });
     });
 
-    it('handleConfigPage liefert die HTML-Seite aus', () => {
+    it('handleConfigPage rendert die Seite mit den Einstellungen', async () => {
         const res = mockResponse();
-        handleConfigPage(mockRequest(), res);
+        await handleConfigPage(mockRequest(), res);
         const html = res.send.mock.calls[0][0] as string;
         expect(html).toContain('<!doctype html>');
         expect(html).toContain('Mechanischer Grüner Drache');
+        expect(html).toContain('Protokoll-Kanal');
+        expect(html).toContain('#log');
+    });
+
+    describe('escapeHtml / renderEinstellungen', () => {
+        it('escapeHtml neutralisiert HTML-Sonderzeichen', () => {
+            expect(escapeHtml(`<script>&"'`)).toBe('&lt;script&gt;&amp;&quot;&#39;');
+        });
+
+        it('renderEinstellungen escaped Label und Wert (kein XSS)', () => {
+            const html = renderEinstellungen([
+                {label: 'Event', wert: '<b>böse</b>', status: 'warnung'}
+            ]);
+            expect(html).toContain('&lt;b&gt;böse&lt;/b&gt;');
+            expect(html).not.toContain('<b>böse</b>');
+        });
     });
 
     it('handleLogin setzt ein state-Cookie und leitet zu Discord', () => {

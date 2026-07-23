@@ -19,6 +19,7 @@ import {
     STATE_COOKIE,
     verifySession
 } from './config.session.js';
+import {Einstellung, EinstellungStatus, sammleEinstellungen} from './config.settings.js';
 
 // Verwaltungs-/Einstellungsseite (README-Todo), abgesichert per Discord-OAuth2-Login.
 // Nur Server-Admins kommen rein: Discord liefert (Scope "identify") die User-ID, die
@@ -56,6 +57,17 @@ function renderPage(bodyHtml: string): string {
         h1 { font-size: 1.5rem; }
         a.button { display: inline-block; padding: 0.6rem 1rem; border-radius: 0.5rem; background: #5865F2; color: #fff; text-decoration: none; }
         a.logout { font-size: 0.9rem; }
+        table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+        th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(128,128,128,0.3); }
+        th { font-weight: 600; }
+        td.wert { white-space: nowrap; }
+        .status-ok { color: #2e7d32; }
+        .status-warnung { color: #b26a00; }
+        .status-leer { opacity: 0.6; }
+        @media (prefers-color-scheme: dark) {
+            .status-ok { color: #66bb6a; }
+            .status-warnung { color: #ffb74d; }
+        }
     </style>
 </head>
 <body>
@@ -65,10 +77,36 @@ ${bodyHtml}
 `;
 }
 
-const CONFIG_BODY = `<h1>Mechanischer Grüner Drache</h1>
-    <p>Hier entsteht die Verwaltungsseite für die Bot-Einstellungen, die bisher nur über Admin-Befehle gehen.</p>
-    <p>Dieser erste Entwurf ist bewusst leer – noch ohne echte Einstellungen.</p>
+// Pflicht: dynamische Werte (Kanal-/Rollen-Namen, Event-Titel) kommen aus User-/Discord-Daten und
+// werden in HTML interpoliert - ohne Escaping waere das ein XSS-Vektor.
+export function escapeHtml(text: string): string {
+    return text
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+const STATUS_SYMBOL: Record<EinstellungStatus, string> = {ok: '✓', warnung: '⚠', leer: '–'};
+
+export function renderEinstellungen(einstellungen: Einstellung[]): string {
+    const rows = einstellungen.map(e =>
+        `<tr><td>${escapeHtml(e.label)}</td>` +
+        `<td class="wert status-${e.status}">${STATUS_SYMBOL[e.status]} ${escapeHtml(e.wert)}</td></tr>`
+    ).join('\n');
+    return `<table>
+        <thead><tr><th>Einstellung</th><th>Aktueller Wert</th></tr></thead>
+        <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function configBody(einstellungenHtml: string): string {
+    return `<h1>Mechanischer Grüner Drache</h1>
+    <p>Aktuelle Bot-Einstellungen (nur Ansicht – das Bearbeiten kommt als nächster Schritt).</p>
+    ${einstellungenHtml}
     <p><a class="logout" href="/config/logout">Abmelden</a></p>`;
+}
 
 const LOGIN_BODY = `<h1>Mechanischer Grüner Drache</h1>
     <p>Die Verwaltungsseite ist nur für Server-Admins.</p>
@@ -127,8 +165,16 @@ export async function requireConfigAuth(req: Request, res: Response, next: () =>
     next();
 }
 
-export function handleConfigPage(_req: Request, res: Response): void {
-    res.type('html').send(renderPage(CONFIG_BODY));
+export async function handleConfigPage(_req: Request, res: Response): Promise<void> {
+    let inhalt: string;
+    try {
+        inhalt = renderEinstellungen(await sammleEinstellungen());
+    } catch (error) {
+        // Ein Redis-/Discord-Problem darf die Seite nicht komplett kosten - lieber ein Hinweis.
+        console.error('Fehler beim Laden der Config-Einstellungen:', error);
+        inhalt = '<p>Die Einstellungen konnten gerade nicht geladen werden.</p>';
+    }
+    res.type('html').send(renderPage(configBody(inhalt)));
 }
 
 // Startet den OAuth-Flow: zufaelligen state als kurzlebiges Cookie setzen (CSRF, Double-Submit)
@@ -198,7 +244,15 @@ configRouter.get('/config', (req, res, next) => {
             res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
         }
     });
-}, handleConfigPage);
+}, (req, res) => {
+    // handleConfigPage ist async (sammelt Einstellungen) - eigenes .catch, auch wenn es intern faengt.
+    handleConfigPage(req, res).catch((error) => {
+        console.error('Fehler beim Rendern der Config-Seite:', error);
+        if (!res.headersSent) {
+            res.status(500).type('html').send(renderPage('<p>Interner Fehler.</p>'));
+        }
+    });
+});
 configRouter.get('/config/login', handleLogin);
 // async void: eigenes .catch, sonst killt eine unhandled rejection den Prozess (siehe CLAUDE.md).
 configRouter.get('/config/callback', (req, res) => {
