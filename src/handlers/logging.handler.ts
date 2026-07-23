@@ -9,6 +9,20 @@ function formatAttachments(attachments: string[]): string {
     return attachments.length ? `\nAnhänge: ${attachments.join(', ')}` : '';
 }
 
+// Discord lehnt Nachrichten über 2000 Zeichen mit Fehler 50035 ("Invalid Form Body") ab. Log-Posts
+// aus dynamischem Inhalt (v.a. eine gelöschte/bearbeitete lange Nachricht) können das überschreiten;
+// dann wird der Post zwar vom try/catch gefangen, aber der Log-Eintrag geht verloren. Deshalb hier
+// kürzen, statt scheitern zu lassen.
+export const DISCORD_MAX_LENGTH = 2000;
+const GEKUERZT_SUFFIX = '… [gekürzt]';
+
+export function kuerzeFuerDiscord(text: string): string {
+    if (text.length <= DISCORD_MAX_LENGTH) {
+        return text;
+    }
+    return text.slice(0, DISCORD_MAX_LENGTH - GEKUERZT_SUFFIX.length) + GEKUERZT_SUFFIX;
+}
+
 class LoggingHandler {
     // Merkt sich Inhalt + Anhang-Namen einer Nachricht, damit beim Löschen/Bearbeiten der alte
     // Stand noch da ist (discord.js hält nur einen RAM-Cache, der jeden Neustart verliert).
@@ -62,7 +76,7 @@ class LoggingHandler {
                 message.partial ? (cached?.attachments ?? []) : message.attachments.map(attachment => attachment.name)
             );
 
-            await logChannel.send(
+            await this.sendeLog(logChannel,
                 `🗑️ **Nachricht gelöscht** – ${author} in <#${message.channelId}>\n${content}${attachments}`
             );
 
@@ -92,7 +106,7 @@ class LoggingHandler {
 
             const author = newMessage.author?.tag ?? cached?.authorTag ?? 'Unbekannt';
 
-            await logChannel.send(
+            await this.sendeLog(logChannel,
                 `✏️ **Nachricht bearbeitet** – ${author} in <#${newMessage.channelId}>\n` +
                 `Vorher: ${oldContent === null ? '*nicht verfügbar*' : (oldContent || '*kein Text*')}\n` +
                 `Nachher: ${newContent === null ? '*nicht verfügbar*' : (newContent || '*kein Text*')}`
@@ -128,7 +142,7 @@ class LoggingHandler {
 
             // Beim ersten Mal ist die Zahl keine Information - erst ein Wiederkommen ist eine.
             const zusatz = anzahl > 1 ? ` (bereits zum ${anzahl}. Mal)` : '';
-            await logChannel.send(`📥 **${member.user.tag}** ist dem Server beigetreten${zusatz}.`);
+            await this.sendeLog(logChannel,`📥 **${member.user.tag}** ist dem Server beigetreten${zusatz}.`);
         } catch (error) {
             console.error('Fehler beim Loggen des Server-Beitritts:', error);
         }
@@ -139,7 +153,7 @@ class LoggingHandler {
             const logChannel = await this.getLogChannel();
             if (!logChannel) return;
 
-            await logChannel.send(`📤 **${member.user.tag}** hat den Server verlassen.`);
+            await this.sendeLog(logChannel,`📤 **${member.user.tag}** hat den Server verlassen.`);
         } catch (error) {
             console.error('Fehler beim Loggen des Server-Austritts:', error);
         }
@@ -192,7 +206,7 @@ class LoggingHandler {
             if (!logChannel) return;
 
             for (const message of messages) {
-                await logChannel.send(message);
+                await this.sendeLog(logChannel,message);
             }
         } catch (error) {
             console.error('Fehler beim Loggen der Mitglieds-Änderung:', error);
@@ -205,7 +219,7 @@ class LoggingHandler {
             if (!logChannel) return;
 
             const reason = ban.reason ? ` (Grund: ${ban.reason})` : '';
-            await logChannel.send(`🔨 **${ban.user.tag}** wurde gebannt.${reason}`);
+            await this.sendeLog(logChannel,`🔨 **${ban.user.tag}** wurde gebannt.${reason}`);
         } catch (error) {
             console.error('Fehler beim Loggen des Banns:', error);
         }
@@ -216,7 +230,7 @@ class LoggingHandler {
             const logChannel = await this.getLogChannel();
             if (!logChannel) return;
 
-            await logChannel.send(`♻️ Der Bann von **${ban.user.tag}** wurde aufgehoben.`);
+            await this.sendeLog(logChannel,`♻️ Der Bann von **${ban.user.tag}** wurde aufgehoben.`);
         } catch (error) {
             console.error('Fehler beim Loggen der Bann-Aufhebung:', error);
         }
@@ -227,7 +241,7 @@ class LoggingHandler {
             const logChannel = await this.getLogChannel();
             if (!logChannel) return;
 
-            await logChannel.send(`🧹 **${messages.size}** Nachrichten wurden in <#${channel.id}> gelöscht (Massen-Löschung).`);
+            await this.sendeLog(logChannel,`🧹 **${messages.size}** Nachrichten wurden in <#${channel.id}> gelöscht (Massen-Löschung).`);
         } catch (error) {
             console.error('Fehler beim Loggen der Massen-Löschung:', error);
         }
@@ -238,6 +252,12 @@ class LoggingHandler {
         if (!channelId) return null;
 
         return await client.channels.fetch(channelId) as TextChannel | null;
+    }
+
+    // Zentraler Weg, einen Log-Eintrag zu posten: kürzt auf das Discord-2000-Zeichen-Limit,
+    // damit ein langer Inhalt den Post nicht mit Fehler 50035 scheitern lässt.
+    private async sendeLog(logChannel: TextChannel, inhalt: string): Promise<void> {
+        await logChannel.send(kuerzeFuerDiscord(inhalt));
     }
 }
 

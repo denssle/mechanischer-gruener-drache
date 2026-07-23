@@ -28,7 +28,22 @@ vi.mock('../client.js', () => ({
 import memberService from '../services/member.service.js';
 import loggingService from '../services/logging.service.js';
 import client from '../client.js';
-import loggingHandler from './logging.handler.js';
+import loggingHandler, { kuerzeFuerDiscord, DISCORD_MAX_LENGTH } from './logging.handler.js';
+
+describe('kuerzeFuerDiscord', () => {
+    it('lässt Text bis zum Discord-Limit unverändert', () => {
+        expect(kuerzeFuerDiscord('kurz')).toBe('kurz');
+        const genauAmLimit = 'a'.repeat(DISCORD_MAX_LENGTH);
+        expect(kuerzeFuerDiscord(genauAmLimit)).toBe(genauAmLimit);
+    });
+
+    it('kürzt zu langen Text auf das Limit und markiert die Kürzung', () => {
+        const zuLang = 'a'.repeat(DISCORD_MAX_LENGTH + 500);
+        const result = kuerzeFuerDiscord(zuLang);
+        expect(result.length).toBe(DISCORD_MAX_LENGTH);
+        expect(result.endsWith('… [gekürzt]')).toBe(true);
+    });
+});
 
 const mockMessage = (overrides = {}) => ({
     id: 'message-1',
