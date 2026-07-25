@@ -52,6 +52,7 @@ import {
     handleLogin,
     handleLogout,
     handleRolleSpeichern,
+    renderConfigSeite,
     renderEinstellungen,
     renderKanalFormulare,
     renderRollenFormular,
@@ -316,6 +317,22 @@ describe('config.router', () => {
     it('renderRollenFormular markiert "— keine —" wenn keine Rolle gesetzt ist', () => {
         const html = renderRollenFormular([{id: 'r1', name: 'Abo'}], null, 'token-9');
         expect(html).toContain('value="" selected>— keine —');
+    });
+
+    it('renderConfigSeite baut die vollständige Seite (Einstellungen + beide Formular-Arten)', () => {
+        const html = renderConfigSeite({
+            einstellungen: [{label: 'Protokoll-Kanal', wert: '#log', status: 'ok'}],
+            kanalFelder: [{schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'c1'}],
+            kanaele: [{id: 'c1', name: 'allgemein'}],
+            rollen: [{id: 'r1', name: 'Streamer'}],
+            twitchRolleId: 'r1',
+            csrfToken: 'tok',
+            gespeichert: true,
+        });
+        expect(html).toContain('<!doctype html>');
+        expect(html).toContain('Gespeichert.');
+        expect(html).toContain('action="/config/kanal"');
+        expect(html).toContain('action="/config/rolle"');
     });
 
     describe('escapeHtml / renderEinstellungen', () => {

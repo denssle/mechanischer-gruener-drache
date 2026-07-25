@@ -7,3 +7,4 @@ config.json
 *.js.map
 *.d.ts
 *.log
+config-vorschau.html

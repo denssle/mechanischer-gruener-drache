@@ -171,6 +171,27 @@ function configBody(einstellungenHtml: string, formularHtml: string, gespeichert
     <p><a class="logout" href="/config/logout">Abmelden</a></p>`;
 }
 
+export interface ConfigSeiteDaten {
+    einstellungen: Einstellung[];
+    kanalFelder: KanalFeld[];
+    kanaele: KanalOption[];
+    rollen: RollenOption[];
+    twitchRolleId: string | null;
+    csrfToken: string;
+    gespeichert: boolean;
+}
+
+// Reine Präsentation der kompletten /config-Seite - KEINE Redis-/Discord-Zugriffe. handleConfigPage
+// sammelt die Daten und ruft das hier; das Vorschau-Skript (scripts/config-vorschau.ts) ruft es mit
+// Beispieldaten auf, um am Layout zu iterieren, ohne zu deployen.
+export function renderConfigSeite(daten: ConfigSeiteDaten): string {
+    const inhalt = renderEinstellungen(daten.einstellungen);
+    const formular =
+        renderKanalFormulare(daten.kanalFelder, daten.kanaele, daten.csrfToken) + '\n' +
+        renderRollenFormular(daten.rollen, daten.twitchRolleId, daten.csrfToken);
+    return renderPage(configBody(inhalt, formular, daten.gespeichert));
+}
+
 const LOGIN_BODY = `<h1>Mechanischer Grüner Drache</h1>
     <p>Die Verwaltungsseite ist nur für Server-Admins.</p>
     <p><a class="button" href="/config/login">Mit Discord anmelden</a></p>`;
@@ -231,22 +252,23 @@ export async function requireConfigAuth(req: Request, res: Response, next: () =>
 }
 
 export async function handleConfigPage(req: Request, res: Response): Promise<void> {
-    let inhalt: string;
-    let formular: string;
     try {
-        inhalt = renderEinstellungen(await sammleEinstellungen());
         const userId = res.locals.configUserId as string;
-        const csrfToken = createCsrfToken(userId);
-        formular =
-            renderKanalFormulare(await ladeKanalFelder(), holeTextKanaele(), csrfToken) + '\n' +
-            renderRollenFormular(holeRollen(), await holeTwitchRolleId(), csrfToken);
+        const html = renderConfigSeite({
+            einstellungen: await sammleEinstellungen(),
+            kanalFelder: await ladeKanalFelder(),
+            kanaele: holeTextKanaele(),
+            rollen: holeRollen(),
+            twitchRolleId: await holeTwitchRolleId(),
+            csrfToken: createCsrfToken(userId),
+            gespeichert: req.query.gespeichert === '1',
+        });
+        res.type('html').send(html);
     } catch (error) {
         // Ein Redis-/Discord-Problem darf die Seite nicht komplett kosten - lieber ein Hinweis.
         console.error('Fehler beim Laden der Config-Einstellungen:', error);
-        inhalt = '<p>Die Einstellungen konnten gerade nicht geladen werden.</p>';
-        formular = '';
+        res.type('html').send(renderPage(configBody('<p>Die Einstellungen konnten gerade nicht geladen werden.</p>', '', false)));
     }
-    res.type('html').send(renderPage(configBody(inhalt, formular, req.query.gespeichert === '1')));
 }
 
 // Speichert einen Kanal fuer die per "feld" benannte Einstellung. Reihenfolge bewusst: CSRF pruefen,
