@@ -170,12 +170,12 @@ describe('config.router', () => {
         expect(html).toContain('Protokoll-Kanal');
         expect(html).toContain('#log');
         // Kanal-Formular inkl. CSRF-Token, Feld-Kennung und vorausgewähltem Kanal
-        expect(html).toContain('<form method="post" action="/config/kanal">');
+        expect(html).toContain('action="/config/kanal"');
         expect(html).toContain('name="feld" value="protokoll"');
         expect(html).toContain(createCsrfToken('12345'));
         expect(html).toContain('value="c1" selected');
         // Rollen-Formular mit "— keine —" und vorausgewählter Rolle
-        expect(html).toContain('<form method="post" action="/config/rolle">');
+        expect(html).toContain('action="/config/rolle"');
         expect(html).toContain('— keine —');
         expect(html).toContain('value="r1" selected');
     });
@@ -310,7 +310,7 @@ describe('config.router', () => {
         expect(html).toContain('&lt;b&gt;Abo&lt;/b&gt;');
         expect(html).not.toContain('<b>Abo</b>');
         expect(html).toContain('value="r2" selected');
-        expect(html).toContain('<form method="post" action="/config/rolle">');
+        expect(html).toContain('action="/config/rolle"');
     });
 
     it('renderRollenFormular markiert "— keine —" wenn keine Rolle gesetzt ist', () => {

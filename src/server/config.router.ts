@@ -75,6 +75,11 @@ function renderPage(bodyHtml: string): string {
         h1 { font-size: 1.5rem; }
         a.button { display: inline-block; padding: 0.6rem 1rem; border-radius: 0.5rem; background: #5865F2; color: #fff; text-decoration: none; }
         a.logout { font-size: 0.9rem; }
+        form.setting { display: flex; align-items: center; gap: 0.75rem; margin: 0.4rem 0; flex-wrap: wrap; }
+        form.setting label { flex: 0 0 16rem; }
+        form.setting select { flex: 0 0 14rem; padding: 0.3rem; }
+        form.setting button { padding: 0.3rem 0.8rem; }
+        form.rolle-abstand { margin-top: 1.75rem; }
         table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
         th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(128,128,128,0.3); }
         th { font-weight: 600; }
@@ -125,7 +130,7 @@ function renderKanalFormular(feld: KanalFeld, kanaele: KanalOption[], csrfToken:
     const optionen = kanaele.map(kanal =>
         `<option value="${escapeHtml(kanal.id)}"${kanal.id === feld.aktuelleId ? ' selected' : ''}>#${escapeHtml(kanal.name)}</option>`
     ).join('\n');
-    return `<form method="post" action="/config/kanal">
+    return `<form class="setting" method="post" action="/config/kanal">
         <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
         <input type="hidden" name="feld" value="${escapeHtml(feld.schluessel)}">
         <label>${escapeHtml(feld.label)}</label>
@@ -148,7 +153,7 @@ export function renderRollenFormular(rollen: RollenOption[], aktuelleId: string 
     const optionen = rollen.map(rolle =>
         `<option value="${escapeHtml(rolle.id)}"${rolle.id === aktuelleId ? ' selected' : ''}>@${escapeHtml(rolle.name)}</option>`
     ).join('\n');
-    return `<form method="post" action="/config/rolle">
+    return `<form class="setting rolle-abstand" method="post" action="/config/rolle">
         <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
         <label>Twitch-Benachrichtigungsrolle</label>
         <select name="rolle">${keineOption}${optionen}</select>
