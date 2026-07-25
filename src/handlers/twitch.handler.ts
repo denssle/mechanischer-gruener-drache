@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits, TextChannel} from "discord.js";
+import {ChatInputCommandInteraction, TextChannel} from "discord.js";
 import twitchUserService from "../services/twitch.user.service.js";
 import twitchService from "../services/twitch.service.js";
 import {StreamOnlineEvent} from "../types/streamOnlineEvent.js";
@@ -87,22 +87,6 @@ class TwitchHandler {
         );
     }
 
-    async handleBenachrichtigungskanal(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const channel = interaction.options.getChannel('kanal', true);
-        await twitchUserService.setNotificationChannel(channel.id);
-
-        return interaction.reply(
-            `Twitch-Notifications werden ab jetzt in <#${channel.id}> gepostet.`
-        );
-    }
-
     async handleHilfe(interaction: ChatInputCommandInteraction) {
         return interaction.reply(
             `**Twitch-Befehle**\n\n` +
@@ -168,21 +152,6 @@ class TwitchHandler {
         await twitchUserService.unlinkUser(discordUserId);
     }
 
-    async handleBenachrichtigungsrolle(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const rolle = interaction.options.getRole('rolle', true);
-        await twitchUserService.setNotificationRole(rolle.id);
-
-        return interaction.reply(
-            `Bei Twitch-Notifications wird ab jetzt <@&${rolle.id}> gepingt.`
-        );
-    }
 }
 
 export default new TwitchHandler();

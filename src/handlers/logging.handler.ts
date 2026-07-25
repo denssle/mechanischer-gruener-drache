@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, GuildBan, GuildMember, GuildTextBasedChannel, Message, MessageFlags, PartialGuildMember, PartialMessage, PermissionFlagsBits, ReadonlyCollection, TextChannel} from 'discord.js';
+import {GuildBan, GuildMember, GuildTextBasedChannel, Message, PartialGuildMember, PartialMessage, ReadonlyCollection, TextChannel} from 'discord.js';
 import client from '../client.js';
 import loggingService, {CachedMessage} from '../services/logging.service.js';
 import memberService from '../services/member.service.js';
@@ -41,22 +41,6 @@ class LoggingHandler {
         } catch (error) {
             console.error('Fehler beim Zwischenspeichern der Nachricht:', error);
         }
-    }
-
-    async handleSetChannel(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const channel = interaction.options.getChannel('kanal', true);
-        await loggingService.setLogChannel(channel.id);
-
-        return interaction.reply(
-            `Bearbeitete/gelöschte Nachrichten werden ab jetzt in <#${channel.id}> geloggt.`
-        );
     }
 
     async handleMessageDelete(message: Message | PartialMessage) {

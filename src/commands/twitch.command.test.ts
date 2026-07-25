@@ -5,9 +5,7 @@ vi.mock('../handlers/twitch.handler.js', () => ({
         handleVerknuepfen: vi.fn(),
         handleEntfernen: vi.fn(),
         handleStatus: vi.fn(),
-        handleBenachrichtigungskanal: vi.fn(),
         handleHilfe: vi.fn(),
-        handleBenachrichtigungsrolle: vi.fn(),
     }
 }));
 
@@ -27,9 +25,7 @@ describe('twitch.command', () => {
         ['verknuepfen', 'handleVerknuepfen'],
         ['entfernen', 'handleEntfernen'],
         ['status', 'handleStatus'],
-        ['benachrichtigungskanal', 'handleBenachrichtigungskanal'],
         ['hilfe', 'handleHilfe'],
-        ['benachrichtigungsrolle', 'handleBenachrichtigungsrolle'],
     ] as const)('leitet Subcommand "%s" an twitchHandler.%s weiter', async (subcommand, handlerMethod) => {
         const interaction = mockInteraction(subcommand);
 
@@ -37,9 +33,8 @@ describe('twitch.command', () => {
 
         expect(twitchHandler[handlerMethod]).toHaveBeenCalledWith(interaction);
         for (const [otherName] of Object.entries({
-            handleVerknuepfen: 'verknuepfen', handleEntfernen: 'entfernen', handleStatus: 'status',
-            handleBenachrichtigungskanal: 'benachrichtigungskanal', handleHilfe: 'hilfe',
-            handleBenachrichtigungsrolle: 'benachrichtigungsrolle',
+            handleVerknuepfen: 'verknuepfen', handleEntfernen: 'entfernen',
+            handleStatus: 'status', handleHilfe: 'hilfe',
         })) {
             if (otherName !== handlerMethod) {
                 expect(twitchHandler[otherName as keyof typeof twitchHandler]).not.toHaveBeenCalled();
@@ -55,14 +50,12 @@ describe('twitch.command', () => {
         expect(twitchHandler.handleVerknuepfen).not.toHaveBeenCalled();
         expect(twitchHandler.handleEntfernen).not.toHaveBeenCalled();
         expect(twitchHandler.handleStatus).not.toHaveBeenCalled();
-        expect(twitchHandler.handleBenachrichtigungskanal).not.toHaveBeenCalled();
         expect(twitchHandler.handleHilfe).not.toHaveBeenCalled();
-        expect(twitchHandler.handleBenachrichtigungsrolle).not.toHaveBeenCalled();
     });
 
     it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
         const definedSubcommands = twitchCommand.data.options.map((option) => option.toJSON().name);
-        const dispatchedSubcommands = ['verknuepfen', 'entfernen', 'status', 'benachrichtigungskanal', 'hilfe', 'benachrichtigungsrolle'];
+        const dispatchedSubcommands = ['verknuepfen', 'entfernen', 'status', 'hilfe'];
 
         expect(definedSubcommands.sort()).toEqual(dispatchedSubcommands.sort());
     });

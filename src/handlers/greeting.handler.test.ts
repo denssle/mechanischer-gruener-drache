@@ -78,62 +78,6 @@ describe('werteReaktionenAus', () => {
     });
 });
 
-describe('GreetingHandler.handleSetChannel', () => {
-    beforeEach(() => {
-        Object.values(svc).forEach(fn => fn.mockReset());
-        channelsFetch.mockReset();
-    });
-
-    it('lehnt Nicht-Admins ephemer ab', async () => {
-        const interaction = { memberPermissions: { has: () => false }, reply: vi.fn() } as any;
-
-        await greetingHandler.handleSetChannel(interaction);
-
-        expect(svc.setChannel).not.toHaveBeenCalled();
-        expect(interaction.reply.mock.calls[0][0].content).toContain('Administrator');
-    });
-
-    it('speichert den Kanal und bestätigt (auch wenn der Scan nichts findet)', async () => {
-        svc.getChannel.mockResolvedValue('chan-99');
-        channelsFetch.mockResolvedValue(null); // Kanal nicht abrufbar -> Scan übersprungen
-        const interaction = {
-            memberPermissions: { has: () => true },
-            options: { getChannel: () => ({ id: 'chan-99' }) },
-            deferReply: vi.fn(),
-            editReply: vi.fn(),
-        } as any;
-
-        await greetingHandler.handleSetChannel(interaction);
-
-        expect(svc.setChannel).toHaveBeenCalledWith('chan-99');
-        expect(interaction.editReply.mock.calls[0][0]).toContain('<#chan-99>');
-    });
-
-    it('scannt die Historie und lernt Emojis, wenn der Kanal abrufbar ist', async () => {
-        svc.getChannel.mockResolvedValue('chan-99');
-        const messages = new Map([
-            ['m1', { author: { id: 'tirsis' }, reactions: { cache: new Map([
-                ['w', { emoji: { id: null, name: WELLE } }],
-                ['s', { emoji: { id: null, name: '☀️' } }],
-            ]) } }],
-        ]) as any;
-        messages.last = () => ({ id: 'm1' });
-        const channel = { isTextBased: () => true, messages: { fetch: vi.fn().mockResolvedValue(messages) } };
-        channelsFetch.mockResolvedValue(channel);
-        const interaction = {
-            memberPermissions: { has: () => true },
-            options: { getChannel: () => ({ id: 'chan-99' }) },
-            deferReply: vi.fn(),
-            editReply: vi.fn(),
-        } as any;
-
-        await greetingHandler.handleSetChannel(interaction);
-
-        expect(svc.setLearnedEmoji).toHaveBeenCalledWith('tirsis', '☀️');
-        expect(interaction.editReply.mock.calls[0][0]).toContain('1 persönliche Emojis');
-    });
-});
-
 describe('GreetingHandler.handleLernen', () => {
     beforeEach(() => {
         Object.values(svc).forEach(fn => fn.mockReset());
@@ -167,7 +111,7 @@ describe('GreetingHandler.handleMessage', () => {
 
         await greetingHandler.handleMessage(message);
 
-        expect(svc.setLastGreetingDay).toHaveBeenCalledWith(heuteAlsTag());
+        expect(svc.setLastGreetingDay).toHaveBeenCalledWith('u1', heuteAlsTag());
         expect(message.react).toHaveBeenCalledWith(WELLE);
         expect(message.react).toHaveBeenCalledWith(ableiteEmoji('u1'));
     });
@@ -208,7 +152,7 @@ describe('GreetingHandler.handleMessage', () => {
         expect(message.react).not.toHaveBeenCalled();
     });
 
-    it('begrüßt nur einmal pro Tag (Tagesmarker bereits gesetzt)', async () => {
+    it('begrüßt dieselbe Person nur einmal pro Tag (Tagesmarker bereits gesetzt)', async () => {
         svc.getLastGreetingDay.mockResolvedValue(heuteAlsTag());
         const message = makeMessage();
 
@@ -216,6 +160,23 @@ describe('GreetingHandler.handleMessage', () => {
 
         expect(message.react).not.toHaveBeenCalled();
         expect(svc.setLastGreetingDay).not.toHaveBeenCalled();
+    });
+
+    it('begrüßt jede Person einzeln (Marker pro User, nicht global)', async () => {
+        // u1 wurde heute schon begrüßt, u2 noch nicht.
+        svc.getLastGreetingDay.mockImplementation(async (userId: string) =>
+            userId === 'u1' ? heuteAlsTag() : null
+        );
+
+        const m1 = makeMessage({ author: { bot: false, id: 'u1' } });
+        await greetingHandler.handleMessage(m1);
+        expect(m1.react).not.toHaveBeenCalled();
+
+        const m2 = makeMessage({ author: { bot: false, id: 'u2' } });
+        await greetingHandler.handleMessage(m2);
+        expect(m2.react).toHaveBeenCalledWith(WELLE);
+        expect(m2.react).toHaveBeenCalledWith(ableiteEmoji('u2'));
+        expect(svc.setLastGreetingDay).toHaveBeenCalledWith('u2', heuteAlsTag());
     });
 
     it('setzt das persönliche Emoji auch dann, wenn die Welle-Reaktion scheitert', async () => {

@@ -1,4 +1,4 @@
-import {ChannelType, ChatInputCommandInteraction, SlashCommandBuilder} from "discord.js";
+import {ChatInputCommandInteraction, SlashCommandBuilder} from "discord.js";
 import twitchHandler from "../handlers/twitch.handler.js";
 
 
@@ -20,23 +20,8 @@ export default {
             .setName('status')
             .setDescription('Deine aktuelle Twitch-Verknüpfung anzeigen'))
         .addSubcommand(sub => sub
-            .setName('benachrichtigungskanal')
-            .setDescription('Discord-Kanal für Twitch-Benachrichtigungen festlegen (nur Admins)')
-            .addChannelOption((option) => option
-                .setName('kanal')
-                .setDescription('Discord-Kanal für Benachrichtigungen')
-                .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-                .setRequired(true)))
-        .addSubcommand(sub => sub
             .setName('hilfe')
-            .setDescription('Zeigt alle verfügbaren Twitch-Befehle'))
-        .addSubcommand(sub => sub
-            .setName('benachrichtigungsrolle')
-            .setDescription('Rolle die bei Twitch-Benachrichtigungen gepingt wird (nur Admins)')
-            .addRoleOption(option => option
-                .setName('rolle')
-                .setDescription('Zu pingende Rolle')
-                .setRequired(true))),
+            .setDescription('Zeigt alle verfügbaren Twitch-Befehle')),
 
     async execute(interaction: ChatInputCommandInteraction) {
         const subcommand = interaction.options.getSubcommand();
@@ -48,12 +33,8 @@ export default {
                 return twitchHandler.handleEntfernen(interaction);
             case 'status':
                 return twitchHandler.handleStatus(interaction);
-            case 'benachrichtigungskanal':
-                return twitchHandler.handleBenachrichtigungskanal(interaction);
             case 'hilfe':
                 return twitchHandler.handleHilfe(interaction);
-            case 'benachrichtigungsrolle':
-                return twitchHandler.handleBenachrichtigungsrolle(interaction);
         }
     }
 };

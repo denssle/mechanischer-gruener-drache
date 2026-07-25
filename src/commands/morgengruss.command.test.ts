@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../handlers/greeting.handler.js', () => ({
     default: {
-        handleSetChannel: vi.fn(),
         handleLernen: vi.fn(),
     }
 }));
@@ -17,28 +16,24 @@ const mockInteraction = (subcommand: string) => ({
 describe('morgengruss.command', () => {
     beforeEach(() => vi.clearAllMocks());
 
-    it.each([
-        ['kanal', 'handleSetChannel'],
-        ['lernen', 'handleLernen'],
-    ] as const)('leitet Subcommand "%s" an greetingHandler.%s weiter', async (subcommand, handlerMethod) => {
-        const interaction = mockInteraction(subcommand);
+    it('leitet Subcommand "lernen" an greetingHandler.handleLernen weiter', async () => {
+        const interaction = mockInteraction('lernen');
 
         await morgengrussCommand.execute(interaction);
 
-        expect(greetingHandler[handlerMethod]).toHaveBeenCalledWith(interaction);
+        expect(greetingHandler.handleLernen).toHaveBeenCalledWith(interaction);
     });
 
     it('tut nichts bei einem unbekannten Subcommand', async () => {
         await morgengrussCommand.execute(mockInteraction('nicht-existent'));
 
-        expect(greetingHandler.handleSetChannel).not.toHaveBeenCalled();
         expect(greetingHandler.handleLernen).not.toHaveBeenCalled();
     });
 
     // Subcommand-Namen stehen doppelt im Code (Builder + switch) - einzige Absicherung gegen Drift.
     it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
         const definedSubcommands = morgengrussCommand.data.options.map((option) => option.toJSON().name);
-        const dispatchedSubcommands = ['kanal', 'lernen'];
+        const dispatchedSubcommands = ['lernen'];
 
         expect(definedSubcommands.sort()).toEqual(dispatchedSubcommands.sort());
     });

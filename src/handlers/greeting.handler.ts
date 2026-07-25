@@ -9,9 +9,9 @@ import {
 import client from '../client.js';
 import greetingService from '../services/greeting.service.js';
 
-// Morgengruß-Tradition: die erste Nachricht des Tages im Morgengruß-Kanal wird nur per Reaktion
-// begrüßt (kein eigener Post - passt zum Blåhaj-/Sport-Auto-Listener-Muster). Die Emojis sind hier
-// funktional (die einzige Rückmeldung), nicht dekorativ - bewusste Ausnahme zur Emoji-Sparsamkeit.
+// Morgengruß-Tradition: die erste Nachricht JEDER Person am Tag im Morgengruß-Kanal wird nur per
+// Reaktion begrüßt (kein eigener Post - passt zum Blåhaj-/Sport-Auto-Listener-Muster). Die Emojis
+// sind hier funktional (die einzige Rückmeldung), nicht dekorativ - bewusste Ausnahme zur Sparsamkeit.
 export const WELLE = '👋';
 
 // Fallback-Pool: persönliches Emoji stabil aus der User-ID abgeleitet, falls sich aus der Historie
@@ -74,30 +74,6 @@ function formatTag(date: Date): string {
 }
 
 class GreetingHandler {
-    async handleSetChannel(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral,
-            });
-        }
-
-        const channel = interaction.options.getChannel('kanal', true);
-        await greetingService.setChannel(channel.id);
-
-        // Der Historien-Scan kann mehrere API-Calls kosten.
-        await interaction.deferReply();
-        const kanal = await this.holeTextkanal();
-        const gelernt = kanal ? await this.lerneUndSpeichere(kanal) : null;
-
-        const lernZeile = gelernt === null
-            ? 'Die bisherige Historie konnte ich nicht scannen.'
-            : `Aus der Historie habe ich ${gelernt} persönliche Emojis gelernt.`;
-        return interaction.editReply(
-            `Die erste Nachricht des Tages in <#${channel.id}> wird ab jetzt mit einem Morgengruß beantwortet. ${lernZeile}`
-        );
-    }
-
     // /morgengruss lernen: die gelernten Emojis aus der aktuellen Historie auffrischen.
     async handleLernen(interaction: ChatInputCommandInteraction) {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
@@ -111,7 +87,7 @@ class GreetingHandler {
         const kanal = await this.holeTextkanal();
         if (!kanal) {
             return interaction.editReply(
-                'Es ist kein (abrufbarer) Morgengruß-Kanal gesetzt. Nutze zuerst `/morgengruss kanal`.'
+                'Es ist kein (abrufbarer) Morgengruß-Kanal gesetzt. Setze ihn zuerst auf der Konfigurationsseite (/config).'
             );
         }
 
@@ -119,9 +95,9 @@ class GreetingHandler {
         return interaction.editReply(`Aus der Historie habe ich ${gelernt} persönliche Emojis gelernt.`);
     }
 
-    // Auto-Listener: begrüßt die erste Nachricht des Tages im Morgengruß-Kanal. Bewusst simpel -
-    // egal welcher Inhalt, kein Schlüsselwort, kein Uhrzeitfenster. Bot-Nachrichten MÜSSEN ignoriert
-    // werden, sonst könnte ein Bot-Post als "erste Nachricht des Tages" durchgehen.
+    // Auto-Listener: begrüßt die erste Nachricht JEDER Person am Tag im Morgengruß-Kanal. Bewusst
+    // simpel - egal welcher Inhalt, kein Schlüsselwort, kein Uhrzeitfenster. Bot-Nachrichten MÜSSEN
+    // ignoriert werden, sonst könnte ein Bot-Post als erste Nachricht durchgehen.
     async handleMessage(message: OmitPartialGroupDMChannel<Message<boolean>>): Promise<void> {
         if (message.author.bot) return;
 
@@ -129,13 +105,15 @@ class GreetingHandler {
         if (!kanalId || message.channelId !== kanalId) return;
 
         const heute = formatTag(new Date());
-        const letzterTag = await greetingService.getLastGreetingDay();
+        // Tagesmarker PRO Person: nur die erste Nachricht dieser Person am Tag wird begrüßt, aber
+        // jede Person bekommt ihren eigenen Gruß (nicht nur, wer als Erste:r überhaupt schreibt).
+        const letzterTag = await greetingService.getLastGreetingDay(message.author.id);
         if (letzterTag === heute) return;
 
-        // Den Tag zuerst beanspruchen, dann reagieren - hält das Fenster für einen Doppelgruß klein
-        // (bei zwei fast gleichzeitigen Nachrichten theoretisch möglich, aber harmlos: nur eine
-        // zusätzliche Reaktion). Bewusst kein aufwändiges atomares SET NX für eine Hobby-Spielerei.
-        await greetingService.setLastGreetingDay(heute);
+        // Den Tag für diese Person zuerst beanspruchen, dann reagieren - hält das Fenster für einen
+        // Doppelgruß klein (bei zwei fast gleichzeitigen Nachrichten derselben Person theoretisch
+        // möglich, aber harmlos: nur eine zusätzliche Reaktion). Bewusst kein atomares SET NX.
+        await greetingService.setLastGreetingDay(message.author.id, heute);
 
         // Gelerntes Emoji bevorzugen; ohne Treffer der stabile Hash-Fallback. Fehlertolerant: ein
         // Redis-Problem darf den Gruß nicht ganz kosten.

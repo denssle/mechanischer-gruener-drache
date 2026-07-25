@@ -398,20 +398,6 @@ describe('SportHandler', () => {
         });
     });
 
-    describe('handleAnkuendigungskanal', () => {
-        it('setzt den Kanal mit Administrator-Rechten', async () => {
-            const interaction = {
-                memberPermissions: { has: vi.fn().mockReturnValue(true) },
-                options: { getChannel: vi.fn().mockReturnValue({ id: 'chan-1' }) },
-                reply: vi.fn(),
-            } as any;
-
-            await sportHandler.handleAnkuendigungskanal(interaction);
-
-            expect(sportService.setAnnouncementChannel).toHaveBeenCalledWith('chan-1');
-        });
-    });
-
     describe('Meilenstein-Ankündigung beim Eintragen', () => {
         const eintragenInteraction = () => ({
             user: {

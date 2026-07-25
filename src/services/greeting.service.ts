@@ -2,7 +2,8 @@ import redisService from './redis.service.js';
 
 const KEYS = {
     channel: 'GREETING:CHANNEL',
-    // Datum (YYYY-MM-DD) der zuletzt begrüßten "ersten Nachricht des Tages" - Doppelgruß-Schutz.
+    // Hash userId → Datum (YYYY-MM-DD) der zuletzt begrüßten ersten Nachricht dieser Person am Tag -
+    // Doppelgruß-Schutz PRO Person, damit jede:r am Tag der eigenen ersten Nachricht begrüßt wird.
     lastDay: 'GREETING:LAST_DAY',
     // Hash userId → persönliches Emoji, aus der Chat-Historie gelernt (Feld pro Person).
     emoji: 'GREETING:EMOJI',
@@ -17,12 +18,13 @@ class GreetingService {
         return redisService.get(KEYS.channel);
     }
 
-    async getLastGreetingDay(): Promise<string | null> {
-        return redisService.get(KEYS.lastDay);
+    async getLastGreetingDay(userId: string): Promise<string | null> {
+        const alle = await redisService.getHashAll(KEYS.lastDay);
+        return alle[userId] ?? null;
     }
 
-    async setLastGreetingDay(day: string): Promise<void> {
-        await redisService.set(KEYS.lastDay, day);
+    async setLastGreetingDay(userId: string, day: string): Promise<void> {
+        await redisService.setHashField(KEYS.lastDay, userId, day);
     }
 
     async setLearnedEmoji(userId: string, emoji: string): Promise<void> {

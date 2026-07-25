@@ -347,23 +347,6 @@ class SportHandler {
         );
     }
 
-    async handleAnkuendigungskanal(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const channel = interaction.options.getChannel('kanal', true);
-        await sportService.setAnnouncementChannel(channel.id);
-
-        return interaction.reply(
-            `<#${channel.id}> ist ab jetzt der Sport-Kanal: Meilensteine werden dort angekündigt, ` +
-            `und mit „+" markierte Kilometer-Angaben („+12 km gelaufen") werden dort automatisch eingetragen.`
-        );
-    }
-
     // Postet neu erreichte Meilensteine in den Ankündigungskanal. Bewusst fehlertolerant: darf
     // eine erfolgreich eingetragene Aktivität niemals nachträglich scheitern lassen (daher try/catch).
     // Ohne konfigurierten/abrufbaren Kanal wird NICHT als announced markiert - so wird die Feier

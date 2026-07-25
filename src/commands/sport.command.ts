@@ -1,4 +1,4 @@
-import {ChannelType, ChatInputCommandInteraction, SlashCommandBuilder} from 'discord.js';
+import {ChatInputCommandInteraction, SlashCommandBuilder} from 'discord.js';
 import sportHandler from '../handlers/sport.handler.js';
 
 export default {
@@ -72,14 +72,6 @@ export default {
                 .setDescription('Neuer Bestandskilometer-Wert (0 = entfernen)')
                 .setRequired(true)
                 .setMinValue(0)))
-        .addSubcommand(sub => sub
-            .setName('ankuendigungskanal')
-            .setDescription('Sport-Kanal festlegen: Meilenstein-Ankündigungen + Auto-Erfassung (nur Admins)')
-            .addChannelOption(option => option
-                .setName('kanal')
-                .setDescription('Sport-Kanal (Ankündigungen landen hier, km-Angaben werden hier erfasst)')
-                .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-                .setRequired(true)))
         .addSubcommandGroup(group => group
             .setName('meilenstein')
             .setDescription('Meilensteine für die gemeinsame Gesamtdistanz')
@@ -142,8 +134,6 @@ export default {
                 return sportHandler.handleAltkilometer(interaction);
             case 'altkilometer-setzen':
                 return sportHandler.handleAltkilometerSetzen(interaction);
-            case 'ankuendigungskanal':
-                return sportHandler.handleAnkuendigungskanal(interaction);
         }
     }
 };

@@ -11,7 +11,6 @@ vi.mock('../handlers/sport.handler.js', () => ({
         handleGesamt: vi.fn(),
         handleAltkilometer: vi.fn(),
         handleAltkilometerSetzen: vi.fn(),
-        handleAnkuendigungskanal: vi.fn(),
         handleMeilensteinSetzen: vi.fn(),
         handleMeilensteinListe: vi.fn(),
         handleMeilensteinEntfernen: vi.fn(),
@@ -43,7 +42,6 @@ describe('sport.command', () => {
         ['gesamt', 'handleGesamt'],
         ['altkilometer', 'handleAltkilometer'],
         ['altkilometer-setzen', 'handleAltkilometerSetzen'],
-        ['ankuendigungskanal', 'handleAnkuendigungskanal'],
     ] as const)('leitet Subcommand "%s" an sportHandler.%s weiter', async (subcommand, handlerMethod) => {
         const interaction = mockInteraction(subcommand);
 
@@ -79,7 +77,7 @@ describe('sport.command', () => {
         const dispatchedOptions = [
             'eintragen', 'loeschen', 'bearbeiten', 'statistik',
             'hilfe', 'setzen', 'gesamt', 'altkilometer', 'altkilometer-setzen',
-            'ankuendigungskanal', 'meilenstein',
+            'meilenstein',
         ];
 
         expect(definedOptions.sort()).toEqual(dispatchedOptions.sort());

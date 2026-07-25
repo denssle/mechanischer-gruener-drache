@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Collection, PermissionFlagsBits } from 'discord.js';
+import { Collection } from 'discord.js';
 
 vi.mock('../services/logging.service.js', () => ({
     default: {
@@ -59,35 +59,6 @@ const mockMessage = (overrides = {}) => ({
 describe('LoggingHandler', () => {
     beforeEach(() => {
         vi.resetAllMocks();
-    });
-
-    describe('handleSetChannel', () => {
-        const mockInteraction = (isAdmin: boolean) => ({
-            memberPermissions: { has: vi.fn().mockReturnValue(isAdmin) },
-            options: { getChannel: vi.fn().mockReturnValue({ id: 'log-channel-1' }) },
-            reply: vi.fn(),
-        } as any);
-
-        it('lehnt ohne Administrator-Rechte ab', async () => {
-            const interaction = mockInteraction(false);
-
-            await loggingHandler.handleSetChannel(interaction);
-
-            expect(loggingService.setLogChannel).not.toHaveBeenCalled();
-            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
-                content: expect.stringContaining('Administrator-Rechte')
-            }));
-        });
-
-        it('setzt den Log-Channel mit Administrator-Rechten', async () => {
-            const interaction = mockInteraction(true);
-
-            await loggingHandler.handleSetChannel(interaction);
-
-            expect(interaction.memberPermissions.has).toHaveBeenCalledWith(PermissionFlagsBits.Administrator);
-            expect(loggingService.setLogChannel).toHaveBeenCalledWith('log-channel-1');
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('log-channel-1'));
-        });
     });
 
     describe('handleMessageCreate (Nachrichten-Cache)', () => {

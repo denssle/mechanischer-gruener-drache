@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PermissionFlagsBits } from 'discord.js';
 
 vi.mock('../services/twitch.user.service.js', () => ({
     default: {
@@ -184,60 +183,6 @@ describe('TwitchHandler', () => {
             await twitchHandler.handleStatus(interaction);
 
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('TestStreamer'));
-        });
-    });
-
-    describe('handleBenachrichtigungskanal', () => {
-        const mockInteraction = (isAdmin: boolean) => ({
-            memberPermissions: { has: vi.fn().mockReturnValue(isAdmin) },
-            options: { getChannel: vi.fn().mockReturnValue({ id: 'channel-1' }) },
-            reply: vi.fn(),
-        } as any);
-
-        it('lehnt ohne Administrator-Rechte ab', async () => {
-            const interaction = mockInteraction(false);
-
-            await twitchHandler.handleBenachrichtigungskanal(interaction);
-
-            expect(twitchUserService.setNotificationChannel).not.toHaveBeenCalled();
-            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
-                content: expect.stringContaining('Administrator-Rechte')
-            }));
-        });
-
-        it('setzt den Notification-Channel mit Administrator-Rechten', async () => {
-            const interaction = mockInteraction(true);
-
-            await twitchHandler.handleBenachrichtigungskanal(interaction);
-
-            expect(interaction.memberPermissions.has).toHaveBeenCalledWith(PermissionFlagsBits.Administrator);
-            expect(twitchUserService.setNotificationChannel).toHaveBeenCalledWith('channel-1');
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('channel-1'));
-        });
-    });
-
-    describe('handleBenachrichtigungsrolle', () => {
-        const mockInteraction = (isAdmin: boolean) => ({
-            memberPermissions: { has: vi.fn().mockReturnValue(isAdmin) },
-            options: { getRole: vi.fn().mockReturnValue({ id: 'role-1' }) },
-            reply: vi.fn(),
-        } as any);
-
-        it('lehnt ohne Administrator-Rechte ab', async () => {
-            const interaction = mockInteraction(false);
-
-            await twitchHandler.handleBenachrichtigungsrolle(interaction);
-
-            expect(twitchUserService.setNotificationRole).not.toHaveBeenCalled();
-        });
-
-        it('setzt die Notification-Rolle mit Administrator-Rechten', async () => {
-            const interaction = mockInteraction(true);
-
-            await twitchHandler.handleBenachrichtigungsrolle(interaction);
-
-            expect(twitchUserService.setNotificationRole).toHaveBeenCalledWith('role-1');
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('role-1'));
         });
     });
 
