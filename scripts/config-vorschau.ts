@@ -39,6 +39,10 @@ const html = renderConfigSeite({
         {id: 'm3', name: 'Acaine'},
     ],
     legacyKilometer: 1250,
+    meilensteine: [
+        {kilometers: 1000, text: 'Yay, gemeinsam 1000 km geschafft!', announced: true},
+        {kilometers: 2000, text: 'Auf zur nächsten Etappe – 2000 km!', announced: false},
+    ],
     csrfToken: 'vorschau-token',
     gespeichert: false,
 });

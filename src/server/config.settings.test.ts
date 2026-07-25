@@ -14,7 +14,8 @@ vi.mock('../services/sport.service.js', () => ({
     default: {
         getAnnouncementChannel: vi.fn(), setAnnouncementChannel: vi.fn(),
         setKilometer: vi.fn(), getLegacyKilometer: vi.fn(),
-        addLegacyKilometer: vi.fn(), setLegacyKilometer: vi.fn()
+        addLegacyKilometer: vi.fn(), setLegacyKilometer: vi.fn(),
+        getMilestones: vi.fn(), removeMilestone: vi.fn()
     }
 }));
 vi.mock('../services/logging.service.js', () => ({
@@ -38,8 +39,10 @@ import {
     addiereLegacyKilometer,
     Einstellung,
     entferneEvent,
+    entferneMeilenstein,
     holeEventFelder,
     holeLegacyKilometer,
+    holeMeilensteine,
     holeMitglieder,
     holeRollen,
     holeTextKanaele,
@@ -309,5 +312,13 @@ describe('config.settings – Sport-Admin', () => {
 
         (sportService.getLegacyKilometer as any).mockResolvedValue(1250);
         expect(await holeLegacyKilometer()).toBe(1250);
+    });
+
+    it('reicht Meilenstein-Aktionen an den Service durch', async () => {
+        (sportService.getMilestones as any).mockResolvedValue([{kilometers: 1000, text: 'x', announced: false}]);
+        expect(await holeMeilensteine()).toEqual([{kilometers: 1000, text: 'x', announced: false}]);
+
+        await entferneMeilenstein(2000);
+        expect(sportService.removeMilestone).toHaveBeenCalledWith(2000);
     });
 });

@@ -7,13 +7,8 @@ vi.mock('../handlers/sport.handler.js', () => ({
         handleBearbeiten: vi.fn(),
         handleStatistik: vi.fn(),
         handleHilfe: vi.fn(),
-        handleSetzen: vi.fn(),
         handleGesamt: vi.fn(),
-        handleAltkilometer: vi.fn(),
-        handleAltkilometerSetzen: vi.fn(),
         handleMeilensteinSetzen: vi.fn(),
-        handleMeilensteinListe: vi.fn(),
-        handleMeilensteinEntfernen: vi.fn(),
     }
 }));
 
@@ -38,10 +33,7 @@ describe('sport.command', () => {
         ['bearbeiten', 'handleBearbeiten'],
         ['statistik', 'handleStatistik'],
         ['hilfe', 'handleHilfe'],
-        ['setzen', 'handleSetzen'],
         ['gesamt', 'handleGesamt'],
-        ['altkilometer', 'handleAltkilometer'],
-        ['altkilometer-setzen', 'handleAltkilometerSetzen'],
     ] as const)('leitet Subcommand "%s" an sportHandler.%s weiter', async (subcommand, handlerMethod) => {
         const interaction = mockInteraction(subcommand);
 
@@ -50,16 +42,12 @@ describe('sport.command', () => {
         expect(sportHandler[handlerMethod]).toHaveBeenCalledWith(interaction);
     });
 
-    it.each([
-        ['setzen', 'handleMeilensteinSetzen'],
-        ['liste', 'handleMeilensteinListe'],
-        ['entfernen', 'handleMeilensteinEntfernen'],
-    ] as const)('leitet Subcommand "meilenstein %s" an sportHandler.%s weiter', async (subcommand, handlerMethod) => {
-        const interaction = mockInteraction(subcommand, 'meilenstein');
+    it('leitet Subcommand "meilenstein setzen" an sportHandler.handleMeilensteinSetzen weiter', async () => {
+        const interaction = mockInteraction('setzen', 'meilenstein');
 
         await sportCommand.execute(interaction);
 
-        expect(sportHandler[handlerMethod]).toHaveBeenCalledWith(interaction);
+        expect(sportHandler.handleMeilensteinSetzen).toHaveBeenCalledWith(interaction);
     });
 
     it('tut nichts bei einem unbekannten Subcommand', async () => {
@@ -75,9 +63,7 @@ describe('sport.command', () => {
     it('registriert alle im SlashCommandBuilder definierten Top-Level-Optionen auch im Dispatch', () => {
         const definedOptions = sportCommand.data.options.map((option) => option.toJSON().name);
         const dispatchedOptions = [
-            'eintragen', 'loeschen', 'bearbeiten', 'statistik',
-            'hilfe', 'setzen', 'gesamt', 'altkilometer', 'altkilometer-setzen',
-            'meilenstein',
+            'eintragen', 'loeschen', 'bearbeiten', 'statistik', 'hilfe', 'gesamt', 'meilenstein',
         ];
 
         expect(definedOptions.sort()).toEqual(dispatchedOptions.sort());

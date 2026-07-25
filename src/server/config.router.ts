@@ -21,14 +21,17 @@ import {
     verifyCsrfToken,
     verifySession
 } from './config.session.js';
+import {SportMilestone} from '../types/sport.js';
 import {
     addiereLegacyKilometer,
     Einstellung,
     EinstellungStatus,
     entferneEvent,
+    entferneMeilenstein,
     EventFelder,
     holeEventFelder,
     holeLegacyKilometer,
+    holeMeilensteine,
     holeMitglieder,
     holeRollen,
     holeTextKanaele,
@@ -98,6 +101,11 @@ function renderPage(bodyHtml: string): string {
         form.event-form input { padding: 0.3rem; }
         form.event-form input[type="text"] { flex: 1; min-width: 8rem; }
         form.event-form button { padding: 0.3rem 0.8rem; }
+        p.meilenstein-titel { margin: 0.9rem 0 0.3rem; }
+        ul.meilensteine { list-style: none; padding: 0; margin: 0.3rem 0; }
+        li.meilenstein { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(128,128,128,0.2); }
+        li.meilenstein form { margin: 0; }
+        li.meilenstein button { padding: 0.2rem 0.7rem; }
         table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
         th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(128,128,128,0.3); }
         th { font-weight: 600; }
@@ -245,6 +253,31 @@ export function renderSportAdmin(mitglieder: MitgliedOption[], legacyKilometer: 
     </form>`;
 }
 
+// Meilenstein-Liste mit je einem Entfernen-Button. Anlegen bleibt bewusst der (für alle offene)
+// Command /sport meilenstein setzen - hier nur die Admin-Verwaltung (anzeigen + entfernen).
+export function renderMeilensteinListe(meilensteine: SportMilestone[], csrfToken: string): string {
+    if (!meilensteine.length) {
+        return '<p class="status-leer">Noch keine Meilensteine angelegt (anlegen per <code>/sport meilenstein setzen</code>).</p>';
+    }
+    const zeilen = [...meilensteine]
+        .sort((a, b) => a.kilometers - b.kilometers)
+        .map(m => {
+            const vorschau = m.text.replace(/\s+/g, ' ').trim();
+            const gekuerzt = vorschau.length > 60 ? `${vorschau.slice(0, 60)}…` : vorschau;
+            return `<li class="meilenstein">
+            <span><strong>${m.kilometers} km</strong> – ${escapeHtml(gekuerzt)}${m.announced ? ' <em>(angekündigt)</em>' : ''}</span>
+            <form method="post" action="/config/sport">
+                <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+                <input type="hidden" name="aktion" value="meilenstein-entfernen">
+                <input type="hidden" name="kilometer" value="${m.kilometers}">
+                <button type="submit">Entfernen</button>
+            </form>
+        </li>`;
+        }).join('\n');
+    return `<p class="meilenstein-titel"><strong>Meilensteine</strong> (Anlegen per <code>/sport meilenstein setzen</code>):</p>
+    <ul class="meilensteine">${zeilen}</ul>`;
+}
+
 function configBody(einstellungenHtml: string, bereicheHtml: string, gespeichert: boolean): string {
     return `<h1>Mechanischer Grüner Drache</h1>
     <p>Aktuelle Bot-Einstellungen im Überblick, darunter nach Bereich gruppiert zum Bearbeiten.</p>
@@ -264,6 +297,7 @@ export interface ConfigSeiteDaten {
     eventFelder: EventFelder;
     mitglieder: MitgliedOption[];
     legacyKilometer: number;
+    meilensteine: SportMilestone[];
     csrfToken: string;
     gespeichert: boolean;
 }
@@ -289,7 +323,7 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
     // Nach Feature gruppiert, damit fachlich Zusammengehöriges zusammensteht.
     const bereiche =
         renderBereich('Twitch', kanal('twitch-kanal') + renderRollenFormular(daten.rollen, daten.twitchRolleId, csrf)) +
-        renderBereich('Sport', kanal('sport-kanal') + renderSportAdmin(daten.mitglieder, daten.legacyKilometer, csrf)) +
+        renderBereich('Sport', kanal('sport-kanal') + renderSportAdmin(daten.mitglieder, daten.legacyKilometer, csrf) + renderMeilensteinListe(daten.meilensteine, csrf)) +
         renderBereich('Nachrichten-Protokoll', kanal('protokoll')) +
         renderBereich('Morgengruß', kanal('morgengruss-kanal')) +
         renderBereich('Event', renderEventFormular(daten.eventFelder, csrf));
@@ -367,6 +401,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
             eventFelder: await holeEventFelder(),
             mitglieder: holeMitglieder(),
             legacyKilometer: await holeLegacyKilometer(),
+            meilensteine: await holeMeilensteine(),
             csrfToken: createCsrfToken(userId),
             gespeichert: req.query.gespeichert === '1',
         });
@@ -501,6 +536,8 @@ export async function handleSportSpeichern(req: Request, res: Response): Promise
         await addiereLegacyKilometer(kilometer);
     } else if (aktion === 'altkilometer-setzen') {
         await setzeLegacyKilometer(kilometer);
+    } else if (aktion === 'meilenstein-entfernen') {
+        await entferneMeilenstein(kilometer);
     } else {
         res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannte Aktion.')));
         return;

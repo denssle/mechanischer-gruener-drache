@@ -46,7 +46,9 @@ vi.mock('./config.settings.js', () => ({
     speichereKilometer: vi.fn(() => Promise.resolve()),
     holeLegacyKilometer: vi.fn(() => Promise.resolve(1250)),
     addiereLegacyKilometer: vi.fn(() => Promise.resolve()),
-    setzeLegacyKilometer: vi.fn(() => Promise.resolve())
+    setzeLegacyKilometer: vi.fn(() => Promise.resolve()),
+    holeMeilensteine: vi.fn(() => Promise.resolve([{kilometers: 1000, text: 'Tausend!', announced: true}])),
+    entferneMeilenstein: vi.fn(() => Promise.resolve())
 }));
 
 import client from '../client.js';
@@ -68,6 +70,7 @@ import {
     renderEinstellungen,
     renderEventFormular,
     renderKanalFormular,
+    renderMeilensteinListe,
     renderRollenFormular,
     renderSportAdmin,
     requireConfigAuth
@@ -201,6 +204,9 @@ describe('config.router', () => {
         expect(html).toContain('action="/config/sport"');
         expect(html).toContain('Kilometerstand eines Mitglieds setzen');
         expect(html).toContain('aktuell 1250 km');
+        // Meilenstein-Liste
+        expect(html).toContain('1000 km');
+        expect(html).toContain('value="meilenstein-entfernen"');
     });
 
     it('handleConfigPage zeigt den Gespeichert-Hinweis nach dem Redirect', async () => {
@@ -483,6 +489,16 @@ describe('config.router', () => {
             expect(settings.setzeLegacyKilometer).toHaveBeenCalledWith(0);
         });
 
+        it('entfernt einen Meilenstein', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleSportSpeichern(anfrage({_csrf: createCsrfToken('12345'), aktion: 'meilenstein-entfernen', kilometer: '2000'}), res);
+
+            expect(settings.entferneMeilenstein).toHaveBeenCalledWith(2000);
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+        });
+
         it('lehnt ein fehlendes CSRF-Token ab', async () => {
             const res = mockResponse();
             res.locals.configUserId = '12345';
@@ -513,6 +529,23 @@ describe('config.router', () => {
         expect(html).toContain('value="altkilometer-setzen"');
     });
 
+    it('renderMeilensteinListe zeigt Meilensteine sortiert mit Entfernen und escaped den Text', () => {
+        const html = renderMeilensteinListe([
+            {kilometers: 2000, text: 'Zwei<b>tausend</b>', announced: false},
+            {kilometers: 1000, text: 'Tausend', announced: true},
+        ], 'token-m');
+        // nach km aufsteigend sortiert -> 1000 vor 2000
+        expect(html.indexOf('1000 km')).toBeLessThan(html.indexOf('2000 km'));
+        expect(html).toContain('&lt;b&gt;tausend&lt;/b&gt;');
+        expect(html).not.toContain('Zwei<b>tausend</b>');
+        expect(html).toContain('value="meilenstein-entfernen"');
+        expect(html).toContain('(angekündigt)');
+    });
+
+    it('renderMeilensteinListe meldet, wenn keine Meilensteine da sind', () => {
+        expect(renderMeilensteinListe([], 'token-m')).toContain('Noch keine Meilensteine');
+    });
+
     it('renderConfigSeite baut die vollständige Seite (Einstellungen + beide Formular-Arten)', () => {
         const html = renderConfigSeite({
             einstellungen: [{label: 'Protokoll-Kanal', wert: '#log', status: 'ok'}],
@@ -523,6 +556,7 @@ describe('config.router', () => {
             eventFelder: {datum: '2026-12-24', uhrzeit: '18:00', titel: 'Fest'},
             mitglieder: [{id: 'm1', name: 'Tirsis'}],
             legacyKilometer: 1250,
+            meilensteine: [{kilometers: 1000, text: 'Tausend!', announced: false}],
             csrfToken: 'tok',
             gespeichert: true,
         });

@@ -337,67 +337,6 @@ describe('SportHandler', () => {
         });
     });
 
-    describe('handleMeilensteinListe', () => {
-        it('lehnt ohne Administrator-Rechte ab', async () => {
-            const interaction = {
-                memberPermissions: { has: vi.fn().mockReturnValue(false) },
-                reply: vi.fn(),
-            } as any;
-
-            await sportHandler.handleMeilensteinListe(interaction);
-
-            expect(sportService.getMilestones).not.toHaveBeenCalled();
-        });
-
-        it('listet die Meilensteine mit Status-Symbol', async () => {
-            vi.mocked(sportService.getMilestones).mockResolvedValue([
-                { kilometers: 500, text: 'Erstes Ziel', announced: true },
-                { kilometers: 2000, text: 'Grosses Ziel\nmehrzeilig', announced: false },
-            ]);
-            const interaction = {
-                memberPermissions: { has: vi.fn().mockReturnValue(true) },
-                reply: vi.fn(),
-            } as any;
-
-            await sportHandler.handleMeilensteinListe(interaction);
-
-            const reply = (interaction.reply as any).mock.calls[0][0] as string;
-            expect(reply).toContain('**500 km** [gefeiert] – Erstes Ziel');
-            expect(reply).toContain('**2000 km** [offen] – Grosses Ziel');
-            // nur die erste Zeile des mehrzeiligen Textes
-            expect(reply).not.toContain('mehrzeilig');
-        });
-    });
-
-    describe('handleMeilensteinEntfernen', () => {
-        it('bestätigt das Entfernen bei Erfolg', async () => {
-            vi.mocked(sportService.removeMilestone).mockResolvedValue(true);
-            const interaction = {
-                memberPermissions: { has: vi.fn().mockReturnValue(true) },
-                options: { getNumber: vi.fn().mockReturnValue(2000) },
-                reply: vi.fn(),
-            } as any;
-
-            await sportHandler.handleMeilensteinEntfernen(interaction);
-
-            expect(sportService.removeMilestone).toHaveBeenCalledWith(2000);
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('entfernt'));
-        });
-
-        it('meldet wenn kein Meilenstein gefunden wurde', async () => {
-            vi.mocked(sportService.removeMilestone).mockResolvedValue(false);
-            const interaction = {
-                memberPermissions: { has: vi.fn().mockReturnValue(true) },
-                options: { getNumber: vi.fn().mockReturnValue(999) },
-                reply: vi.fn(),
-            } as any;
-
-            await sportHandler.handleMeilensteinEntfernen(interaction);
-
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('Kein Meilenstein'));
-        });
-    });
-
     describe('Meilenstein-Ankündigung beim Eintragen', () => {
         const eintragenInteraction = () => ({
             user: {
@@ -596,37 +535,6 @@ describe('SportHandler', () => {
         });
     });
 
-    describe('handleSetzen', () => {
-        const mockInteraction = (isAdmin: boolean) => ({
-            memberPermissions: { has: vi.fn().mockReturnValue(isAdmin) },
-            options: {
-                getUser: vi.fn().mockReturnValue({ id: 'target-user' }),
-                getNumber: vi.fn().mockReturnValue(42),
-            },
-            reply: vi.fn(),
-        } as any);
-
-        it('lehnt ohne Administrator-Rechte ab', async () => {
-            const interaction = mockInteraction(false);
-
-            await sportHandler.handleSetzen(interaction);
-
-            expect(sportService.setKilometer).not.toHaveBeenCalled();
-            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
-                content: expect.stringContaining('Administrator-Rechte')
-            }));
-        });
-
-        it('setzt den Kilometerstand mit Administrator-Rechten', async () => {
-            const interaction = mockInteraction(true);
-
-            await sportHandler.handleSetzen(interaction);
-
-            expect(sportService.setKilometer).toHaveBeenCalledWith('target-user', 42);
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('42 km'));
-        });
-    });
-
     describe('handleGesamt', () => {
         it('zeigt die Gesamtkilometer an', async () => {
             vi.mocked(sportService.getGesamtKilometer).mockResolvedValue(123);
@@ -638,65 +546,4 @@ describe('SportHandler', () => {
         });
     });
 
-    describe('handleAltkilometer', () => {
-        const mockInteraction = (isAdmin: boolean) => ({
-            memberPermissions: { has: vi.fn().mockReturnValue(isAdmin) },
-            options: { getNumber: vi.fn().mockReturnValue(50) },
-            reply: vi.fn(),
-        } as any);
-
-        it('lehnt ohne Administrator-Rechte ab', async () => {
-            const interaction = mockInteraction(false);
-
-            await sportHandler.handleAltkilometer(interaction);
-
-            expect(sportService.addLegacyKilometer).not.toHaveBeenCalled();
-        });
-
-        it('speist die Altdaten mit Administrator-Rechten ein', async () => {
-            const interaction = mockInteraction(true);
-
-            await sportHandler.handleAltkilometer(interaction);
-
-            expect(sportService.addLegacyKilometer).toHaveBeenCalledWith(50);
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('50 km'));
-        });
-    });
-
-    describe('handleAltkilometerSetzen', () => {
-        const mockInteraction = (isAdmin: boolean, kilometer = 200) => ({
-            memberPermissions: { has: vi.fn().mockReturnValue(isAdmin) },
-            options: { getNumber: vi.fn().mockReturnValue(kilometer) },
-            reply: vi.fn(),
-        } as any);
-
-        it('lehnt ohne Administrator-Rechte ab', async () => {
-            const interaction = mockInteraction(false);
-
-            await sportHandler.handleAltkilometerSetzen(interaction);
-
-            expect(sportService.setLegacyKilometer).not.toHaveBeenCalled();
-        });
-
-        it('setzt die Bestandskilometer und nennt den vorherigen Wert', async () => {
-            vi.mocked(sportService.getLegacyKilometer).mockResolvedValue(120);
-            const interaction = mockInteraction(true, 200);
-
-            await sportHandler.handleAltkilometerSetzen(interaction);
-
-            expect(sportService.setLegacyKilometer).toHaveBeenCalledWith(200);
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('200 km'));
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('120 km'));
-        });
-
-        it('meldet das Entfernen wenn auf 0 gesetzt wird', async () => {
-            vi.mocked(sportService.getLegacyKilometer).mockResolvedValue(80);
-            const interaction = mockInteraction(true, 0);
-
-            await sportHandler.handleAltkilometerSetzen(interaction);
-
-            expect(sportService.setLegacyKilometer).toHaveBeenCalledWith(0);
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('entfernt'));
-        });
-    });
 });

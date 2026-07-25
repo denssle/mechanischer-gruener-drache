@@ -42,36 +42,8 @@ export default {
             .setName('hilfe')
             .setDescription('Zeigt alle verfügbaren Sport-Befehle'))
         .addSubcommand(sub => sub
-            .setName('setzen')
-            .setDescription('Kilometer eines Mitglieds manuell setzen (nur Admins)')
-            .addUserOption(option => option
-                .setName('mitglied')
-                .setDescription('Discord-Mitglied')
-                .setRequired(true))
-            .addNumberOption(option => option
-                .setName('kilometer')
-                .setDescription('Kilometerstand der gesetzt werden soll')
-                .setRequired(true)
-                .setMinValue(0)))
-        .addSubcommand(sub => sub
             .setName('gesamt')
             .setDescription('Gesamtkilometer aller Sportler'))
-        .addSubcommand(sub => sub
-            .setName('altkilometer')
-            .setDescription('Altkilometer ohne zugeordnetes Mitglied einspeisen (nur Admins)')
-            .addNumberOption(option => option
-                .setName('kilometer')
-                .setDescription('Anzahl der Kilometer')
-                .setRequired(true)
-                .setMinValue(0)))
-        .addSubcommand(sub => sub
-            .setName('altkilometer-setzen')
-            .setDescription('Bestandskilometer auf einen Wert setzen; 0 entfernt sie (nur Admins)')
-            .addNumberOption(option => option
-                .setName('kilometer')
-                .setDescription('Neuer Bestandskilometer-Wert (0 = entfernen)')
-                .setRequired(true)
-                .setMinValue(0)))
         .addSubcommandGroup(group => group
             .setName('meilenstein')
             .setDescription('Meilensteine für die gemeinsame Gesamtdistanz')
@@ -86,18 +58,7 @@ export default {
                 .addStringOption(option => option
                     .setName('text')
                     .setDescription('Ankündigungstext (Markdown erlaubt, \\n für Zeilenumbruch)')
-                    .setRequired(true)))
-            .addSubcommand(sub => sub
-                .setName('liste')
-                .setDescription('Alle gesetzten Meilensteine anzeigen (nur Admins)'))
-            .addSubcommand(sub => sub
-                .setName('entfernen')
-                .setDescription('Einen Meilenstein anhand der Kilometerzahl entfernen (nur Admins)')
-                .addNumberOption(option => option
-                    .setName('kilometer')
-                    .setDescription('Kilometerzahl des zu entfernenden Meilensteins')
-                    .setRequired(true)
-                    .setMinValue(1)))),
+                    .setRequired(true)))),
 
     async execute(interaction: ChatInputCommandInteraction) {
         const group = interaction.options.getSubcommandGroup(false);
@@ -107,10 +68,6 @@ export default {
             switch (subcommand) {
                 case 'setzen':
                     return sportHandler.handleMeilensteinSetzen(interaction);
-                case 'liste':
-                    return sportHandler.handleMeilensteinListe(interaction);
-                case 'entfernen':
-                    return sportHandler.handleMeilensteinEntfernen(interaction);
             }
             return;
         }
@@ -126,14 +83,8 @@ export default {
                 return sportHandler.handleStatistik(interaction);
             case 'hilfe':
                 return sportHandler.handleHilfe(interaction);
-            case 'setzen':
-                return sportHandler.handleSetzen(interaction);
             case 'gesamt':
                 return sportHandler.handleGesamt(interaction);
-            case 'altkilometer':
-                return sportHandler.handleAltkilometer(interaction);
-            case 'altkilometer-setzen':
-                return sportHandler.handleAltkilometerSetzen(interaction);
         }
     }
 };

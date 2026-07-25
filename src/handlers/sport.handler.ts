@@ -5,7 +5,6 @@ import {
     MessageFlags,
     OmitPartialGroupDMChannel,
     PartialMessage,
-    PermissionFlagsBits,
     TextChannel
 } from 'discord.js';
 import sportService from '../services/sport.service.js';
@@ -230,67 +229,12 @@ class SportHandler {
         );
     }
 
-    async handleSetzen(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const user = interaction.options.getUser('mitglied', true);
-        const kilometer = interaction.options.getNumber('kilometer', true);
-
-        await sportService.setKilometer(user.id, kilometer);
-
-        await interaction.reply(
-            `Kilometerstand von <@${user.id}> wurde auf **${kilometer} km** gesetzt.`
-        );
-        await this.announceReachedMilestones();
-    }
-
     async handleGesamt(interaction: ChatInputCommandInteraction) {
         const gesamtKilometer = await sportService.getGesamtKilometer();
 
         return interaction.reply(
             `Zusammen habt ihr bereits **${gesamtKilometer} km** zurückgelegt!`
         );
-    }
-
-    async handleAltkilometer(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const kilometer = interaction.options.getNumber('kilometer', true);
-        await sportService.addLegacyKilometer(kilometer);
-
-        await interaction.reply(
-            `**${kilometer} km** wurden als Altdaten eingespeist.`
-        );
-        await this.announceReachedMilestones();
-    }
-
-    async handleAltkilometerSetzen(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const kilometer = interaction.options.getNumber('kilometer', true);
-        const vorher = await sportService.getLegacyKilometer();
-        await sportService.setLegacyKilometer(kilometer);
-
-        await interaction.reply(kilometer <= 0
-            ? `Bestandskilometer entfernt (vorher **${vorher} km**).`
-            : `Bestandskilometer auf **${kilometer} km** gesetzt (vorher **${vorher} km**).`
-        );
-        await this.announceReachedMilestones();
     }
 
     async handleMeilensteinSetzen(interaction: ChatInputCommandInteraction) {
@@ -304,46 +248,6 @@ class SportHandler {
         return interaction.reply(
             `Meilenstein bei **${kilometer} km** gespeichert. ` +
             `Sobald die gemeinsame Gesamtdistanz das erreicht, wird der Text im Ankündigungskanal gepostet.`
-        );
-    }
-
-    async handleMeilensteinListe(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const milestones = await sportService.getMilestones();
-        if (!milestones.length) {
-            return interaction.reply('Es sind keine Meilensteine gesetzt. Leg einen mit `/sport meilenstein setzen` an.');
-        }
-
-        // Nur die erste Zeile des (evtl. mehrzeiligen) Textes als Vorschau, sonst wird die Liste zu lang.
-        const lines = milestones.map(m =>
-            `**${m.kilometers} km** [${m.announced ? 'gefeiert' : 'offen'}] – ${m.text.split('\n')[0]}`
-        );
-
-        return interaction.reply(
-            `**Meilensteine**\n\n${lines.join('\n')}`
-        );
-    }
-
-    async handleMeilensteinEntfernen(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const kilometer = interaction.options.getNumber('kilometer', true);
-        const removed = await sportService.removeMilestone(kilometer);
-
-        return interaction.reply(removed
-            ? `Meilenstein bei **${kilometer} km** entfernt.`
-            : `Kein Meilenstein bei **${kilometer} km** gefunden.`
         );
     }
 

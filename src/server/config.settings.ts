@@ -1,4 +1,5 @@
 import {ChannelType, TextChannel} from 'discord.js';
+import {SportMilestone} from '../types/sport.js';
 import client from '../client.js';
 import config from '../../config.json' with {type: 'json'};
 import twitchUserService from '../services/twitch.user.service.js';
@@ -245,6 +246,14 @@ export async function addiereLegacyKilometer(kilometer: number): Promise<void> {
 // 0 entfernt die Bestandskilometer ganz (siehe sportService.setLegacyKilometer).
 export async function setzeLegacyKilometer(kilometer: number): Promise<void> {
     await sportService.setLegacyKilometer(kilometer);
+}
+
+export async function holeMeilensteine(): Promise<SportMilestone[]> {
+    return sportService.getMilestones();
+}
+
+export async function entferneMeilenstein(kilometer: number): Promise<void> {
+    await sportService.removeMilestone(kilometer);
 }
 
 export async function sammleEinstellungen(): Promise<Einstellung[]> {
