@@ -94,6 +94,20 @@ describe('config.settings – sammleEinstellungen', () => {
             expect(kanaele.map(k => k.name)).toEqual(['allgemein', 'ankuendigungen', 'zebra']);
         });
 
+        it('sortiert nach dem Namen ohne führendes Emoji/Symbol', () => {
+            (client.guilds as any).cache = new Map([['guild-1', {
+                channels: {
+                    cache: new Collection<string, any>([
+                        ['c1', {id: 'c1', name: '🎮-spiele', type: ChannelType.GuildText}],
+                        ['c2', {id: 'c2', name: '📢-ankuendigungen', type: ChannelType.GuildText}],
+                        ['c3', {id: 'c3', name: 'allgemein', type: ChannelType.GuildText}],
+                    ])
+                }
+            }]]);
+            // Sortiert nach spiele/ankuendigungen/allgemein -> Anzeigename bleibt aber inkl. Emoji.
+            expect(holeTextKanaele().map(k => k.name)).toEqual(['allgemein', '📢-ankuendigungen', '🎮-spiele']);
+        });
+
         it('akzeptiert nur IDs aus der Kanalliste', () => {
             mitKanaelen();
             expect(istGueltigerTextKanal('c1')).toBe(true);

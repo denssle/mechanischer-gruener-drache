@@ -56,6 +56,13 @@ export interface KanalOption {
     name: string;
 }
 
+// Sortierschluessel: fuehrende Nicht-Buchstaben/-Zahlen (v.a. Emojis, Symbole, Bindestriche)
+// ignorieren. Viele Discord-Kanaele beginnen mit einem Emoji ("🎮-gaming"), das sonst die
+// alphabetische Ordnung nach dem eigentlichen Namen zerstoert. Der Anzeigename bleibt unveraendert.
+function sortierschluessel(name: string): string {
+    return name.replace(/^[^\p{L}\p{N}]+/u, '');
+}
+
 // Alle beschreibbaren Text-/Announcement-Kanäle des Servers - Grundlage fuers Auswahl-Dropdown
 // (statt Kanal-IDs abtippen zu lassen) UND fuer die Validierung beim Speichern. Announcement-Kanäle
 // sind mit drin, weil dort ebenfalls gepostet werden kann (analog addChannelTypes bei /twitch).
@@ -67,7 +74,7 @@ export function holeTextKanaele(): KanalOption[] {
     return guild.channels.cache
         .filter(kanal => kanal.type === ChannelType.GuildText || kanal.type === ChannelType.GuildAnnouncement)
         .map(kanal => ({id: kanal.id, name: kanal.name}))
-        .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+        .sort((a, b) => sortierschluessel(a.name).localeCompare(sortierschluessel(b.name), 'de'));
 }
 
 // Serverseitige Validierung: nur eine ID aus der bekannten Kanalliste wird akzeptiert. Damit kann
