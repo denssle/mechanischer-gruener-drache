@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits} from 'discord.js';
+import {ChatInputCommandInteraction} from 'discord.js';
 import eventService from '../services/event.service.js';
 
 // Parst "TT.MM.JJJJ" (+ optional "HH:MM") in einen Unix-Timestamp in ms. Gibt null bei
@@ -66,40 +66,6 @@ export function randomNoEventReply(): string {
 }
 
 class EventHandler {
-    async handleSetzen(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const datum = interaction.options.getString('datum', true);
-        const uhrzeit = interaction.options.getString('uhrzeit');
-        const titel = interaction.options.getString('titel') ?? undefined;
-
-        const timestamp = parseGermanDateTime(datum, uhrzeit);
-        if (timestamp === null) {
-            return interaction.reply({
-                content: 'Ungültiges Datum. Format: `TT.MM.JJJJ` (z.B. `24.12.2026`), Uhrzeit optional als `HH:MM`.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        if (timestamp <= Date.now()) {
-            return interaction.reply({
-                content: 'Das Datum liegt in der Vergangenheit.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        await eventService.setEvent(timestamp, titel);
-
-        const unix = Math.floor(timestamp / 1000);
-        const was = titel ? `**${titel}**` : 'Das nächste Event';
-        return interaction.reply(`${was} wurde auf <t:${unix}:F> gesetzt (<t:${unix}:R>).`);
-    }
-
     async handleCountdown(interaction: ChatInputCommandInteraction) {
         const event = await eventService.getEvent();
         if (!event) {
@@ -131,23 +97,6 @@ class EventHandler {
             `**/event countdown** – Zeigt, wie lange es noch bis zum nächsten Event dauert\n` +
             `**/event hilfe** – Zeigt diese Übersicht`
         );
-    }
-
-    async handleEntfernen(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        const event = await eventService.getEvent();
-        if (!event) {
-            return interaction.reply({ content: 'Es ist gar kein Event gesetzt.', flags: MessageFlags.Ephemeral });
-        }
-
-        await eventService.clearEvent();
-        return interaction.reply(`**${event.title}** wurde entfernt.`);
     }
 }
 

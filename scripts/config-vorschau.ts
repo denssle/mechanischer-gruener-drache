@@ -32,6 +32,7 @@ const html = renderConfigSeite({
         {id: 'r3', name: 'Zuschauer'},
     ],
     twitchRolleId: 'r2',
+    eventFelder: {datum: '2026-12-24', uhrzeit: '18:00', titel: 'Weihnachtstreffen'},
     csrfToken: 'vorschau-token',
     gespeichert: false,
 });

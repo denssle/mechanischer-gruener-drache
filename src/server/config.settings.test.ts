@@ -19,7 +19,9 @@ vi.mock('../services/logging.service.js', () => ({
 vi.mock('../services/greeting.service.js', () => ({
     default: {getChannel: vi.fn(), setChannel: vi.fn()}
 }));
-vi.mock('../services/event.service.js', () => ({default: {getEvent: vi.fn()}}));
+vi.mock('../services/event.service.js', () => ({
+    default: {getEvent: vi.fn(), setEvent: vi.fn(), clearEvent: vi.fn()}
+}));
 
 import client from '../client.js';
 import twitchUserService from '../services/twitch.user.service.js';
@@ -30,6 +32,8 @@ import eventService from '../services/event.service.js';
 import {ChannelType, Collection} from 'discord.js';
 import {
     Einstellung,
+    entferneEvent,
+    holeEventFelder,
     holeRollen,
     holeTextKanaele,
     istGueltigerTextKanal,
@@ -37,6 +41,7 @@ import {
     istKanalFeld,
     ladeKanalFelder,
     sammleEinstellungen,
+    speichereEventDaten,
     speichereKanal,
     speichereTwitchRolle
 } from './config.settings.js';
@@ -223,5 +228,32 @@ describe('config.settings – Twitch-Rolle (bearbeiten)', () => {
 
         await speichereTwitchRolle(null);
         expect(twitchUserService.removeNotificationRole).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('config.settings – Event (bearbeiten)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('holeEventFelder liefert leere Felder, wenn kein Event gesetzt ist', async () => {
+        (eventService.getEvent as any).mockResolvedValue(null);
+        expect(await holeEventFelder()).toEqual({datum: '', uhrzeit: '', titel: ''});
+    });
+
+    it('holeEventFelder wandelt einen Timestamp in native Datums-/Zeit-Felder', async () => {
+        // Lokale Zeit (Host/Test = Europe/Berlin): 24.12.2026 18:30
+        const ts = new Date(2026, 11, 24, 18, 30).getTime();
+        (eventService.getEvent as any).mockResolvedValue({timestamp: ts, title: 'Weihnachtstreffen'});
+
+        expect(await holeEventFelder()).toEqual({datum: '2026-12-24', uhrzeit: '18:30', titel: 'Weihnachtstreffen'});
+    });
+
+    it('speichereEventDaten und entferneEvent reichen an den Service durch', async () => {
+        await speichereEventDaten(123, 'Titel');
+        expect(eventService.setEvent).toHaveBeenCalledWith(123, 'Titel');
+
+        await entferneEvent();
+        expect(eventService.clearEvent).toHaveBeenCalledTimes(1);
     });
 });

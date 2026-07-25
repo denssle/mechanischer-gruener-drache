@@ -175,6 +175,39 @@ export async function speichereTwitchRolle(rolleId: string | null): Promise<void
     }
 }
 
+export interface EventFelder {
+    datum: string;   // YYYY-MM-DD (für <input type="date">) oder '' wenn kein Event gesetzt
+    uhrzeit: string; // HH:MM (für <input type="time">) oder ''
+    titel: string;
+}
+
+function pad2(n: number): string {
+    return String(n).padStart(2, '0');
+}
+
+// Aktueller Event-Stand als Formularfelder (rohe Werte für die native date/time-Vorauswahl).
+// Timestamp → lokale Datum/Zeit-Strings (Host läuft auf Europe/Berlin).
+export async function holeEventFelder(): Promise<EventFelder> {
+    const event = await eventService.getEvent();
+    if (!event) {
+        return {datum: '', uhrzeit: '', titel: ''};
+    }
+    const d = new Date(event.timestamp);
+    return {
+        datum: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
+        uhrzeit: `${pad2(d.getHours())}:${pad2(d.getMinutes())}`,
+        titel: event.title ?? '',
+    };
+}
+
+export async function speichereEventDaten(timestamp: number, titel: string | undefined): Promise<void> {
+    await eventService.setEvent(timestamp, titel);
+}
+
+export async function entferneEvent(): Promise<void> {
+    await eventService.clearEvent();
+}
+
 export async function sammleEinstellungen(): Promise<Einstellung[]> {
     const einstellungen: Einstellung[] = [];
 

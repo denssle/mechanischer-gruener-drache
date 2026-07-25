@@ -37,7 +37,10 @@ vi.mock('./config.settings.js', () => ({
     holeRollen: vi.fn(() => [{id: 'r1', name: 'Abonnenten'}]),
     holeTwitchRolleId: vi.fn(() => Promise.resolve('r1')),
     istGueltigeRolle: vi.fn((id: string) => id === 'r1'),
-    speichereTwitchRolle: vi.fn(() => Promise.resolve())
+    speichereTwitchRolle: vi.fn(() => Promise.resolve()),
+    holeEventFelder: vi.fn(() => Promise.resolve({datum: '2026-12-24', uhrzeit: '18:00', titel: 'Weihnachtstreffen'})),
+    speichereEventDaten: vi.fn(() => Promise.resolve()),
+    entferneEvent: vi.fn(() => Promise.resolve())
 }));
 
 import client from '../client.js';
@@ -48,12 +51,15 @@ import {
     escapeHtml,
     handleCallback,
     handleConfigPage,
+    handleEventSpeichern,
     handleKanalSpeichern,
     handleLogin,
     handleLogout,
     handleRolleSpeichern,
+    parseIsoDateTime,
     renderConfigSeite,
     renderEinstellungen,
+    renderEventFormular,
     renderKanalFormulare,
     renderRollenFormular,
     requireConfigAuth
@@ -179,6 +185,10 @@ describe('config.router', () => {
         expect(html).toContain('action="/config/rolle"');
         expect(html).toContain('— keine —');
         expect(html).toContain('value="r1" selected');
+        // Event-Formular mit vorausgefüllten Datums-/Zeit-Feldern
+        expect(html).toContain('action="/config/event"');
+        expect(html).toContain('value="2026-12-24"');
+        expect(html).toContain('value="18:00"');
     });
 
     it('handleConfigPage zeigt den Gespeichert-Hinweis nach dem Redirect', async () => {
@@ -319,6 +329,97 @@ describe('config.router', () => {
         expect(html).toContain('value="" selected>— keine —');
     });
 
+    describe('parseIsoDateTime', () => {
+        it('baut einen Timestamp aus Datum + Uhrzeit', () => {
+            const ts = parseIsoDateTime('2026-12-24', '18:30');
+            expect(ts).toBe(new Date(2026, 11, 24, 18, 30).getTime());
+        });
+
+        it('nimmt Mitternacht, wenn keine Uhrzeit angegeben ist', () => {
+            const ts = parseIsoDateTime('2026-12-24', '');
+            expect(ts).toBe(new Date(2026, 11, 24, 0, 0).getTime());
+        });
+
+        it('lehnt inkonsistente/ungültige Werte ab (Round-Trip)', () => {
+            expect(parseIsoDateTime('2026-02-31', '12:00')).toBeNull(); // 31. Februar gibt es nicht
+            expect(parseIsoDateTime('quatsch', '12:00')).toBeNull();
+            expect(parseIsoDateTime('2026-12-24', '25:00')).toBeNull(); // Stunde > 23
+            expect(parseIsoDateTime('2026-12-24', '12:99')).toBeNull(); // Minute > 59
+        });
+    });
+
+    describe('handleEventSpeichern', () => {
+        const anfrage = (body: Record<string, string>) => mockRequest({body});
+
+        it('speichert ein zukünftiges Event und leitet zurück', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleEventSpeichern(
+                anfrage({_csrf: createCsrfToken('12345'), aktion: 'speichern', datum: '2099-12-31', uhrzeit: '20:00', titel: 'Silvester'}), res
+            );
+
+            expect(settings.speichereEventDaten).toHaveBeenCalledWith(new Date(2099, 11, 31, 20, 0).getTime(), 'Silvester');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+        });
+
+        it('entfernt das Event bei aktion=entfernen', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleEventSpeichern(
+                anfrage({_csrf: createCsrfToken('12345'), aktion: 'entfernen'}), res
+            );
+
+            expect(settings.entferneEvent).toHaveBeenCalledTimes(1);
+            expect(settings.speichereEventDaten).not.toHaveBeenCalled();
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+        });
+
+        it('lehnt ein fehlendes CSRF-Token ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleEventSpeichern(anfrage({aktion: 'entfernen'}), res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(settings.entferneEvent).not.toHaveBeenCalled();
+        });
+
+        it('lehnt ein Datum in der Vergangenheit ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleEventSpeichern(
+                anfrage({_csrf: createCsrfToken('12345'), aktion: 'speichern', datum: '2020-01-01', uhrzeit: '12:00'}), res
+            );
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(settings.speichereEventDaten).not.toHaveBeenCalled();
+        });
+
+        it('lehnt ein ungültiges Datum ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleEventSpeichern(
+                anfrage({_csrf: createCsrfToken('12345'), aktion: 'speichern', datum: '', uhrzeit: ''}), res
+            );
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(settings.speichereEventDaten).not.toHaveBeenCalled();
+        });
+    });
+
+    it('renderEventFormular füllt Datum/Uhrzeit/Titel vor und escaped den Titel', () => {
+        const html = renderEventFormular({datum: '2026-12-24', uhrzeit: '18:00', titel: '<b>Fest</b>'}, 'token-e');
+        expect(html).toContain('action="/config/event"');
+        expect(html).toContain('type="date" name="datum" value="2026-12-24"');
+        expect(html).toContain('value="18:00"');
+        expect(html).toContain('&lt;b&gt;Fest&lt;/b&gt;');
+        expect(html).toContain('value="entfernen"');
+    });
+
     it('renderConfigSeite baut die vollständige Seite (Einstellungen + beide Formular-Arten)', () => {
         const html = renderConfigSeite({
             einstellungen: [{label: 'Protokoll-Kanal', wert: '#log', status: 'ok'}],
@@ -326,6 +427,7 @@ describe('config.router', () => {
             kanaele: [{id: 'c1', name: 'allgemein'}],
             rollen: [{id: 'r1', name: 'Streamer'}],
             twitchRolleId: 'r1',
+            eventFelder: {datum: '2026-12-24', uhrzeit: '18:00', titel: 'Fest'},
             csrfToken: 'tok',
             gespeichert: true,
         });
@@ -333,6 +435,7 @@ describe('config.router', () => {
         expect(html).toContain('Gespeichert.');
         expect(html).toContain('action="/config/kanal"');
         expect(html).toContain('action="/config/rolle"');
+        expect(html).toContain('action="/config/event"');
     });
 
     describe('escapeHtml / renderEinstellungen', () => {

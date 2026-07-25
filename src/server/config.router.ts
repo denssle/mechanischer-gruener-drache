@@ -24,6 +24,9 @@ import {
 import {
     Einstellung,
     EinstellungStatus,
+    entferneEvent,
+    EventFelder,
+    holeEventFelder,
     holeRollen,
     holeTextKanaele,
     holeTwitchRolleId,
@@ -35,6 +38,7 @@ import {
     ladeKanalFelder,
     RollenOption,
     sammleEinstellungen,
+    speichereEventDaten,
     speichereKanal,
     speichereTwitchRolle
 } from './config.settings.js';
@@ -79,7 +83,9 @@ function renderPage(bodyHtml: string): string {
         form.setting label { flex: 0 0 16rem; }
         form.setting select { flex: 0 0 14rem; padding: 0.3rem; }
         form.setting button { padding: 0.3rem 0.8rem; }
+        form.setting input { padding: 0.3rem; }
         form.rolle-abstand { margin-top: 1.75rem; }
+        form.event-abstand { margin-top: 1.75rem; }
         table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
         th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(128,128,128,0.3); }
         th { font-weight: 600; }
@@ -161,6 +167,52 @@ export function renderRollenFormular(rollen: RollenOption[], aktuelleId: string 
     </form>`;
 }
 
+// Baut aus nativen <input type="date"> (YYYY-MM-DD) + <input type="time"> (HH:MM, optional) einen
+// Unix-Timestamp (ms) in lokaler TZ (Host = Europe/Berlin). null bei ungültigem/inkonsistentem
+// Datum - Round-Trip-Check wie parseGermanDateTime, damit z.B. 2026-02-31 nicht still normalisiert.
+export function parseIsoDateTime(datum: string, uhrzeit: string): number | null {
+    const d = datum.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!d) {
+        return null;
+    }
+    let stunden = 0;
+    let minuten = 0;
+    if (uhrzeit.trim()) {
+        const t = uhrzeit.trim().match(/^(\d{1,2}):(\d{2})$/);
+        if (!t) {
+            return null;
+        }
+        stunden = Number(t[1]);
+        minuten = Number(t[2]);
+        if (stunden > 23 || minuten > 59) {
+            return null;
+        }
+    }
+    const jahr = Number(d[1]);
+    const monat = Number(d[2]);
+    const tag = Number(d[3]);
+    const date = new Date(jahr, monat - 1, tag, stunden, minuten, 0, 0);
+    if (date.getFullYear() !== jahr || date.getMonth() !== monat - 1 || date.getDate() !== tag) {
+        return null;
+    }
+    return date.getTime();
+}
+
+// Event-Formular: native Datums-/Zeit-Felder (kein Dropdown) + optionaler Titel. Zwei Submit-Buttons
+// (Speichern/Entfernen) über name="aktion"; "Entfernen" ist formnovalidate, damit es auch ohne
+// ausgefülltes (required) Datum abschickbar ist.
+export function renderEventFormular(felder: EventFelder, csrfToken: string): string {
+    return `<form class="setting event-abstand" method="post" action="/config/event">
+        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+        <label>Nächstes Event</label>
+        <input type="date" name="datum" value="${escapeHtml(felder.datum)}" required>
+        <input type="time" name="uhrzeit" value="${escapeHtml(felder.uhrzeit)}">
+        <input type="text" name="titel" placeholder="Titel (optional)" maxlength="100" value="${escapeHtml(felder.titel)}">
+        <button type="submit" name="aktion" value="speichern">Speichern</button>
+        <button type="submit" name="aktion" value="entfernen" formnovalidate>Event entfernen</button>
+    </form>`;
+}
+
 function configBody(einstellungenHtml: string, formularHtml: string, gespeichert: boolean): string {
     return `<h1>Mechanischer Grüner Drache</h1>
     <p>Aktuelle Bot-Einstellungen.</p>
@@ -177,6 +229,7 @@ export interface ConfigSeiteDaten {
     kanaele: KanalOption[];
     rollen: RollenOption[];
     twitchRolleId: string | null;
+    eventFelder: EventFelder;
     csrfToken: string;
     gespeichert: boolean;
 }
@@ -188,7 +241,8 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
     const inhalt = renderEinstellungen(daten.einstellungen);
     const formular =
         renderKanalFormulare(daten.kanalFelder, daten.kanaele, daten.csrfToken) + '\n' +
-        renderRollenFormular(daten.rollen, daten.twitchRolleId, daten.csrfToken);
+        renderRollenFormular(daten.rollen, daten.twitchRolleId, daten.csrfToken) + '\n' +
+        renderEventFormular(daten.eventFelder, daten.csrfToken);
     return renderPage(configBody(inhalt, formular, daten.gespeichert));
 }
 
@@ -260,6 +314,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
             kanaele: holeTextKanaele(),
             rollen: holeRollen(),
             twitchRolleId: await holeTwitchRolleId(),
+            eventFelder: await holeEventFelder(),
             csrfToken: createCsrfToken(userId),
             gespeichert: req.query.gespeichert === '1',
         });
@@ -325,6 +380,42 @@ export async function handleRolleSpeichern(req: Request, res: Response): Promise
     }
 
     await speichereTwitchRolle(rolleId);
+    res.redirect('/config?gespeichert=1');
+}
+
+// Speichert oder entfernt das nächste Event. Zwei Aktionen über name="aktion" (speichern/entfernen).
+// Beim Speichern: Datum/Uhrzeit aus den nativen Feldern zum Timestamp, gegen Vergangenheit prüfen.
+export async function handleEventSpeichern(req: Request, res: Response): Promise<void> {
+    const userId = res.locals.configUserId as string;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const token = typeof body._csrf === 'string' ? body._csrf : undefined;
+
+    if (!verifyCsrfToken(userId, token)) {
+        res.status(403).type('html').send(renderPage(forbiddenBody('Ungültiges oder fehlendes CSRF-Token.')));
+        return;
+    }
+
+    if (body.aktion === 'entfernen') {
+        await entferneEvent();
+        res.redirect('/config?gespeichert=1');
+        return;
+    }
+
+    const datum = typeof body.datum === 'string' ? body.datum : '';
+    const uhrzeit = typeof body.uhrzeit === 'string' ? body.uhrzeit : '';
+    const titel = typeof body.titel === 'string' && body.titel.trim() ? body.titel.trim() : undefined;
+
+    const timestamp = parseIsoDateTime(datum, uhrzeit);
+    if (timestamp === null) {
+        res.status(400).type('html').send(renderPage(forbiddenBody('Ungültiges Datum oder ungültige Uhrzeit.')));
+        return;
+    }
+    if (timestamp <= Date.now()) {
+        res.status(400).type('html').send(renderPage(forbiddenBody('Das Datum liegt in der Vergangenheit.')));
+        return;
+    }
+
+    await speichereEventDaten(timestamp, titel);
     res.redirect('/config?gespeichert=1');
 }
 
@@ -439,6 +530,25 @@ configRouter.post('/config/rolle',
     (req, res) => {
         handleRolleSpeichern(req, res).catch((error) => {
             console.error('Fehler beim Speichern der Rolle:', error);
+            if (!res.headersSent) {
+                res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
+            }
+        });
+    }
+);
+configRouter.post('/config/event',
+    (req, res, next) => {
+        requireConfigAuth(req, res, next).catch((error) => {
+            console.error('Fehler in requireConfigAuth:', error);
+            if (!res.headersSent) {
+                res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
+            }
+        });
+    },
+    urlencoded({extended: false}),
+    (req, res) => {
+        handleEventSpeichern(req, res).catch((error) => {
+            console.error('Fehler beim Speichern des Events:', error);
             if (!res.headersSent) {
                 res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
             }

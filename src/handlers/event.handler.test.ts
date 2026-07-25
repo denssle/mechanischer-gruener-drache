@@ -83,59 +83,6 @@ describe('EventHandler', () => {
         reply: vi.fn(),
     } as any);
 
-    describe('handleSetzen', () => {
-        it('lehnt ohne Administrator-Rechte ab', async () => {
-            const interaction = mockInteraction({ isAdmin: false });
-
-            await eventHandler.handleSetzen(interaction);
-
-            expect(eventService.setEvent).not.toHaveBeenCalled();
-            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
-                content: expect.stringContaining('Administrator-Rechte')
-            }));
-        });
-
-        it('lehnt ein ungültiges Datum ab', async () => {
-            const interaction = mockInteraction({ datum: 'quatsch' });
-
-            await eventHandler.handleSetzen(interaction);
-
-            expect(eventService.setEvent).not.toHaveBeenCalled();
-            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
-                content: expect.stringContaining('Ungültiges Datum')
-            }));
-        });
-
-        it('lehnt ein Datum in der Vergangenheit ab', async () => {
-            const interaction = mockInteraction({ datum: '01.01.2000' });
-
-            await eventHandler.handleSetzen(interaction);
-
-            expect(eventService.setEvent).not.toHaveBeenCalled();
-            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({
-                content: expect.stringContaining('Vergangenheit')
-            }));
-        });
-
-        it('speichert ein gültiges zukünftiges Event mit Titel', async () => {
-            const interaction = mockInteraction({ titel: 'LAN-Party' });
-
-            await eventHandler.handleSetzen(interaction);
-
-            expect(eventService.setEvent).toHaveBeenCalledWith(expect.any(Number), 'LAN-Party');
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('LAN-Party'));
-        });
-
-        it('speichert ein Event ohne Titel (undefined) und bestätigt neutral', async () => {
-            const interaction = mockInteraction();
-
-            await eventHandler.handleSetzen(interaction);
-
-            expect(eventService.setEvent).toHaveBeenCalledWith(expect.any(Number), undefined);
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('Das nächste Event'));
-        });
-    });
-
     describe('handleCountdown', () => {
         it('antwortet mit einem spielerischen Fallback wenn kein Event gesetzt ist', async () => {
             vi.mocked(eventService.getEvent).mockResolvedValue(null);
@@ -189,36 +136,6 @@ describe('EventHandler', () => {
             // Admin-Aktionen (setzen/entfernen) werden in der Hilfe bewusst nicht mehr gelistet.
             expect(reply).not.toContain('/event setzen');
             expect(reply).not.toContain('/event entfernen');
-        });
-    });
-
-    describe('handleEntfernen', () => {
-        it('lehnt ohne Administrator-Rechte ab', async () => {
-            vi.mocked(eventService.getEvent).mockResolvedValue({ timestamp: Date.now() + 1000, title: 'X' });
-            const interaction = mockInteraction({ isAdmin: false });
-
-            await eventHandler.handleEntfernen(interaction);
-
-            expect(eventService.clearEvent).not.toHaveBeenCalled();
-        });
-
-        it('meldet wenn gar kein Event gesetzt ist', async () => {
-            vi.mocked(eventService.getEvent).mockResolvedValue(null);
-            const interaction = mockInteraction();
-
-            await eventHandler.handleEntfernen(interaction);
-
-            expect(eventService.clearEvent).not.toHaveBeenCalled();
-        });
-
-        it('entfernt ein gesetztes Event', async () => {
-            vi.mocked(eventService.getEvent).mockResolvedValue({ timestamp: Date.now() + 1000, title: 'LAN-Party' });
-            const interaction = mockInteraction();
-
-            await eventHandler.handleEntfernen(interaction);
-
-            expect(eventService.clearEvent).toHaveBeenCalled();
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('LAN-Party'));
         });
     });
 });
