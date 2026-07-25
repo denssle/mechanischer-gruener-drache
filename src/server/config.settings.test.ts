@@ -5,11 +5,17 @@ vi.mock('../client.js', () => ({
     default: {channels: {fetch: vi.fn()}, guilds: {cache: new Map()}}
 }));
 vi.mock('../services/twitch.user.service.js', () => ({
-    default: {getNotificationChannel: vi.fn(), getNotificationRole: vi.fn()}
+    default: {getNotificationChannel: vi.fn(), getNotificationRole: vi.fn(), setNotificationChannel: vi.fn()}
 }));
-vi.mock('../services/sport.service.js', () => ({default: {getAnnouncementChannel: vi.fn()}}));
-vi.mock('../services/logging.service.js', () => ({default: {getLogChannel: vi.fn()}}));
-vi.mock('../services/greeting.service.js', () => ({default: {getChannel: vi.fn()}}));
+vi.mock('../services/sport.service.js', () => ({
+    default: {getAnnouncementChannel: vi.fn(), setAnnouncementChannel: vi.fn()}
+}));
+vi.mock('../services/logging.service.js', () => ({
+    default: {getLogChannel: vi.fn(), setLogChannel: vi.fn()}
+}));
+vi.mock('../services/greeting.service.js', () => ({
+    default: {getChannel: vi.fn(), setChannel: vi.fn()}
+}));
 vi.mock('../services/event.service.js', () => ({default: {getEvent: vi.fn()}}));
 
 import client from '../client.js';
@@ -19,7 +25,15 @@ import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import eventService from '../services/event.service.js';
 import {ChannelType, Collection} from 'discord.js';
-import {Einstellung, holeTextKanaele, istGueltigerTextKanal, sammleEinstellungen} from './config.settings.js';
+import {
+    Einstellung,
+    holeTextKanaele,
+    istGueltigerTextKanal,
+    istKanalFeld,
+    ladeKanalFelder,
+    sammleEinstellungen,
+    speichereKanal
+} from './config.settings.js';
 
 const finde = (einstellungen: Einstellung[], label: string): Einstellung =>
     einstellungen.find(e => e.label === label)!;
@@ -127,5 +141,41 @@ describe('config.settings – sammleEinstellungen', () => {
         const event = finde(await sammleEinstellungen(), 'Nächstes Event');
         expect(event.status).toBe('ok');
         expect(event.wert).toContain('Weihnachtstreffen');
+    });
+});
+
+describe('config.settings – Kanal-Felder (bearbeiten)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('istKanalFeld kennt genau die Kanal-Einstellungen (und keine Prototyp-Keys)', () => {
+        expect(istKanalFeld('protokoll')).toBe(true);
+        expect(istKanalFeld('twitch-kanal')).toBe(true);
+        expect(istKanalFeld('sport-kanal')).toBe(true);
+        expect(istKanalFeld('morgengruss-kanal')).toBe(true);
+        expect(istKanalFeld('event')).toBe(false);
+        expect(istKanalFeld('__proto__')).toBe(false);
+    });
+
+    it('ladeKanalFelder liefert jedes Feld mit aktueller ID', async () => {
+        (loggingService.getLogChannel as any).mockResolvedValue('log-1');
+        (twitchUserService.getNotificationChannel as any).mockResolvedValue(null);
+        (sportService.getAnnouncementChannel as any).mockResolvedValue('sport-1');
+        (greetingService.getChannel as any).mockResolvedValue(null);
+
+        const felder = await ladeKanalFelder();
+        expect(felder.map(f => f.schluessel)).toEqual(['protokoll', 'twitch-kanal', 'sport-kanal', 'morgengruss-kanal']);
+        expect(felder.find(f => f.schluessel === 'protokoll')!.aktuelleId).toBe('log-1');
+        expect(felder.find(f => f.schluessel === 'sport-kanal')!.aktuelleId).toBe('sport-1');
+        expect(felder.find(f => f.schluessel === 'twitch-kanal')!.aktuelleId).toBeNull();
+    });
+
+    it('speichereKanal ruft den passenden Service-Setter', async () => {
+        await speichereKanal('twitch-kanal', 'c9');
+        expect(twitchUserService.setNotificationChannel).toHaveBeenCalledWith('c9');
+
+        await speichereKanal('morgengruss-kanal', 'c8');
+        expect(greetingService.setChannel).toHaveBeenCalledWith('c8');
     });
 });

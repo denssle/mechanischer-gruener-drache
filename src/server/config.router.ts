@@ -24,12 +24,14 @@ import {
 import {
     Einstellung,
     EinstellungStatus,
-    holeProtokollKanalId,
     holeTextKanaele,
     istGueltigerTextKanal,
+    istKanalFeld,
+    KanalFeld,
     KanalOption,
+    ladeKanalFelder,
     sammleEinstellungen,
-    speichereProtokollKanal
+    speichereKanal
 } from './config.settings.js';
 
 // Verwaltungs-/Einstellungsseite (README-Todo), abgesichert per Discord-OAuth2-Login.
@@ -112,25 +114,26 @@ export function renderEinstellungen(einstellungen: Einstellung[]): string {
     </table>`;
 }
 
-// Bearbeiten-Formular (Pilot: Protokoll-Kanal). Auswahl statt Freitext-ID - die Liste kommt aus dem
-// Bot und dient zugleich als Whitelist bei der Validierung. Das CSRF-Token haengt als hidden field dran.
-export function renderProtokollFormular(
-    kanaele: KanalOption[],
-    aktuelleId: string | null,
-    csrfToken: string
-): string {
+// Ein Bearbeiten-Formular je Kanal-Einstellung. Auswahl statt Freitext-ID - die Liste kommt aus dem
+// Bot und dient zugleich als Whitelist bei der Validierung. CSRF-Token + Feld-Kennung als hidden fields.
+function renderKanalFormular(feld: KanalFeld, kanaele: KanalOption[], csrfToken: string): string {
+    const optionen = kanaele.map(kanal =>
+        `<option value="${escapeHtml(kanal.id)}"${kanal.id === feld.aktuelleId ? ' selected' : ''}>#${escapeHtml(kanal.name)}</option>`
+    ).join('\n');
+    return `<form method="post" action="/config/kanal">
+        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+        <input type="hidden" name="feld" value="${escapeHtml(feld.schluessel)}">
+        <label>${escapeHtml(feld.label)}</label>
+        <select name="kanal">${optionen}</select>
+        <button type="submit">Speichern</button>
+    </form>`;
+}
+
+export function renderKanalFormulare(felder: KanalFeld[], kanaele: KanalOption[], csrfToken: string): string {
     if (!kanaele.length) {
         return '<p>Keine Text-Kanäle gefunden – ist der Bot auf dem Server?</p>';
     }
-    const optionen = kanaele.map(kanal =>
-        `<option value="${escapeHtml(kanal.id)}"${kanal.id === aktuelleId ? ' selected' : ''}>#${escapeHtml(kanal.name)}</option>`
-    ).join('\n');
-    return `<form method="post" action="/config/protokoll">
-        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
-        <label for="kanal">Protokoll-Kanal</label>
-        <select id="kanal" name="kanal">${optionen}</select>
-        <button type="submit">Speichern</button>
-    </form>`;
+    return felder.map(feld => renderKanalFormular(feld, kanaele, csrfToken)).join('\n');
 }
 
 function configBody(einstellungenHtml: string, formularHtml: string, gespeichert: boolean): string {
@@ -208,7 +211,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
     try {
         inhalt = renderEinstellungen(await sammleEinstellungen());
         const userId = res.locals.configUserId as string;
-        formular = renderProtokollFormular(holeTextKanaele(), await holeProtokollKanalId(), createCsrfToken(userId));
+        formular = renderKanalFormulare(await ladeKanalFelder(), holeTextKanaele(), createCsrfToken(userId));
     } catch (error) {
         // Ein Redis-/Discord-Problem darf die Seite nicht komplett kosten - lieber ein Hinweis.
         console.error('Fehler beim Laden der Config-Einstellungen:', error);
@@ -218,10 +221,10 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
     res.type('html').send(renderPage(configBody(inhalt, formular, req.query.gespeichert === '1')));
 }
 
-// Speichert den Protokoll-Kanal. Reihenfolge bewusst: CSRF pruefen, dann den Wert gegen die
-// Kanal-Whitelist validieren, erst dann schreiben. Danach Redirect (Post/Redirect/Get), damit
-// ein Reload im Browser nicht erneut speichert.
-export async function handleProtokollSpeichern(req: Request, res: Response): Promise<void> {
+// Speichert einen Kanal fuer die per "feld" benannte Einstellung. Reihenfolge bewusst: CSRF pruefen,
+// dann Feld-Kennung UND Kanal-ID gegen ihre jeweilige Whitelist validieren, erst dann schreiben.
+// Danach Redirect (Post/Redirect/Get), damit ein Reload im Browser nicht erneut speichert.
+export async function handleKanalSpeichern(req: Request, res: Response): Promise<void> {
     const userId = res.locals.configUserId as string;
     const body = (req.body ?? {}) as Record<string, unknown>;
     const token = typeof body._csrf === 'string' ? body._csrf : undefined;
@@ -231,13 +234,19 @@ export async function handleProtokollSpeichern(req: Request, res: Response): Pro
         return;
     }
 
+    const feld = typeof body.feld === 'string' ? body.feld : '';
+    if (!istKanalFeld(feld)) {
+        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannte Einstellung.')));
+        return;
+    }
+
     const kanalId = typeof body.kanal === 'string' ? body.kanal : '';
     if (!istGueltigerTextKanal(kanalId)) {
         res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannter Kanal – bitte einen Kanal aus der Liste wählen.')));
         return;
     }
 
-    await speichereProtokollKanal(kanalId);
+    await speichereKanal(feld, kanalId);
     res.redirect('/config?gespeichert=1');
 }
 
@@ -320,7 +329,7 @@ configRouter.get('/config', (req, res, next) => {
 // Body-Parser NUR an dieser Route (nicht global!) - global gemountet wuerde er den Rohkoerper des
 // Twitch-Webhooks zerstoeren und dessen Signaturpruefung brechen. Auth laeuft davor, damit fuer
 // Unbefugte gar nichts geparst wird.
-configRouter.post('/config/protokoll',
+configRouter.post('/config/kanal',
     (req, res, next) => {
         requireConfigAuth(req, res, next).catch((error) => {
             console.error('Fehler in requireConfigAuth:', error);
@@ -331,8 +340,8 @@ configRouter.post('/config/protokoll',
     },
     urlencoded({extended: false}),
     (req, res) => {
-        handleProtokollSpeichern(req, res).catch((error) => {
-            console.error('Fehler beim Speichern des Protokoll-Kanals:', error);
+        handleKanalSpeichern(req, res).catch((error) => {
+            console.error('Fehler beim Speichern des Kanals:', error);
             if (!res.headersSent) {
                 res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
             }

@@ -83,13 +83,59 @@ export function istGueltigerTextKanal(kanalId: string): boolean {
     return holeTextKanaele().some(kanal => kanal.id === kanalId);
 }
 
-// Rohe ID (nicht der aufgeloeste Name wie in sammleEinstellungen) - fuer die Vorauswahl im Dropdown.
-export async function holeProtokollKanalId(): Promise<string | null> {
-    return loggingService.getLogChannel();
+// Datengetriebene Liste der ueber /config bearbeitbaren Kanal-Einstellungen. Jede traegt ihren
+// Redis-Getter/-Setter - so kommt ein neues Kanal-Feld mit einer Zeile dazu, ohne neue Route/Handler.
+// `schluessel` ist die Form-/Routen-Kennung (nur [a-z-], landet im hidden field "feld").
+interface KanalService {
+    label: string;
+    lade: () => Promise<string | null>;
+    speichere: (kanalId: string) => Promise<void>;
 }
 
-export async function speichereProtokollKanal(kanalId: string): Promise<void> {
-    await loggingService.setLogChannel(kanalId);
+const KANAL_SERVICES: Record<string, KanalService> = {
+    'protokoll': {
+        label: 'Protokoll-Kanal',
+        lade: () => loggingService.getLogChannel(),
+        speichere: (id) => loggingService.setLogChannel(id),
+    },
+    'twitch-kanal': {
+        label: 'Twitch-Benachrichtigungskanal',
+        lade: () => twitchUserService.getNotificationChannel(),
+        speichere: (id) => twitchUserService.setNotificationChannel(id),
+    },
+    'sport-kanal': {
+        label: 'Sport-Ankündigungskanal',
+        lade: () => sportService.getAnnouncementChannel(),
+        speichere: (id) => sportService.setAnnouncementChannel(id),
+    },
+    'morgengruss-kanal': {
+        label: 'Morgengruß-Kanal',
+        lade: () => greetingService.getChannel(),
+        speichere: (id) => greetingService.setChannel(id),
+    },
+};
+
+export interface KanalFeld {
+    schluessel: string;
+    label: string;
+    aktuelleId: string | null;
+}
+
+export function istKanalFeld(schluessel: string): boolean {
+    return Object.prototype.hasOwnProperty.call(KANAL_SERVICES, schluessel);
+}
+
+// Jedes Feld inkl. aktuell gesetzter Kanal-ID (rohe ID fuer die Vorauswahl im Dropdown).
+export async function ladeKanalFelder(): Promise<KanalFeld[]> {
+    const felder: KanalFeld[] = [];
+    for (const [schluessel, service] of Object.entries(KANAL_SERVICES)) {
+        felder.push({schluessel, label: service.label, aktuelleId: await service.lade()});
+    }
+    return felder;
+}
+
+export async function speichereKanal(schluessel: string, kanalId: string): Promise<void> {
+    await KANAL_SERVICES[schluessel].speichere(kanalId);
 }
 
 export async function sammleEinstellungen(): Promise<Einstellung[]> {

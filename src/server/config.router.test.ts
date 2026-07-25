@@ -28,9 +28,12 @@ vi.mock('./config.settings.js', () => ({
         {label: 'Protokoll-Kanal', wert: '#log', status: 'ok'}
     ])),
     holeTextKanaele: vi.fn(() => [{id: 'c1', name: 'allgemein'}]),
-    holeProtokollKanalId: vi.fn(() => Promise.resolve('c1')),
+    ladeKanalFelder: vi.fn(() => Promise.resolve([
+        {schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'c1'}
+    ])),
     istGueltigerTextKanal: vi.fn((id: string) => id === 'c1'),
-    speichereProtokollKanal: vi.fn(() => Promise.resolve())
+    istKanalFeld: vi.fn((feld: string) => feld === 'protokoll'),
+    speichereKanal: vi.fn(() => Promise.resolve())
 }));
 
 import client from '../client.js';
@@ -41,11 +44,11 @@ import {
     escapeHtml,
     handleCallback,
     handleConfigPage,
+    handleKanalSpeichern,
     handleLogin,
     handleLogout,
-    handleProtokollSpeichern,
     renderEinstellungen,
-    renderProtokollFormular,
+    renderKanalFormulare,
     requireConfigAuth
 } from './config.router.js';
 
@@ -150,7 +153,7 @@ describe('config.router', () => {
         });
     });
 
-    it('handleConfigPage rendert Einstellungen und Bearbeiten-Formular', async () => {
+    it('handleConfigPage rendert Einstellungen und Bearbeiten-Formulare', async () => {
         const res = mockResponse();
         res.locals.configUserId = '12345';
 
@@ -160,8 +163,9 @@ describe('config.router', () => {
         expect(html).toContain('<!doctype html>');
         expect(html).toContain('Protokoll-Kanal');
         expect(html).toContain('#log');
-        // Formular inkl. CSRF-Token und vorausgewähltem Kanal
-        expect(html).toContain('<form method="post" action="/config/protokoll">');
+        // Formular inkl. CSRF-Token, Feld-Kennung und vorausgewähltem Kanal
+        expect(html).toContain('<form method="post" action="/config/kanal">');
+        expect(html).toContain('name="feld" value="protokoll"');
         expect(html).toContain(createCsrfToken('12345'));
         expect(html).toContain('value="c1" selected');
     });
@@ -175,18 +179,18 @@ describe('config.router', () => {
         expect(res.send.mock.calls[0][0]).toContain('Gespeichert.');
     });
 
-    describe('handleProtokollSpeichern', () => {
+    describe('handleKanalSpeichern', () => {
         const gueltigeAnfrage = (body: Record<string, string>) => mockRequest({body});
 
         it('speichert einen gültigen Kanal und leitet zurück', async () => {
             const res = mockResponse();
             res.locals.configUserId = '12345';
 
-            await handleProtokollSpeichern(
-                gueltigeAnfrage({_csrf: createCsrfToken('12345'), kanal: 'c1'}), res
+            await handleKanalSpeichern(
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), feld: 'protokoll', kanal: 'c1'}), res
             );
 
-            expect(settings.speichereProtokollKanal).toHaveBeenCalledWith('c1');
+            expect(settings.speichereKanal).toHaveBeenCalledWith('protokoll', 'c1');
             expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
         });
 
@@ -194,33 +198,48 @@ describe('config.router', () => {
             const res = mockResponse();
             res.locals.configUserId = '12345';
 
-            await handleProtokollSpeichern(gueltigeAnfrage({kanal: 'c1'}), res);
+            await handleKanalSpeichern(gueltigeAnfrage({feld: 'protokoll', kanal: 'c1'}), res);
 
             expect(res.status).toHaveBeenCalledWith(403);
-            expect(settings.speichereProtokollKanal).not.toHaveBeenCalled();
+            expect(settings.speichereKanal).not.toHaveBeenCalled();
+        });
+
+        it('lehnt eine unbekannte Einstellung ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleKanalSpeichern(
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), feld: 'quatsch', kanal: 'c1'}), res
+            );
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(settings.speichereKanal).not.toHaveBeenCalled();
         });
 
         it('lehnt einen Kanal ab, der nicht in der Liste steht', async () => {
             const res = mockResponse();
             res.locals.configUserId = '12345';
 
-            await handleProtokollSpeichern(
-                gueltigeAnfrage({_csrf: createCsrfToken('12345'), kanal: 'fremder-kanal'}), res
+            await handleKanalSpeichern(
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), feld: 'protokoll', kanal: 'fremder-kanal'}), res
             );
 
             expect(res.status).toHaveBeenCalledWith(400);
-            expect(settings.speichereProtokollKanal).not.toHaveBeenCalled();
+            expect(settings.speichereKanal).not.toHaveBeenCalled();
         });
     });
 
-    it('renderProtokollFormular escaped Kanalnamen und markiert den aktuellen Kanal', () => {
-        const html = renderProtokollFormular(
-            [{id: 'a', name: '<böse>'}, {id: 'b', name: 'log'}], 'b', 'token-123'
+    it('renderKanalFormulare escaped Kanalnamen, markiert den aktuellen Kanal und trägt die Feld-Kennung', () => {
+        const html = renderKanalFormulare(
+            [{schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'b'}],
+            [{id: 'a', name: '<böse>'}, {id: 'b', name: 'log'}],
+            'token-123'
         );
         expect(html).toContain('&lt;böse&gt;');
         expect(html).not.toContain('<böse>');
         expect(html).toContain('value="b" selected');
         expect(html).toContain('value="token-123"');
+        expect(html).toContain('name="feld" value="protokoll"');
     });
 
     describe('escapeHtml / renderEinstellungen', () => {
