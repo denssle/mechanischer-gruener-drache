@@ -22,24 +22,31 @@ import {
     verifySession
 } from './config.session.js';
 import {
+    addiereLegacyKilometer,
     Einstellung,
     EinstellungStatus,
     entferneEvent,
     EventFelder,
     holeEventFelder,
+    holeLegacyKilometer,
+    holeMitglieder,
     holeRollen,
     holeTextKanaele,
     holeTwitchRolleId,
     istGueltigerTextKanal,
     istGueltigeRolle,
+    istGueltigesMitglied,
     istKanalFeld,
     KanalFeld,
     KanalOption,
     ladeKanalFelder,
+    MitgliedOption,
     RollenOption,
     sammleEinstellungen,
+    setzeLegacyKilometer,
     speichereEventDaten,
     speichereKanal,
+    speichereKilometer,
     speichereTwitchRolle
 } from './config.settings.js';
 
@@ -214,6 +221,30 @@ export function renderEventFormular(felder: EventFelder, csrfToken: string): str
     </form>`;
 }
 
+// Sport-Admin-Formulare: Kilometerstand eines Mitglieds setzen (Mitglied-Dropdown = Whitelist) und
+// Bestandskilometer (Addieren / Setzen; 0 = entfernen). Alle posten an /config/sport mit name="aktion".
+export function renderSportAdmin(mitglieder: MitgliedOption[], legacyKilometer: number, csrfToken: string): string {
+    const mitgliedFeld = mitglieder.length
+        ? `<select name="mitglied">${mitglieder.map(m =>
+            `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join('\n')}</select>`
+        : '<span class="status-leer">keine Mitglieder gefunden</span>';
+    return `<form class="setting" method="post" action="/config/sport">
+        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+        <input type="hidden" name="aktion" value="kilometer-setzen">
+        <label>Kilometerstand eines Mitglieds setzen</label>
+        ${mitgliedFeld}
+        <input type="number" name="kilometer" min="0" step="0.01" placeholder="km" required aria-label="Kilometer">
+        <button type="submit">Setzen</button>
+    </form>
+    <form class="setting" method="post" action="/config/sport">
+        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+        <label>Bestandskilometer (aktuell ${legacyKilometer} km)</label>
+        <input type="number" name="kilometer" min="0" step="0.01" placeholder="km" required aria-label="Bestandskilometer">
+        <button type="submit" name="aktion" value="altkilometer-addieren">Addieren</button>
+        <button type="submit" name="aktion" value="altkilometer-setzen">Setzen (0 = entfernen)</button>
+    </form>`;
+}
+
 function configBody(einstellungenHtml: string, bereicheHtml: string, gespeichert: boolean): string {
     return `<h1>Mechanischer Grüner Drache</h1>
     <p>Aktuelle Bot-Einstellungen im Überblick, darunter nach Bereich gruppiert zum Bearbeiten.</p>
@@ -231,6 +262,8 @@ export interface ConfigSeiteDaten {
     rollen: RollenOption[];
     twitchRolleId: string | null;
     eventFelder: EventFelder;
+    mitglieder: MitgliedOption[];
+    legacyKilometer: number;
     csrfToken: string;
     gespeichert: boolean;
 }
@@ -256,7 +289,7 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
     // Nach Feature gruppiert, damit fachlich Zusammengehöriges zusammensteht.
     const bereiche =
         renderBereich('Twitch', kanal('twitch-kanal') + renderRollenFormular(daten.rollen, daten.twitchRolleId, csrf)) +
-        renderBereich('Sport', kanal('sport-kanal')) +
+        renderBereich('Sport', kanal('sport-kanal') + renderSportAdmin(daten.mitglieder, daten.legacyKilometer, csrf)) +
         renderBereich('Nachrichten-Protokoll', kanal('protokoll')) +
         renderBereich('Morgengruß', kanal('morgengruss-kanal')) +
         renderBereich('Event', renderEventFormular(daten.eventFelder, csrf));
@@ -332,6 +365,8 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
             rollen: holeRollen(),
             twitchRolleId: await holeTwitchRolleId(),
             eventFelder: await holeEventFelder(),
+            mitglieder: holeMitglieder(),
+            legacyKilometer: await holeLegacyKilometer(),
             csrfToken: createCsrfToken(userId),
             gespeichert: req.query.gespeichert === '1',
         });
@@ -433,6 +468,44 @@ export async function handleEventSpeichern(req: Request, res: Response): Promise
     }
 
     await speichereEventDaten(timestamp, titel);
+    res.redirect('/config?gespeichert=1');
+}
+
+// Sport-Admin: drei Aktionen über name="aktion". Kilometer werden als Zahl >= 0 validiert; beim
+// Mitglied-Setzen zusätzlich gegen die Mitglieder-Whitelist. 0 bei altkilometer-setzen entfernt sie.
+export async function handleSportSpeichern(req: Request, res: Response): Promise<void> {
+    const userId = res.locals.configUserId as string;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const token = typeof body._csrf === 'string' ? body._csrf : undefined;
+
+    if (!verifyCsrfToken(userId, token)) {
+        res.status(403).type('html').send(renderPage(forbiddenBody('Ungültiges oder fehlendes CSRF-Token.')));
+        return;
+    }
+
+    const aktion = typeof body.aktion === 'string' ? body.aktion : '';
+    const kilometer = Number(typeof body.kilometer === 'string' ? body.kilometer : NaN);
+    if (!Number.isFinite(kilometer) || kilometer < 0) {
+        res.status(400).type('html').send(renderPage(forbiddenBody('Ungültige Kilometerangabe.')));
+        return;
+    }
+
+    if (aktion === 'kilometer-setzen') {
+        const mitglied = typeof body.mitglied === 'string' ? body.mitglied : '';
+        if (!istGueltigesMitglied(mitglied)) {
+            res.status(400).type('html').send(renderPage(forbiddenBody('Unbekanntes Mitglied.')));
+            return;
+        }
+        await speichereKilometer(mitglied, kilometer);
+    } else if (aktion === 'altkilometer-addieren') {
+        await addiereLegacyKilometer(kilometer);
+    } else if (aktion === 'altkilometer-setzen') {
+        await setzeLegacyKilometer(kilometer);
+    } else {
+        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannte Aktion.')));
+        return;
+    }
+
     res.redirect('/config?gespeichert=1');
 }
 
@@ -566,6 +639,25 @@ configRouter.post('/config/event',
     (req, res) => {
         handleEventSpeichern(req, res).catch((error) => {
             console.error('Fehler beim Speichern des Events:', error);
+            if (!res.headersSent) {
+                res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
+            }
+        });
+    }
+);
+configRouter.post('/config/sport',
+    (req, res, next) => {
+        requireConfigAuth(req, res, next).catch((error) => {
+            console.error('Fehler in requireConfigAuth:', error);
+            if (!res.headersSent) {
+                res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
+            }
+        });
+    },
+    urlencoded({extended: false}),
+    (req, res) => {
+        handleSportSpeichern(req, res).catch((error) => {
+            console.error('Fehler beim Speichern der Sport-Einstellung:', error);
             if (!res.headersSent) {
                 res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
             }

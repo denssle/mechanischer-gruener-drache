@@ -40,7 +40,13 @@ vi.mock('./config.settings.js', () => ({
     speichereTwitchRolle: vi.fn(() => Promise.resolve()),
     holeEventFelder: vi.fn(() => Promise.resolve({datum: '2026-12-24', uhrzeit: '18:00', titel: 'Weihnachtstreffen'})),
     speichereEventDaten: vi.fn(() => Promise.resolve()),
-    entferneEvent: vi.fn(() => Promise.resolve())
+    entferneEvent: vi.fn(() => Promise.resolve()),
+    holeMitglieder: vi.fn(() => [{id: 'm1', name: 'Tirsis'}]),
+    istGueltigesMitglied: vi.fn((id: string) => id === 'm1'),
+    speichereKilometer: vi.fn(() => Promise.resolve()),
+    holeLegacyKilometer: vi.fn(() => Promise.resolve(1250)),
+    addiereLegacyKilometer: vi.fn(() => Promise.resolve()),
+    setzeLegacyKilometer: vi.fn(() => Promise.resolve())
 }));
 
 import client from '../client.js';
@@ -56,12 +62,14 @@ import {
     handleLogin,
     handleLogout,
     handleRolleSpeichern,
+    handleSportSpeichern,
     parseIsoDateTime,
     renderConfigSeite,
     renderEinstellungen,
     renderEventFormular,
     renderKanalFormular,
     renderRollenFormular,
+    renderSportAdmin,
     requireConfigAuth
 } from './config.router.js';
 
@@ -189,6 +197,10 @@ describe('config.router', () => {
         expect(html).toContain('action="/config/event"');
         expect(html).toContain('value="2026-12-24"');
         expect(html).toContain('value="18:00"');
+        // Sport-Admin-Block
+        expect(html).toContain('action="/config/sport"');
+        expect(html).toContain('Kilometerstand eines Mitglieds setzen');
+        expect(html).toContain('aktuell 1250 km');
     });
 
     it('handleConfigPage zeigt den Gespeichert-Hinweis nach dem Redirect', async () => {
@@ -420,6 +432,87 @@ describe('config.router', () => {
         expect(html).toContain('value="entfernen"');
     });
 
+    describe('handleSportSpeichern', () => {
+        const anfrage = (body: Record<string, string>) => mockRequest({body});
+
+        it('setzt den Kilometerstand eines gültigen Mitglieds', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleSportSpeichern(
+                anfrage({_csrf: createCsrfToken('12345'), aktion: 'kilometer-setzen', mitglied: 'm1', kilometer: '42'}), res
+            );
+
+            expect(settings.speichereKilometer).toHaveBeenCalledWith('m1', 42);
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+        });
+
+        it('lehnt ein unbekanntes Mitglied ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleSportSpeichern(
+                anfrage({_csrf: createCsrfToken('12345'), aktion: 'kilometer-setzen', mitglied: 'fremd', kilometer: '42'}), res
+            );
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(settings.speichereKilometer).not.toHaveBeenCalled();
+        });
+
+        it('lehnt eine ungültige Kilometerangabe ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleSportSpeichern(
+                anfrage({_csrf: createCsrfToken('12345'), aktion: 'kilometer-setzen', mitglied: 'm1', kilometer: '-5'}), res
+            );
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(settings.speichereKilometer).not.toHaveBeenCalled();
+        });
+
+        it('addiert bzw. setzt Bestandskilometer', async () => {
+            const res1 = mockResponse();
+            res1.locals.configUserId = '12345';
+            await handleSportSpeichern(anfrage({_csrf: createCsrfToken('12345'), aktion: 'altkilometer-addieren', kilometer: '10'}), res1);
+            expect(settings.addiereLegacyKilometer).toHaveBeenCalledWith(10);
+
+            const res2 = mockResponse();
+            res2.locals.configUserId = '12345';
+            await handleSportSpeichern(anfrage({_csrf: createCsrfToken('12345'), aktion: 'altkilometer-setzen', kilometer: '0'}), res2);
+            expect(settings.setzeLegacyKilometer).toHaveBeenCalledWith(0);
+        });
+
+        it('lehnt ein fehlendes CSRF-Token ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleSportSpeichern(anfrage({aktion: 'kilometer-setzen', mitglied: 'm1', kilometer: '42'}), res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(settings.speichereKilometer).not.toHaveBeenCalled();
+        });
+
+        it('lehnt eine unbekannte Aktion ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleSportSpeichern(anfrage({_csrf: createCsrfToken('12345'), aktion: 'quatsch', kilometer: '5'}), res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+        });
+    });
+
+    it('renderSportAdmin zeigt Mitglied-Dropdown und den aktuellen Bestandskilometer-Wert', () => {
+        const html = renderSportAdmin([{id: 'm1', name: 'Tirsis'}], 1250, 'token-s');
+        expect(html).toContain('action="/config/sport"');
+        expect(html).toContain('value="m1"');
+        expect(html).toContain('Tirsis');
+        expect(html).toContain('aktuell 1250 km');
+        expect(html).toContain('value="altkilometer-addieren"');
+        expect(html).toContain('value="altkilometer-setzen"');
+    });
+
     it('renderConfigSeite baut die vollständige Seite (Einstellungen + beide Formular-Arten)', () => {
         const html = renderConfigSeite({
             einstellungen: [{label: 'Protokoll-Kanal', wert: '#log', status: 'ok'}],
@@ -428,6 +521,8 @@ describe('config.router', () => {
             rollen: [{id: 'r1', name: 'Streamer'}],
             twitchRolleId: 'r1',
             eventFelder: {datum: '2026-12-24', uhrzeit: '18:00', titel: 'Fest'},
+            mitglieder: [{id: 'm1', name: 'Tirsis'}],
+            legacyKilometer: 1250,
             csrfToken: 'tok',
             gespeichert: true,
         });
@@ -436,6 +531,7 @@ describe('config.router', () => {
         expect(html).toContain('action="/config/kanal"');
         expect(html).toContain('action="/config/rolle"');
         expect(html).toContain('action="/config/event"');
+        expect(html).toContain('action="/config/sport"');
     });
 
     describe('escapeHtml / renderEinstellungen', () => {

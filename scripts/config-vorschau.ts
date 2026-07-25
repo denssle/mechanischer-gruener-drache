@@ -33,6 +33,12 @@ const html = renderConfigSeite({
     ],
     twitchRolleId: 'r2',
     eventFelder: {datum: '2026-12-24', uhrzeit: '18:00', titel: 'Weihnachtstreffen'},
+    mitglieder: [
+        {id: 'm1', name: 'Tirsis'},
+        {id: 'm2', name: 'Zerix'},
+        {id: 'm3', name: 'Acaine'},
+    ],
+    legacyKilometer: 1250,
     csrfToken: 'vorschau-token',
     gespeichert: false,
 });

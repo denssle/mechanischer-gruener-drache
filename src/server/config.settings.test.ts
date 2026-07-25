@@ -11,7 +11,11 @@ vi.mock('../services/twitch.user.service.js', () => ({
     }
 }));
 vi.mock('../services/sport.service.js', () => ({
-    default: {getAnnouncementChannel: vi.fn(), setAnnouncementChannel: vi.fn()}
+    default: {
+        getAnnouncementChannel: vi.fn(), setAnnouncementChannel: vi.fn(),
+        setKilometer: vi.fn(), getLegacyKilometer: vi.fn(),
+        addLegacyKilometer: vi.fn(), setLegacyKilometer: vi.fn()
+    }
 }));
 vi.mock('../services/logging.service.js', () => ({
     default: {getLogChannel: vi.fn(), setLogChannel: vi.fn()}
@@ -31,18 +35,24 @@ import greetingService from '../services/greeting.service.js';
 import eventService from '../services/event.service.js';
 import {ChannelType, Collection} from 'discord.js';
 import {
+    addiereLegacyKilometer,
     Einstellung,
     entferneEvent,
     holeEventFelder,
+    holeLegacyKilometer,
+    holeMitglieder,
     holeRollen,
     holeTextKanaele,
     istGueltigerTextKanal,
     istGueltigeRolle,
+    istGueltigesMitglied,
     istKanalFeld,
     ladeKanalFelder,
     sammleEinstellungen,
+    setzeLegacyKilometer,
     speichereEventDaten,
     speichereKanal,
+    speichereKilometer,
     speichereTwitchRolle
 } from './config.settings.js';
 
@@ -255,5 +265,49 @@ describe('config.settings – Event (bearbeiten)', () => {
 
         await entferneEvent();
         expect(eventService.clearEvent).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('config.settings – Sport-Admin', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    const mitMitgliedern = () => {
+        (client.guilds as any).cache = new Map([['guild-1', {
+            members: {
+                cache: new Collection<string, any>([
+                    ['m2', {id: 'm2', displayName: 'Zerix', user: {bot: false}}],
+                    ['m1', {id: 'm1', displayName: 'Acaine', user: {bot: false}}],
+                    ['b1', {id: 'b1', displayName: 'DracheBot', user: {bot: true}}],
+                ])
+            }
+        }]]);
+    };
+
+    it('holeMitglieder liefert Mitglieder ohne Bots, alphabetisch', () => {
+        mitMitgliedern();
+        expect(holeMitglieder().map(m => m.name)).toEqual(['Acaine', 'Zerix']);
+    });
+
+    it('istGueltigesMitglied akzeptiert nur echte Mitglieder (keine Bots)', () => {
+        mitMitgliedern();
+        expect(istGueltigesMitglied('m1')).toBe(true);
+        expect(istGueltigesMitglied('b1')).toBe(false);
+        expect(istGueltigesMitglied('fremd')).toBe(false);
+    });
+
+    it('reicht Kilometer-/Bestandskilometer-Aktionen an den Service durch', async () => {
+        await speichereKilometer('m1', 42);
+        expect(sportService.setKilometer).toHaveBeenCalledWith('m1', 42);
+
+        await addiereLegacyKilometer(10);
+        expect(sportService.addLegacyKilometer).toHaveBeenCalledWith(10);
+
+        await setzeLegacyKilometer(0);
+        expect(sportService.setLegacyKilometer).toHaveBeenCalledWith(0);
+
+        (sportService.getLegacyKilometer as any).mockResolvedValue(1250);
+        expect(await holeLegacyKilometer()).toBe(1250);
     });
 });

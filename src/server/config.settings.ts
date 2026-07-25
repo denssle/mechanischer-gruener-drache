@@ -208,6 +208,45 @@ export async function entferneEvent(): Promise<void> {
     await eventService.clearEvent();
 }
 
+export interface MitgliedOption {
+    id: string;
+    name: string;
+}
+
+// Server-Mitglieder (ohne Bots) fürs Auswahl-Dropdown UND als Whitelist. Alle Mitglieder sind seit
+// dem Start gecacht (loadAllMembers, GuildMembers-Intent). Alphabetisch nach Anzeigename (Emoji-tolerant).
+export function holeMitglieder(): MitgliedOption[] {
+    const guild = client.guilds.cache.get(config.GUILD_ID);
+    if (!guild) {
+        return [];
+    }
+    return guild.members.cache
+        .filter(member => !member.user.bot)
+        .map(member => ({id: member.id, name: member.displayName}))
+        .sort((a, b) => sortierschluessel(a.name).localeCompare(sortierschluessel(b.name), 'de'));
+}
+
+export function istGueltigesMitglied(userId: string): boolean {
+    return holeMitglieder().some(member => member.id === userId);
+}
+
+export async function speichereKilometer(userId: string, kilometer: number): Promise<void> {
+    await sportService.setKilometer(userId, kilometer);
+}
+
+export async function holeLegacyKilometer(): Promise<number> {
+    return sportService.getLegacyKilometer();
+}
+
+export async function addiereLegacyKilometer(kilometer: number): Promise<void> {
+    await sportService.addLegacyKilometer(kilometer);
+}
+
+// 0 entfernt die Bestandskilometer ganz (siehe sportService.setLegacyKilometer).
+export async function setzeLegacyKilometer(kilometer: number): Promise<void> {
+    await sportService.setLegacyKilometer(kilometer);
+}
+
 export async function sammleEinstellungen(): Promise<Einstellung[]> {
     const einstellungen: Einstellung[] = [];
 
