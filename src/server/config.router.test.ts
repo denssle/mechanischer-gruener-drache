@@ -26,19 +26,26 @@ vi.mock('../services/discordOAuth.service.js', () => ({
 vi.mock('./config.settings.js', () => ({
     sammleEinstellungen: vi.fn(() => Promise.resolve([
         {label: 'Protokoll-Kanal', wert: '#log', status: 'ok'}
-    ]))
+    ])),
+    holeTextKanaele: vi.fn(() => [{id: 'c1', name: 'allgemein'}]),
+    holeProtokollKanalId: vi.fn(() => Promise.resolve('c1')),
+    istGueltigerTextKanal: vi.fn((id: string) => id === 'c1'),
+    speichereProtokollKanal: vi.fn(() => Promise.resolve())
 }));
 
 import client from '../client.js';
 import * as oauth from '../services/discordOAuth.service.js';
-import {signSession, SESSION_COOKIE, STATE_COOKIE} from './config.session.js';
+import * as settings from './config.settings.js';
+import {createCsrfToken, signSession, SESSION_COOKIE, STATE_COOKIE} from './config.session.js';
 import {
     escapeHtml,
     handleCallback,
     handleConfigPage,
     handleLogin,
     handleLogout,
+    handleProtokollSpeichern,
     renderEinstellungen,
+    renderProtokollFormular,
     requireConfigAuth
 } from './config.router.js';
 
@@ -50,12 +57,14 @@ const mockResponse = () => {
     res.setHeader = vi.fn().mockReturnValue(res);
     res.redirect = vi.fn().mockReturnValue(res);
     res.headersSent = false;
+    res.locals = {};
     return res;
 };
 
-const mockRequest = (opts: {cookie?: string; query?: Record<string, string>} = {}) => ({
+const mockRequest = (opts: {cookie?: string; query?: Record<string, string>; body?: unknown} = {}) => ({
     headers: {cookie: opts.cookie},
-    query: opts.query ?? {}
+    query: opts.query ?? {},
+    body: opts.body
 } as any);
 
 const setGuildMember = (member: unknown, throwOnFetch = false) => {
@@ -86,6 +95,8 @@ describe('config.router', () => {
 
             expect(next).toHaveBeenCalledTimes(1);
             expect(res.send).not.toHaveBeenCalled();
+            // User-ID wird für nachgelagerte Handler (CSRF-Token) durchgereicht.
+            expect(res.locals.configUserId).toBe('12345');
         });
 
         it('zeigt ohne gültigen Cookie die Login-Seite', async () => {
@@ -139,14 +150,77 @@ describe('config.router', () => {
         });
     });
 
-    it('handleConfigPage rendert die Seite mit den Einstellungen', async () => {
+    it('handleConfigPage rendert Einstellungen und Bearbeiten-Formular', async () => {
         const res = mockResponse();
+        res.locals.configUserId = '12345';
+
         await handleConfigPage(mockRequest(), res);
+
         const html = res.send.mock.calls[0][0] as string;
         expect(html).toContain('<!doctype html>');
-        expect(html).toContain('Mechanischer Grüner Drache');
         expect(html).toContain('Protokoll-Kanal');
         expect(html).toContain('#log');
+        // Formular inkl. CSRF-Token und vorausgewähltem Kanal
+        expect(html).toContain('<form method="post" action="/config/protokoll">');
+        expect(html).toContain(createCsrfToken('12345'));
+        expect(html).toContain('value="c1" selected');
+    });
+
+    it('handleConfigPage zeigt den Gespeichert-Hinweis nach dem Redirect', async () => {
+        const res = mockResponse();
+        res.locals.configUserId = '12345';
+
+        await handleConfigPage(mockRequest({query: {gespeichert: '1'}}), res);
+
+        expect(res.send.mock.calls[0][0]).toContain('Gespeichert.');
+    });
+
+    describe('handleProtokollSpeichern', () => {
+        const gueltigeAnfrage = (body: Record<string, string>) => mockRequest({body});
+
+        it('speichert einen gültigen Kanal und leitet zurück', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleProtokollSpeichern(
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), kanal: 'c1'}), res
+            );
+
+            expect(settings.speichereProtokollKanal).toHaveBeenCalledWith('c1');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+        });
+
+        it('lehnt ein fehlendes/falsches CSRF-Token ab und speichert nicht', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleProtokollSpeichern(gueltigeAnfrage({kanal: 'c1'}), res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(settings.speichereProtokollKanal).not.toHaveBeenCalled();
+        });
+
+        it('lehnt einen Kanal ab, der nicht in der Liste steht', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleProtokollSpeichern(
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), kanal: 'fremder-kanal'}), res
+            );
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(settings.speichereProtokollKanal).not.toHaveBeenCalled();
+        });
+    });
+
+    it('renderProtokollFormular escaped Kanalnamen und markiert den aktuellen Kanal', () => {
+        const html = renderProtokollFormular(
+            [{id: 'a', name: '<böse>'}, {id: 'b', name: 'log'}], 'b', 'token-123'
+        );
+        expect(html).toContain('&lt;böse&gt;');
+        expect(html).not.toContain('<böse>');
+        expect(html).toContain('value="b" selected');
+        expect(html).toContain('value="token-123"');
     });
 
     describe('escapeHtml / renderEinstellungen', () => {

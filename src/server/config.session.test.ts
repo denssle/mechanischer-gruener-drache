@@ -8,9 +8,11 @@ vi.mock('../../config.json', () => ({
 
 import {
     buildSetCookie,
+    createCsrfToken,
     parseCookies,
     sessionConfigured,
     signSession,
+    verifyCsrfToken,
     verifySession
 } from './config.session.js';
 
@@ -59,6 +61,18 @@ describe('config.session', () => {
         expect(parseCookies('  x=y  ')).toEqual({x: 'y'});
         expect(parseCookies('kaputt; c=3')).toEqual({c: '3'});
         expect(parseCookies(undefined)).toEqual({});
+    });
+
+    it('akzeptiert das eigene CSRF-Token und lehnt fremde/kaputte ab', () => {
+        const token = createCsrfToken('12345');
+        expect(verifyCsrfToken('12345', token)).toBe(true);
+
+        // Token einer anderen Person zählt nicht.
+        expect(verifyCsrfToken('99999', token)).toBe(false);
+        // Manipuliert / fehlt / Unsinn.
+        expect(verifyCsrfToken('12345', token.slice(0, -1) + (token.endsWith('a') ? 'b' : 'a'))).toBe(false);
+        expect(verifyCsrfToken('12345', undefined)).toBe(false);
+        expect(verifyCsrfToken('12345', 'kurz')).toBe(false);
     });
 
     it('baut Set-Cookie-Strings mit den erwarteten Attributen', () => {

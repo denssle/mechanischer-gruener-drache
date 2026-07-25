@@ -1,4 +1,4 @@
-import {Request, Response, Router} from 'express';
+import {Request, Response, Router, urlencoded} from 'express';
 import {randomUUID} from 'crypto';
 import {PermissionFlagsBits} from 'discord.js';
 import config from '../../config.json' with {type: 'json'};
@@ -11,15 +11,26 @@ import {
 } from '../services/discordOAuth.service.js';
 import {
     buildSetCookie,
+    createCsrfToken,
     parseCookies,
     SESSION_COOKIE,
     SESSION_MAX_AGE_SECONDS,
     sessionConfigured,
     signSession,
     STATE_COOKIE,
+    verifyCsrfToken,
     verifySession
 } from './config.session.js';
-import {Einstellung, EinstellungStatus, sammleEinstellungen} from './config.settings.js';
+import {
+    Einstellung,
+    EinstellungStatus,
+    holeProtokollKanalId,
+    holeTextKanaele,
+    istGueltigerTextKanal,
+    KanalOption,
+    sammleEinstellungen,
+    speichereProtokollKanal
+} from './config.settings.js';
 
 // Verwaltungs-/Einstellungsseite (README-Todo), abgesichert per Discord-OAuth2-Login.
 // Nur Server-Admins kommen rein: Discord liefert (Scope "identify") die User-ID, die
@@ -101,10 +112,34 @@ export function renderEinstellungen(einstellungen: Einstellung[]): string {
     </table>`;
 }
 
-function configBody(einstellungenHtml: string): string {
+// Bearbeiten-Formular (Pilot: Protokoll-Kanal). Auswahl statt Freitext-ID - die Liste kommt aus dem
+// Bot und dient zugleich als Whitelist bei der Validierung. Das CSRF-Token haengt als hidden field dran.
+export function renderProtokollFormular(
+    kanaele: KanalOption[],
+    aktuelleId: string | null,
+    csrfToken: string
+): string {
+    if (!kanaele.length) {
+        return '<p>Keine Text-Kanäle gefunden – ist der Bot auf dem Server?</p>';
+    }
+    const optionen = kanaele.map(kanal =>
+        `<option value="${escapeHtml(kanal.id)}"${kanal.id === aktuelleId ? ' selected' : ''}>#${escapeHtml(kanal.name)}</option>`
+    ).join('\n');
+    return `<form method="post" action="/config/protokoll">
+        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+        <label for="kanal">Protokoll-Kanal</label>
+        <select id="kanal" name="kanal">${optionen}</select>
+        <button type="submit">Speichern</button>
+    </form>`;
+}
+
+function configBody(einstellungenHtml: string, formularHtml: string, gespeichert: boolean): string {
     return `<h1>Mechanischer Grüner Drache</h1>
-    <p>Aktuelle Bot-Einstellungen (nur Ansicht – das Bearbeiten kommt als nächster Schritt).</p>
+    <p>Aktuelle Bot-Einstellungen.</p>
+    ${gespeichert ? '<p class="status-ok">Gespeichert.</p>' : ''}
     ${einstellungenHtml}
+    <h2>Bearbeiten</h2>
+    ${formularHtml}
     <p><a class="logout" href="/config/logout">Abmelden</a></p>`;
 }
 
@@ -162,19 +197,48 @@ export async function requireConfigAuth(req: Request, res: Response, next: () =>
         res.type('html').send(renderPage(LOGIN_BODY));
         return;
     }
+    // Fuer nachgelagerte Handler: wer ist eingeloggt (Basis des CSRF-Tokens).
+    res.locals.configUserId = userId;
     next();
 }
 
-export async function handleConfigPage(_req: Request, res: Response): Promise<void> {
+export async function handleConfigPage(req: Request, res: Response): Promise<void> {
     let inhalt: string;
+    let formular: string;
     try {
         inhalt = renderEinstellungen(await sammleEinstellungen());
+        const userId = res.locals.configUserId as string;
+        formular = renderProtokollFormular(holeTextKanaele(), await holeProtokollKanalId(), createCsrfToken(userId));
     } catch (error) {
         // Ein Redis-/Discord-Problem darf die Seite nicht komplett kosten - lieber ein Hinweis.
         console.error('Fehler beim Laden der Config-Einstellungen:', error);
         inhalt = '<p>Die Einstellungen konnten gerade nicht geladen werden.</p>';
+        formular = '';
     }
-    res.type('html').send(renderPage(configBody(inhalt)));
+    res.type('html').send(renderPage(configBody(inhalt, formular, req.query.gespeichert === '1')));
+}
+
+// Speichert den Protokoll-Kanal. Reihenfolge bewusst: CSRF pruefen, dann den Wert gegen die
+// Kanal-Whitelist validieren, erst dann schreiben. Danach Redirect (Post/Redirect/Get), damit
+// ein Reload im Browser nicht erneut speichert.
+export async function handleProtokollSpeichern(req: Request, res: Response): Promise<void> {
+    const userId = res.locals.configUserId as string;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const token = typeof body._csrf === 'string' ? body._csrf : undefined;
+
+    if (!verifyCsrfToken(userId, token)) {
+        res.status(403).type('html').send(renderPage(forbiddenBody('Ungültiges oder fehlendes CSRF-Token.')));
+        return;
+    }
+
+    const kanalId = typeof body.kanal === 'string' ? body.kanal : '';
+    if (!istGueltigerTextKanal(kanalId)) {
+        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannter Kanal – bitte einen Kanal aus der Liste wählen.')));
+        return;
+    }
+
+    await speichereProtokollKanal(kanalId);
+    res.redirect('/config?gespeichert=1');
 }
 
 // Startet den OAuth-Flow: zufaelligen state als kurzlebiges Cookie setzen (CSRF, Double-Submit)
@@ -253,6 +317,28 @@ configRouter.get('/config', (req, res, next) => {
         }
     });
 });
+// Body-Parser NUR an dieser Route (nicht global!) - global gemountet wuerde er den Rohkoerper des
+// Twitch-Webhooks zerstoeren und dessen Signaturpruefung brechen. Auth laeuft davor, damit fuer
+// Unbefugte gar nichts geparst wird.
+configRouter.post('/config/protokoll',
+    (req, res, next) => {
+        requireConfigAuth(req, res, next).catch((error) => {
+            console.error('Fehler in requireConfigAuth:', error);
+            if (!res.headersSent) {
+                res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
+            }
+        });
+    },
+    urlencoded({extended: false}),
+    (req, res) => {
+        handleProtokollSpeichern(req, res).catch((error) => {
+            console.error('Fehler beim Speichern des Protokoll-Kanals:', error);
+            if (!res.headersSent) {
+                res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
+            }
+        });
+    }
+);
 configRouter.get('/config/login', handleLogin);
 // async void: eigenes .catch, sonst killt eine unhandled rejection den Prozess (siehe CLAUDE.md).
 configRouter.get('/config/callback', (req, res) => {

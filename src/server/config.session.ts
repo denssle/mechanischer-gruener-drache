@@ -60,6 +60,26 @@ export function verifySession(value: string | undefined): string | null {
     return userId;
 }
 
+// CSRF-Token fuer Bearbeiten-Formulare: zustandslos aus der User-ID abgeleitet (HMAC mit demselben
+// Secret wie die Session) - kein Redis, kein Formular-State. Ein fremder Angreifer kann es weder
+// erraten noch auslesen (Same-Origin-Policy); zusammen mit SameSite=Lax am Session-Cookie ist das
+// fuer ein Admin-Panel ausreichend. Bewusst kein Ablauf: das Token gilt so lange wie die Session.
+export function createCsrfToken(userId: string): string {
+    if (!sessionConfigured()) {
+        throw new Error('CONFIG_SESSION_SECRET ist nicht gesetzt - CSRF-Token kann nicht erzeugt werden.');
+    }
+    return hmac(`csrf:${userId}`);
+}
+
+export function verifyCsrfToken(userId: string, token: string | undefined): boolean {
+    if (!token || !sessionConfigured()) {
+        return false;
+    }
+    const expected = Buffer.from(createCsrfToken(userId), 'hex');
+    const actual = Buffer.from(token, 'hex');
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
 // Manuelles Parsen von req.headers.cookie ("a=1; b=2") - spart die cookie-parser-Dependency.
 export function parseCookies(header: string | undefined): Record<string, string> {
     const cookies: Record<string, string> = {};

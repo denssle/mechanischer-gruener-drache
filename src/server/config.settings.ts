@@ -1,4 +1,4 @@
-import {TextChannel} from 'discord.js';
+import {ChannelType, TextChannel} from 'discord.js';
 import client from '../client.js';
 import config from '../../config.json' with {type: 'json'};
 import twitchUserService from '../services/twitch.user.service.js';
@@ -49,6 +49,40 @@ function formatEvent(event: {timestamp: number; title?: string}): string {
         timeStyle: 'short',
     });
     return event.title ? `${datum} – ${event.title}` : datum;
+}
+
+export interface KanalOption {
+    id: string;
+    name: string;
+}
+
+// Alle beschreibbaren Text-/Announcement-Kanäle des Servers - Grundlage fuers Auswahl-Dropdown
+// (statt Kanal-IDs abtippen zu lassen) UND fuer die Validierung beim Speichern. Announcement-Kanäle
+// sind mit drin, weil dort ebenfalls gepostet werden kann (analog addChannelTypes bei /twitch).
+export function holeTextKanaele(): KanalOption[] {
+    const guild = client.guilds.cache.get(config.GUILD_ID);
+    if (!guild) {
+        return [];
+    }
+    return guild.channels.cache
+        .filter(kanal => kanal.type === ChannelType.GuildText || kanal.type === ChannelType.GuildAnnouncement)
+        .map(kanal => ({id: kanal.id, name: kanal.name}))
+        .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+}
+
+// Serverseitige Validierung: nur eine ID aus der bekannten Kanalliste wird akzeptiert. Damit kann
+// ueber das Formular kein beliebiger Wert (fremder Kanal, Unsinn) in Redis landen.
+export function istGueltigerTextKanal(kanalId: string): boolean {
+    return holeTextKanaele().some(kanal => kanal.id === kanalId);
+}
+
+// Rohe ID (nicht der aufgeloeste Name wie in sammleEinstellungen) - fuer die Vorauswahl im Dropdown.
+export async function holeProtokollKanalId(): Promise<string | null> {
+    return loggingService.getLogChannel();
+}
+
+export async function speichereProtokollKanal(kanalId: string): Promise<void> {
+    await loggingService.setLogChannel(kanalId);
 }
 
 export async function sammleEinstellungen(): Promise<Einstellung[]> {
