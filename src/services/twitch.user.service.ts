@@ -88,6 +88,10 @@ class TwitchUserService {
     async getNotificationRole(): Promise<string | null> {
         return redisService.get('TWITCH:NOTIFICATION_ROLE');
     }
+
+    async removeNotificationRole(): Promise<void> {
+        await redisService.delete('TWITCH:NOTIFICATION_ROLE');
+    }
 }
 
 export default new TwitchUserService();

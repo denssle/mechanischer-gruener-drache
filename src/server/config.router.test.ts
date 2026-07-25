@@ -33,7 +33,11 @@ vi.mock('./config.settings.js', () => ({
     ])),
     istGueltigerTextKanal: vi.fn((id: string) => id === 'c1'),
     istKanalFeld: vi.fn((feld: string) => feld === 'protokoll'),
-    speichereKanal: vi.fn(() => Promise.resolve())
+    speichereKanal: vi.fn(() => Promise.resolve()),
+    holeRollen: vi.fn(() => [{id: 'r1', name: 'Abonnenten'}]),
+    holeTwitchRolleId: vi.fn(() => Promise.resolve('r1')),
+    istGueltigeRolle: vi.fn((id: string) => id === 'r1'),
+    speichereTwitchRolle: vi.fn(() => Promise.resolve())
 }));
 
 import client from '../client.js';
@@ -47,8 +51,10 @@ import {
     handleKanalSpeichern,
     handleLogin,
     handleLogout,
+    handleRolleSpeichern,
     renderEinstellungen,
     renderKanalFormulare,
+    renderRollenFormular,
     requireConfigAuth
 } from './config.router.js';
 
@@ -163,11 +169,15 @@ describe('config.router', () => {
         expect(html).toContain('<!doctype html>');
         expect(html).toContain('Protokoll-Kanal');
         expect(html).toContain('#log');
-        // Formular inkl. CSRF-Token, Feld-Kennung und vorausgewähltem Kanal
+        // Kanal-Formular inkl. CSRF-Token, Feld-Kennung und vorausgewähltem Kanal
         expect(html).toContain('<form method="post" action="/config/kanal">');
         expect(html).toContain('name="feld" value="protokoll"');
         expect(html).toContain(createCsrfToken('12345'));
         expect(html).toContain('value="c1" selected');
+        // Rollen-Formular mit "— keine —" und vorausgewählter Rolle
+        expect(html).toContain('<form method="post" action="/config/rolle">');
+        expect(html).toContain('— keine —');
+        expect(html).toContain('value="r1" selected');
     });
 
     it('handleConfigPage zeigt den Gespeichert-Hinweis nach dem Redirect', async () => {
@@ -240,6 +250,72 @@ describe('config.router', () => {
         expect(html).toContain('value="b" selected');
         expect(html).toContain('value="token-123"');
         expect(html).toContain('name="feld" value="protokoll"');
+    });
+
+    describe('handleRolleSpeichern', () => {
+        const gueltigeAnfrage = (body: Record<string, string>) => mockRequest({body});
+
+        it('speichert eine gültige Rolle und leitet zurück', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleRolleSpeichern(
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), rolle: 'r1'}), res
+            );
+
+            expect(settings.speichereTwitchRolle).toHaveBeenCalledWith('r1');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+        });
+
+        it('entfernt die Rolle bei leerem Wert (— keine —)', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleRolleSpeichern(
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), rolle: ''}), res
+            );
+
+            expect(settings.speichereTwitchRolle).toHaveBeenCalledWith(null);
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+        });
+
+        it('lehnt ein fehlendes CSRF-Token ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleRolleSpeichern(gueltigeAnfrage({rolle: 'r1'}), res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(settings.speichereTwitchRolle).not.toHaveBeenCalled();
+        });
+
+        it('lehnt eine unbekannte Rolle ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleRolleSpeichern(
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), rolle: 'fremde-rolle'}), res
+            );
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(settings.speichereTwitchRolle).not.toHaveBeenCalled();
+        });
+    });
+
+    it('renderRollenFormular bietet "— keine —" und markiert die aktuelle Rolle', () => {
+        const html = renderRollenFormular(
+            [{id: 'r1', name: '<b>Abo</b>'}, {id: 'r2', name: 'Zuschauer'}], 'r2', 'token-9'
+        );
+        expect(html).toContain('— keine —');
+        expect(html).toContain('&lt;b&gt;Abo&lt;/b&gt;');
+        expect(html).not.toContain('<b>Abo</b>');
+        expect(html).toContain('value="r2" selected');
+        expect(html).toContain('<form method="post" action="/config/rolle">');
+    });
+
+    it('renderRollenFormular markiert "— keine —" wenn keine Rolle gesetzt ist', () => {
+        const html = renderRollenFormular([{id: 'r1', name: 'Abo'}], null, 'token-9');
+        expect(html).toContain('value="" selected>— keine —');
     });
 
     describe('escapeHtml / renderEinstellungen', () => {

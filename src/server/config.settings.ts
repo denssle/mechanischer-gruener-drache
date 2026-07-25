@@ -138,6 +138,43 @@ export async function speichereKanal(schluessel: string, kanalId: string): Promi
     await KANAL_SERVICES[schluessel].speichere(kanalId);
 }
 
+export interface RollenOption {
+    id: string;
+    name: string;
+}
+
+// Alle Rollen des Servers ausser @everyone (id === guild.id) - fuers Rollen-Dropdown UND als
+// Whitelist. Alphabetisch (Emoji-tolerant wie bei den Kanaelen), nicht nach Hierarchie - im
+// Dropdown ist alphabetisch leichter zu finden.
+export function holeRollen(): RollenOption[] {
+    const guild = client.guilds.cache.get(config.GUILD_ID);
+    if (!guild) {
+        return [];
+    }
+    return guild.roles.cache
+        .filter(rolle => rolle.id !== guild.id)
+        .map(rolle => ({id: rolle.id, name: rolle.name}))
+        .sort((a, b) => sortierschluessel(a.name).localeCompare(sortierschluessel(b.name), 'de'));
+}
+
+export function istGueltigeRolle(rolleId: string): boolean {
+    return holeRollen().some(rolle => rolle.id === rolleId);
+}
+
+// Rohe ID (nicht der aufgeloeste @Name aus sammleEinstellungen) - fuer die Vorauswahl im Dropdown.
+export async function holeTwitchRolleId(): Promise<string | null> {
+    return twitchUserService.getNotificationRole();
+}
+
+// null = Rolle entfernen (die Twitch-Benachrichtigungsrolle ist optional). Sonst setzen.
+export async function speichereTwitchRolle(rolleId: string | null): Promise<void> {
+    if (rolleId === null) {
+        await twitchUserService.removeNotificationRole();
+    } else {
+        await twitchUserService.setNotificationRole(rolleId);
+    }
+}
+
 export async function sammleEinstellungen(): Promise<Einstellung[]> {
     const einstellungen: Einstellung[] = [];
 

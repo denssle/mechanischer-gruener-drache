@@ -24,14 +24,19 @@ import {
 import {
     Einstellung,
     EinstellungStatus,
+    holeRollen,
     holeTextKanaele,
+    holeTwitchRolleId,
     istGueltigerTextKanal,
+    istGueltigeRolle,
     istKanalFeld,
     KanalFeld,
     KanalOption,
     ladeKanalFelder,
+    RollenOption,
     sammleEinstellungen,
-    speichereKanal
+    speichereKanal,
+    speichereTwitchRolle
 } from './config.settings.js';
 
 // Verwaltungs-/Einstellungsseite (README-Todo), abgesichert per Discord-OAuth2-Login.
@@ -136,6 +141,21 @@ export function renderKanalFormulare(felder: KanalFeld[], kanaele: KanalOption[]
     return felder.map(feld => renderKanalFormular(feld, kanaele, csrfToken)).join('\n');
 }
 
+// Twitch-Benachrichtigungsrolle: wie ein Kanal-Feld, aber die Rolle ist optional -> eine
+// "— keine —"-Option (leerer Wert) zum Entfernen. `aktuelleId === null` heisst "keine gesetzt".
+export function renderRollenFormular(rollen: RollenOption[], aktuelleId: string | null, csrfToken: string): string {
+    const keineOption = `<option value=""${aktuelleId === null ? ' selected' : ''}>— keine —</option>`;
+    const optionen = rollen.map(rolle =>
+        `<option value="${escapeHtml(rolle.id)}"${rolle.id === aktuelleId ? ' selected' : ''}>@${escapeHtml(rolle.name)}</option>`
+    ).join('\n');
+    return `<form method="post" action="/config/rolle">
+        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+        <label>Twitch-Benachrichtigungsrolle</label>
+        <select name="rolle">${keineOption}${optionen}</select>
+        <button type="submit">Speichern</button>
+    </form>`;
+}
+
 function configBody(einstellungenHtml: string, formularHtml: string, gespeichert: boolean): string {
     return `<h1>Mechanischer Grüner Drache</h1>
     <p>Aktuelle Bot-Einstellungen.</p>
@@ -211,7 +231,10 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
     try {
         inhalt = renderEinstellungen(await sammleEinstellungen());
         const userId = res.locals.configUserId as string;
-        formular = renderKanalFormulare(await ladeKanalFelder(), holeTextKanaele(), createCsrfToken(userId));
+        const csrfToken = createCsrfToken(userId);
+        formular =
+            renderKanalFormulare(await ladeKanalFelder(), holeTextKanaele(), csrfToken) + '\n' +
+            renderRollenFormular(holeRollen(), await holeTwitchRolleId(), csrfToken);
     } catch (error) {
         // Ein Redis-/Discord-Problem darf die Seite nicht komplett kosten - lieber ein Hinweis.
         console.error('Fehler beim Laden der Config-Einstellungen:', error);
@@ -247,6 +270,34 @@ export async function handleKanalSpeichern(req: Request, res: Response): Promise
     }
 
     await speichereKanal(feld, kanalId);
+    res.redirect('/config?gespeichert=1');
+}
+
+// Speichert die Twitch-Benachrichtigungsrolle. Leerer Wert = Rolle entfernen (sie ist optional).
+// Sonst gegen die Rollen-Whitelist validieren. CSRF wie ueberall zuerst.
+export async function handleRolleSpeichern(req: Request, res: Response): Promise<void> {
+    const userId = res.locals.configUserId as string;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const token = typeof body._csrf === 'string' ? body._csrf : undefined;
+
+    if (!verifyCsrfToken(userId, token)) {
+        res.status(403).type('html').send(renderPage(forbiddenBody('Ungültiges oder fehlendes CSRF-Token.')));
+        return;
+    }
+
+    const rolleId = typeof body.rolle === 'string' ? body.rolle : '';
+    if (rolleId === '') {
+        await speichereTwitchRolle(null);
+        res.redirect('/config?gespeichert=1');
+        return;
+    }
+
+    if (!istGueltigeRolle(rolleId)) {
+        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannte Rolle – bitte eine Rolle aus der Liste wählen.')));
+        return;
+    }
+
+    await speichereTwitchRolle(rolleId);
     res.redirect('/config?gespeichert=1');
 }
 
@@ -342,6 +393,25 @@ configRouter.post('/config/kanal',
     (req, res) => {
         handleKanalSpeichern(req, res).catch((error) => {
             console.error('Fehler beim Speichern des Kanals:', error);
+            if (!res.headersSent) {
+                res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
+            }
+        });
+    }
+);
+configRouter.post('/config/rolle',
+    (req, res, next) => {
+        requireConfigAuth(req, res, next).catch((error) => {
+            console.error('Fehler in requireConfigAuth:', error);
+            if (!res.headersSent) {
+                res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
+            }
+        });
+    },
+    urlencoded({extended: false}),
+    (req, res) => {
+        handleRolleSpeichern(req, res).catch((error) => {
+            console.error('Fehler beim Speichern der Rolle:', error);
             if (!res.headersSent) {
                 res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
             }

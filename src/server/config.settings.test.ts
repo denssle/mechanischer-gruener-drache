@@ -5,7 +5,10 @@ vi.mock('../client.js', () => ({
     default: {channels: {fetch: vi.fn()}, guilds: {cache: new Map()}}
 }));
 vi.mock('../services/twitch.user.service.js', () => ({
-    default: {getNotificationChannel: vi.fn(), getNotificationRole: vi.fn(), setNotificationChannel: vi.fn()}
+    default: {
+        getNotificationChannel: vi.fn(), getNotificationRole: vi.fn(),
+        setNotificationChannel: vi.fn(), setNotificationRole: vi.fn(), removeNotificationRole: vi.fn()
+    }
 }));
 vi.mock('../services/sport.service.js', () => ({
     default: {getAnnouncementChannel: vi.fn(), setAnnouncementChannel: vi.fn()}
@@ -27,12 +30,15 @@ import eventService from '../services/event.service.js';
 import {ChannelType, Collection} from 'discord.js';
 import {
     Einstellung,
+    holeRollen,
     holeTextKanaele,
     istGueltigerTextKanal,
+    istGueltigeRolle,
     istKanalFeld,
     ladeKanalFelder,
     sammleEinstellungen,
-    speichereKanal
+    speichereKanal,
+    speichereTwitchRolle
 } from './config.settings.js';
 
 const finde = (einstellungen: Einstellung[], label: string): Einstellung =>
@@ -177,5 +183,45 @@ describe('config.settings – Kanal-Felder (bearbeiten)', () => {
 
         await speichereKanal('morgengruss-kanal', 'c8');
         expect(greetingService.setChannel).toHaveBeenCalledWith('c8');
+    });
+});
+
+describe('config.settings – Twitch-Rolle (bearbeiten)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    const mitRollen = () => {
+        (client.guilds as any).cache = new Map([['guild-1', {
+            id: 'guild-1',
+            roles: {
+                cache: new Collection<string, any>([
+                    ['guild-1', {id: 'guild-1', name: '@everyone'}],
+                    ['r2', {id: 'r2', name: 'Zuschauer'}],
+                    ['r1', {id: 'r1', name: 'Abonnenten'}],
+                ])
+            }
+        }]]);
+    };
+
+    it('holeRollen liefert alle Rollen außer @everyone, alphabetisch', () => {
+        mitRollen();
+        expect(holeRollen().map(r => r.name)).toEqual(['Abonnenten', 'Zuschauer']);
+    });
+
+    it('istGueltigeRolle akzeptiert echte Rollen, nicht @everyone', () => {
+        mitRollen();
+        expect(istGueltigeRolle('r1')).toBe(true);
+        expect(istGueltigeRolle('guild-1')).toBe(false);
+        expect(istGueltigeRolle('fremd')).toBe(false);
+    });
+
+    it('speichereTwitchRolle setzt eine Rolle bzw. entfernt sie bei null', async () => {
+        await speichereTwitchRolle('r1');
+        expect(twitchUserService.setNotificationRole).toHaveBeenCalledWith('r1');
+        expect(twitchUserService.removeNotificationRole).not.toHaveBeenCalled();
+
+        await speichereTwitchRolle(null);
+        expect(twitchUserService.removeNotificationRole).toHaveBeenCalledTimes(1);
     });
 });
