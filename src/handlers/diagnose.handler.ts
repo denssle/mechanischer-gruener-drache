@@ -7,6 +7,8 @@ import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import eventService from '../services/event.service.js';
 import characterService, {CharacterLink, findInRoster} from '../services/character.service.js';
+import {oauthConfigured} from '../services/discordOAuth.service.js';
+import {sessionConfigured} from '../server/config.session.js';
 
 // Feature-übergreifende Admin-Diagnose: zeigt auf einen Blick, ob alle setzbaren Kanäle/Einstellungen
 // gesetzt UND abrufbar sind, und faltet den früheren Twitch-EventSub-Check mit ein (ersetzt
@@ -44,7 +46,26 @@ class DiagnoseHandler {
         lines.push('\n**Verknüpfte Charaktere**');
         await this.pruefeCharaktere(lines);
 
+        lines.push('\n**Config-Seite (/config)**');
+        this.pruefeConfig(lines);
+
         return interaction.editReply(lines.join('\n'));
+    }
+
+    // Ist der /config-Login scharf geschaltet? Reines Config-Lesen (kein Netz): ohne beide Secrets
+    // bleibt die Seite fail-closed (503) - die häufigste "warum geht /config nicht"-Ursache. Die
+    // externe Erreichbarkeit (nginx/Backend-Mapping) wird bewusst NICHT geprüft - dafür bräuchte es
+    // einen Selbst-HTTP-Request; das deckt der Deploy-curl (/twitch/eventsub → 404) ohnehin ab.
+    private pruefeConfig(lines: string[]): void {
+        const login = oauthConfigured();
+        const session = sessionConfigured();
+        if (login && session) {
+            lines.push('✅ Login konfiguriert – die Seite ist erreichbar (sofern das Web-Backend-Mapping steht).');
+            return;
+        }
+        const fehlt = [!login && 'DISCORD_CLIENT_SECRET', !session && 'CONFIG_SESSION_SECRET']
+            .filter(Boolean).join(' + ');
+        lines.push(`❌ Login NICHT konfiguriert (${fehlt} fehlt) – /config bleibt gesperrt (503).`);
     }
 
     // Ein gesetzter Kanal wird gegen Discord gegengeprüft - fängt gelöschte Kanäle / fehlenden Zugriff ab.

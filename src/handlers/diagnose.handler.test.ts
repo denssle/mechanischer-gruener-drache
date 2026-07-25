@@ -11,6 +11,8 @@ const logging = vi.hoisted(() => ({ getLogChannel: vi.fn() }));
 const greeting = vi.hoisted(() => ({ getChannel: vi.fn() }));
 const event = vi.hoisted(() => ({ getEvent: vi.fn() }));
 const character = vi.hoisted(() => ({ getAllLinks: vi.fn(), getRoster: vi.fn() }));
+const oauth = vi.hoisted(() => ({ oauthConfigured: vi.fn() }));
+const session = vi.hoisted(() => ({ sessionConfigured: vi.fn() }));
 const channelsFetch = vi.hoisted(() => vi.fn());
 
 vi.mock('../client.js', () => ({ default: { channels: { fetch: channelsFetch } } }));
@@ -20,6 +22,8 @@ vi.mock('../services/sport.service.js', () => ({ default: sport }));
 vi.mock('../services/logging.service.js', () => ({ default: logging }));
 vi.mock('../services/greeting.service.js', () => ({ default: greeting }));
 vi.mock('../services/event.service.js', () => ({ default: event }));
+vi.mock('../services/discordOAuth.service.js', () => oauth);
+vi.mock('../server/config.session.js', () => session);
 // findInRoster (rein) real lassen, nur den Service-Default mocken.
 vi.mock('../services/character.service.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../services/character.service.js')>();
@@ -57,6 +61,9 @@ describe('DiagnoseHandler', () => {
         character.getAllLinks.mockResolvedValue([]);
         character.getRoster.mockResolvedValue([]);
         channelsFetch.mockResolvedValue({ id: 'ok' });
+        // Standard: Config-Login konfiguriert
+        oauth.oauthConfigured.mockReturnValue(true);
+        session.sessionConfigured.mockReturnValue(true);
     });
 
     it('lehnt Nicht-Admins ephemer ab', async () => {
@@ -141,6 +148,28 @@ describe('DiagnoseHandler', () => {
         expect(text).toContain('EventSub-Subscriptions konnten nicht abgefragt werden');
         // Die restliche Diagnose (weitere Kanäle) läuft trotzdem durch.
         expect(text).toContain('Morgengruß-Kanal:');
+    });
+
+    describe('Config-Seite', () => {
+        it('meldet den Login als konfiguriert, wenn beide Secrets gesetzt sind', async () => {
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Login konfiguriert');
+        });
+
+        it('nennt das fehlende Secret, wenn der Login nicht konfiguriert ist', async () => {
+            oauth.oauthConfigured.mockReturnValue(true);
+            session.sessionConfigured.mockReturnValue(false);
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            const text = report(interaction);
+            expect(text).toContain('Login NICHT konfiguriert');
+            expect(text).toContain('CONFIG_SESSION_SECRET');
+        });
     });
 
     describe('verknüpfte Charaktere', () => {
