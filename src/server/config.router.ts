@@ -84,8 +84,13 @@ function renderPage(bodyHtml: string): string {
         form.setting select { flex: 0 0 14rem; padding: 0.3rem; }
         form.setting button { padding: 0.3rem 0.8rem; }
         form.setting input { padding: 0.3rem; }
-        form.rolle-abstand { margin-top: 1.75rem; }
-        form.event-abstand { margin-top: 1.75rem; }
+        form.rolle-abstand { margin-top: 0.9rem; }
+        fieldset.bereich { border: 1px solid rgba(128,128,128,0.4); border-radius: 0.6rem; padding: 0.4rem 1.25rem 1rem; margin: 1.1rem 0; }
+        fieldset.bereich legend { font-weight: 600; font-size: 1.05rem; padding: 0 0.4rem; }
+        form.event-form { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 0.4rem 0; }
+        form.event-form input { padding: 0.3rem; }
+        form.event-form input[type="text"] { flex: 1; min-width: 8rem; }
+        form.event-form button { padding: 0.3rem 0.8rem; }
         table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
         th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(128,128,128,0.3); }
         th { font-weight: 600; }
@@ -130,9 +135,13 @@ export function renderEinstellungen(einstellungen: Einstellung[]): string {
     </table>`;
 }
 
-// Ein Bearbeiten-Formular je Kanal-Einstellung. Auswahl statt Freitext-ID - die Liste kommt aus dem
-// Bot und dient zugleich als Whitelist bei der Validierung. CSRF-Token + Feld-Kennung als hidden fields.
-function renderKanalFormular(feld: KanalFeld, kanaele: KanalOption[], csrfToken: string): string {
+// Ein Bearbeiten-Formular für eine Kanal-Einstellung. Auswahl statt Freitext-ID - die Liste kommt aus
+// dem Bot und dient zugleich als Whitelist bei der Validierung. CSRF-Token + Feld-Kennung als hidden
+// fields. Sind keine Kanäle da (Bot nicht auf dem Server?), zeigt das Dropdown einen Hinweis.
+export function renderKanalFormular(feld: KanalFeld, kanaele: KanalOption[], csrfToken: string): string {
+    if (!kanaele.length) {
+        return `<p>${escapeHtml(feld.label)}: keine Text-Kanäle gefunden.</p>`;
+    }
     const optionen = kanaele.map(kanal =>
         `<option value="${escapeHtml(kanal.id)}"${kanal.id === feld.aktuelleId ? ' selected' : ''}>#${escapeHtml(kanal.name)}</option>`
     ).join('\n');
@@ -143,13 +152,6 @@ function renderKanalFormular(feld: KanalFeld, kanaele: KanalOption[], csrfToken:
         <select name="kanal">${optionen}</select>
         <button type="submit">Speichern</button>
     </form>`;
-}
-
-export function renderKanalFormulare(felder: KanalFeld[], kanaele: KanalOption[], csrfToken: string): string {
-    if (!kanaele.length) {
-        return '<p>Keine Text-Kanäle gefunden – ist der Bot auf dem Server?</p>';
-    }
-    return felder.map(feld => renderKanalFormular(feld, kanaele, csrfToken)).join('\n');
 }
 
 // Twitch-Benachrichtigungsrolle: wie ein Kanal-Feld, aber die Rolle ist optional -> eine
@@ -202,24 +204,23 @@ export function parseIsoDateTime(datum: string, uhrzeit: string): number | null 
 // (Speichern/Entfernen) über name="aktion"; "Entfernen" ist formnovalidate, damit es auch ohne
 // ausgefülltes (required) Datum abschickbar ist.
 export function renderEventFormular(felder: EventFelder, csrfToken: string): string {
-    return `<form class="setting event-abstand" method="post" action="/config/event">
+    return `<form class="event-form" method="post" action="/config/event">
         <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
-        <label>Nächstes Event</label>
-        <input type="date" name="datum" value="${escapeHtml(felder.datum)}" required>
-        <input type="time" name="uhrzeit" value="${escapeHtml(felder.uhrzeit)}">
-        <input type="text" name="titel" placeholder="Titel (optional)" maxlength="100" value="${escapeHtml(felder.titel)}">
+        <input type="date" name="datum" value="${escapeHtml(felder.datum)}" required aria-label="Datum" title="Datum">
+        <input type="time" name="uhrzeit" value="${escapeHtml(felder.uhrzeit)}" aria-label="Uhrzeit (optional)" title="Uhrzeit (optional)">
+        <input type="text" name="titel" placeholder="Titel (optional)" maxlength="100" value="${escapeHtml(felder.titel)}" aria-label="Titel">
         <button type="submit" name="aktion" value="speichern">Speichern</button>
         <button type="submit" name="aktion" value="entfernen" formnovalidate>Event entfernen</button>
     </form>`;
 }
 
-function configBody(einstellungenHtml: string, formularHtml: string, gespeichert: boolean): string {
+function configBody(einstellungenHtml: string, bereicheHtml: string, gespeichert: boolean): string {
     return `<h1>Mechanischer Grüner Drache</h1>
-    <p>Aktuelle Bot-Einstellungen.</p>
+    <p>Aktuelle Bot-Einstellungen im Überblick, darunter nach Bereich gruppiert zum Bearbeiten.</p>
     ${gespeichert ? '<p class="status-ok">Gespeichert.</p>' : ''}
     ${einstellungenHtml}
     <h2>Bearbeiten</h2>
-    ${formularHtml}
+    ${bereicheHtml}
     <p><a class="logout" href="/config/logout">Abmelden</a></p>`;
 }
 
@@ -234,16 +235,32 @@ export interface ConfigSeiteDaten {
     gespeichert: boolean;
 }
 
+// Ein fachlich abgegrenzter Bereich als <fieldset> (semantisch die Formular-Gruppierung),
+// die <legend> ist die Bereichs-Überschrift.
+function renderBereich(titel: string, inhaltHtml: string): string {
+    return `<fieldset class="bereich">
+        <legend>${escapeHtml(titel)}</legend>
+        ${inhaltHtml}
+    </fieldset>`;
+}
+
 // Reine Präsentation der kompletten /config-Seite - KEINE Redis-/Discord-Zugriffe. handleConfigPage
 // sammelt die Daten und ruft das hier; das Vorschau-Skript (scripts/config-vorschau.ts) ruft es mit
 // Beispieldaten auf, um am Layout zu iterieren, ohne zu deployen.
 export function renderConfigSeite(daten: ConfigSeiteDaten): string {
-    const inhalt = renderEinstellungen(daten.einstellungen);
-    const formular =
-        renderKanalFormulare(daten.kanalFelder, daten.kanaele, daten.csrfToken) + '\n' +
-        renderRollenFormular(daten.rollen, daten.twitchRolleId, daten.csrfToken) + '\n' +
-        renderEventFormular(daten.eventFelder, daten.csrfToken);
-    return renderPage(configBody(inhalt, formular, daten.gespeichert));
+    const csrf = daten.csrfToken;
+    const kanal = (schluessel: string): string => {
+        const feld = daten.kanalFelder.find(f => f.schluessel === schluessel);
+        return feld ? renderKanalFormular(feld, daten.kanaele, csrf) : '';
+    };
+    // Nach Feature gruppiert, damit fachlich Zusammengehöriges zusammensteht.
+    const bereiche =
+        renderBereich('Twitch', kanal('twitch-kanal') + renderRollenFormular(daten.rollen, daten.twitchRolleId, csrf)) +
+        renderBereich('Sport', kanal('sport-kanal')) +
+        renderBereich('Nachrichten-Protokoll', kanal('protokoll')) +
+        renderBereich('Morgengruß', kanal('morgengruss-kanal')) +
+        renderBereich('Event', renderEventFormular(daten.eventFelder, csrf));
+    return renderPage(configBody(renderEinstellungen(daten.einstellungen), bereiche, daten.gespeichert));
 }
 
 const LOGIN_BODY = `<h1>Mechanischer Grüner Drache</h1>

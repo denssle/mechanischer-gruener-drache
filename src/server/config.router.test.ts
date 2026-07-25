@@ -60,7 +60,7 @@ import {
     renderConfigSeite,
     renderEinstellungen,
     renderEventFormular,
-    renderKanalFormulare,
+    renderKanalFormular,
     renderRollenFormular,
     requireConfigAuth
 } from './config.router.js';
@@ -250,9 +250,9 @@ describe('config.router', () => {
         });
     });
 
-    it('renderKanalFormulare escaped Kanalnamen, markiert den aktuellen Kanal und trägt die Feld-Kennung', () => {
-        const html = renderKanalFormulare(
-            [{schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'b'}],
+    it('renderKanalFormular escaped Kanalnamen, markiert den aktuellen Kanal und trägt die Feld-Kennung', () => {
+        const html = renderKanalFormular(
+            {schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'b'},
             [{id: 'a', name: '<böse>'}, {id: 'b', name: 'log'}],
             'token-123'
         );
