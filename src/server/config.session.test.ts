@@ -9,7 +9,9 @@ vi.mock('../../config.json', () => ({
 import {
     buildSetCookie,
     createCsrfToken,
+    CSRF_MAX_AGE_SECONDS,
     parseCookies,
+    SESSION_MAX_AGE_SECONDS,
     sessionConfigured,
     signSession,
     verifyCsrfToken,
@@ -73,6 +75,28 @@ describe('config.session', () => {
         expect(verifyCsrfToken('12345', token.slice(0, -1) + (token.endsWith('a') ? 'b' : 'a'))).toBe(false);
         expect(verifyCsrfToken('12345', undefined)).toBe(false);
         expect(verifyCsrfToken('12345', 'kurz')).toBe(false);
+        expect(verifyCsrfToken('12345', 'ohne-punkt-und-signatur')).toBe(false);
+    });
+
+    // Bis 2026-07-26 war das Token ein reiner HMAC über die User-ID, galt also für die Lebensdauer
+    // des Secrets unveränderlich - ein einmal mitgelesenes Token hätte nie aufgehört zu gelten.
+    it('lehnt ein abgelaufenes CSRF-Token ab', () => {
+        const abgelaufen = Date.now() - 1000;
+        // Gültige Signatur über einen Ablauf in der Vergangenheit: der Ablauf selbst muss greifen,
+        // nicht nur die Signaturprüfung.
+        const echt = createCsrfToken('12345');
+        expect(verifyCsrfToken('12345', echt)).toBe(true);
+
+        vi.setSystemTime(new Date(Date.now() + (CSRF_MAX_AGE_SECONDS + 60) * 1000));
+        expect(verifyCsrfToken('12345', echt)).toBe(false);
+        vi.useRealTimers();
+
+        // Ein selbst zusammengebauter Ablauf ohne passende Signatur zählt ohnehin nicht.
+        expect(verifyCsrfToken('12345', `${abgelaufen}.deadbeef`)).toBe(false);
+    });
+
+    it('CSRF-Token gilt genauso lange wie die Session', () => {
+        expect(CSRF_MAX_AGE_SECONDS).toBe(SESSION_MAX_AGE_SECONDS);
     });
 
     it('baut Set-Cookie-Strings mit den erwarteten Attributen', () => {

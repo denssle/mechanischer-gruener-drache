@@ -261,6 +261,27 @@ describe('SportService', () => {
         });
     });
 
+    describe('getAlleKilometer', () => {
+        it('liefert alle Stände als Map userId -> km (inkl. Legacy-Dummy)', async () => {
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([
+                { value: 'user-1', score: 128.5 },
+                { value: 'LEGACY_KILOMETERS', score: 1250 },
+            ] as any);
+
+            expect(await sportService.getAlleKilometer()).toEqual({
+                'user-1': 128.5,
+                LEGACY_KILOMETERS: 1250,
+            });
+            expect(redisService.getSortedSetAll).toHaveBeenCalledWith('SPORT:HIGHSCORE');
+        });
+
+        it('gibt ein leeres Objekt zurück wenn noch nichts eingetragen ist', async () => {
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([]);
+
+            expect(await sportService.getAlleKilometer()).toEqual({});
+        });
+    });
+
     describe('setMilestone', () => {
         it('speichert den Meilenstein als Hash-Feld mit announced=false', async () => {
             await sportService.setMilestone(2000, 'Yay, 2000 km!');

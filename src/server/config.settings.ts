@@ -4,53 +4,20 @@ import client from '../client.js';
 import config from '../../config.json' with {type: 'json'};
 import twitchUserService from '../services/twitch.user.service.js';
 import sportService from '../services/sport.service.js';
+import sportHandler from '../handlers/sport.handler.js';
 import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import eventService from '../services/event.service.js';
 
-// Sammelt die aktuell konfigurierten Admin-Einstellungen fuer die read-only-Anzeige auf /config.
-// Dieselben Werte, die /diagnose prueft (siehe diagnose.handler.ts) - hier aber als strukturierte
-// Daten fuers Web-Rendering. Kanal-/Rollen-IDs werden ueber den Bot zu Namen aufgeloest.
+// Sammelt die auf /config bearbeitbaren Admin-Einstellungen als strukturierte Daten fuers
+// Web-Rendering. Jedes Feld traegt seinen aktuellen Wert UND seinen Zustand (siehe FeldStatus) -
+// bis 2026-07-26 gab es dafuer zusaetzlich eine read-only-Tabelle (sammleEinstellungen), die
+// dieselben Werte ein zweites Mal aus Redis las; der Zustand steht jetzt am jeweiligen Formular.
 // client wird nur in Funktionskoerpern benutzt (Zirkular-Import-Falle, wie config.router.ts).
 
-export type EinstellungStatus = 'ok' | 'warnung' | 'leer';
-
-export interface Einstellung {
-    label: string;
-    // Menschenlesbarer, schon aufgeloester Wert (roh - wird erst beim Rendern HTML-escaped).
-    wert: string;
-    status: EinstellungStatus;
-}
-
-async function kanalEinstellung(label: string, channelId: string | null): Promise<Einstellung> {
-    if (!channelId) {
-        return {label, wert: 'nicht gesetzt', status: 'leer'};
-    }
-    const channel = await client.channels.fetch(channelId).catch(() => null) as TextChannel | null;
-    if (!channel) {
-        return {label, wert: `gesetzt (${channelId}), aber nicht abrufbar`, status: 'warnung'};
-    }
-    return {label, wert: `#${channel.name}`, status: 'ok'};
-}
-
-async function rolleEinstellung(label: string, roleId: string | null): Promise<Einstellung> {
-    if (!roleId) {
-        return {label, wert: 'nicht gesetzt (optional)', status: 'leer'};
-    }
-    const role = client.guilds.cache.get(config.GUILD_ID)?.roles.cache.get(roleId);
-    if (!role) {
-        return {label, wert: `gesetzt (${roleId}), aber nicht abrufbar`, status: 'warnung'};
-    }
-    return {label, wert: `@${role.name}`, status: 'ok'};
-}
-
-function formatEvent(event: {timestamp: number; title?: string}): string {
-    const datum = new Date(event.timestamp).toLocaleString('de-DE', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-    });
-    return event.title ? `${datum} – ${event.title}` : datum;
-}
+// 'ok' = gesetzt und abrufbar, 'warnung' = gesetzt, aber der Kanal/die Rolle existiert nicht (mehr)
+// bzw. der Bot kommt nicht dran, 'leer' = nicht gesetzt.
+export type FeldStatus = 'ok' | 'warnung' | 'leer';
 
 export interface KanalOption {
     id: string;
@@ -120,19 +87,30 @@ export interface KanalFeld {
     schluessel: string;
     label: string;
     aktuelleId: string | null;
+    status: FeldStatus;
 }
 
 export function istKanalFeld(schluessel: string): boolean {
     return Object.prototype.hasOwnProperty.call(KANAL_SERVICES, schluessel);
 }
 
-// Jedes Feld inkl. aktuell gesetzter Kanal-ID (rohe ID fuer die Vorauswahl im Dropdown).
+// Jedes Feld inkl. aktuell gesetzter Kanal-ID (rohe ID fuer die Vorauswahl im Dropdown) und
+// Zustand. Der Abruf-Check (client.channels.fetch) faengt geloeschte Kanaele bzw. fehlenden Zugriff
+// ab - ohne ihn wuerde das Dropdown eine tote ID einfach nicht wiederfinden und stillschweigend
+// irgendetwas anderes anzeigen. Alle Felder parallel: sie haengen nicht voneinander ab.
 export async function ladeKanalFelder(): Promise<KanalFeld[]> {
-    const felder: KanalFeld[] = [];
-    for (const [schluessel, service] of Object.entries(KANAL_SERVICES)) {
-        felder.push({schluessel, label: service.label, aktuelleId: await service.lade()});
+    return Promise.all(Object.entries(KANAL_SERVICES).map(async ([schluessel, service]) => {
+        const aktuelleId = await service.lade();
+        return {schluessel, label: service.label, aktuelleId, status: await kanalStatus(aktuelleId)};
+    }));
+}
+
+async function kanalStatus(channelId: string | null): Promise<FeldStatus> {
+    if (!channelId) {
+        return 'leer';
     }
-    return felder;
+    const channel = await client.channels.fetch(channelId).catch(() => null) as TextChannel | null;
+    return channel ? 'ok' : 'warnung';
 }
 
 export async function speichereKanal(schluessel: string, kanalId: string): Promise<void> {
@@ -162,9 +140,20 @@ export function istGueltigeRolle(rolleId: string): boolean {
     return holeRollen().some(rolle => rolle.id === rolleId);
 }
 
-// Rohe ID (nicht der aufgeloeste @Name aus sammleEinstellungen) - fuer die Vorauswahl im Dropdown.
-export async function holeTwitchRolleId(): Promise<string | null> {
-    return twitchUserService.getNotificationRole();
+export interface RollenFeld {
+    aktuelleId: string | null;
+    status: FeldStatus;
+}
+
+// Rohe ID (fuer die Vorauswahl im Dropdown) plus Zustand. Die Rolle ist optional, "nicht gesetzt"
+// ist also kein Mangel - 'warnung' meint hier: gesetzt, aber die Rolle gibt es nicht mehr.
+export async function holeTwitchRolle(): Promise<RollenFeld> {
+    const aktuelleId = await twitchUserService.getNotificationRole();
+    if (!aktuelleId) {
+        return {aktuelleId: null, status: 'leer'};
+    }
+    const rolle = client.guilds.cache.get(config.GUILD_ID)?.roles.cache.get(aktuelleId);
+    return {aktuelleId, status: rolle ? 'ok' : 'warnung'};
 }
 
 // null = Rolle entfernen (die Twitch-Benachrichtigungsrolle ist optional). Sonst setzen.
@@ -212,11 +201,15 @@ export async function entferneEvent(): Promise<void> {
 export interface MitgliedOption {
     id: string;
     name: string;
+    // Aktueller Kilometerstand - wird im Dropdown mit angezeigt, damit ein Admin sieht, was er
+    // überschreibt (setKilometer ist nicht rückgängig zu machen, siehe holeMitglieder).
+    kilometer: number;
 }
 
-// Server-Mitglieder (ohne Bots) fürs Auswahl-Dropdown UND als Whitelist. Alle Mitglieder sind seit
-// dem Start gecacht (loadAllMembers, GuildMembers-Intent). Alphabetisch nach Anzeigename (Emoji-tolerant).
-export function holeMitglieder(): MitgliedOption[] {
+// Server-Mitglieder (ohne Bots), roh - ohne Redis-Zugriff. Dient als Whitelist beim Speichern;
+// alle Mitglieder sind seit dem Start gecacht (loadAllMembers, GuildMembers-Intent).
+// Alphabetisch nach Anzeigename (Emoji-tolerant).
+function guildMitglieder(): {id: string; name: string}[] {
     const guild = client.guilds.cache.get(config.GUILD_ID);
     if (!guild) {
         return [];
@@ -227,12 +220,25 @@ export function holeMitglieder(): MitgliedOption[] {
         .sort((a, b) => sortierschluessel(a.name).localeCompare(sortierschluessel(b.name), 'de'));
 }
 
-export function istGueltigesMitglied(userId: string): boolean {
-    return holeMitglieder().some(member => member.id === userId);
+// Dieselbe Liste fürs Dropdown, angereichert um den aktuellen Kilometerstand (ein Redis-Read für
+// alle zusammen). Wer nichts eingetragen hat, steht mit 0 da.
+export async function holeMitglieder(): Promise<MitgliedOption[]> {
+    const kilometer = await sportService.getAlleKilometer();
+    return guildMitglieder().map(member => ({...member, kilometer: kilometer[member.id] ?? 0}));
 }
 
+export function istGueltigesMitglied(userId: string): boolean {
+    return guildMitglieder().some(member => member.id === userId);
+}
+
+// Die drei summen-ERHÖHENDEN Sport-Aktionen stoßen danach die Meilenstein-Prüfung an - genau wie
+// die User-Aktionen im sport.handler. Vor der /config-Migration hing das an den (inzwischen
+// entfernten) Admin-Commands; ohne den Aufruf hier bliebe eine überschrittene Schwelle liegen, bis
+// zufällig jemand anders etwas einträgt. announceReachedMilestones fängt eigene Fehler ab und darf
+// das Speichern deshalb nicht nachträglich scheitern lassen.
 export async function speichereKilometer(userId: string, kilometer: number): Promise<void> {
     await sportService.setKilometer(userId, kilometer);
+    await sportHandler.announceReachedMilestones();
 }
 
 export async function holeLegacyKilometer(): Promise<number> {
@@ -241,11 +247,15 @@ export async function holeLegacyKilometer(): Promise<number> {
 
 export async function addiereLegacyKilometer(kilometer: number): Promise<void> {
     await sportService.addLegacyKilometer(kilometer);
+    await sportHandler.announceReachedMilestones();
 }
 
-// 0 entfernt die Bestandskilometer ganz (siehe sportService.setLegacyKilometer).
+// 0 entfernt die Bestandskilometer ganz (siehe sportService.setLegacyKilometer). Die
+// Meilenstein-Prüfung läuft auch hier: Setzen kann die Summe erhöhen. Verkleinert sie sich, kann
+// checkAndMarkReachedMilestones nichts auslösen (es meldet nur erreichte, noch nicht angekündigte).
 export async function setzeLegacyKilometer(kilometer: number): Promise<void> {
     await sportService.setLegacyKilometer(kilometer);
+    await sportHandler.announceReachedMilestones();
 }
 
 export async function holeMeilensteine(): Promise<SportMilestone[]> {
@@ -254,21 +264,4 @@ export async function holeMeilensteine(): Promise<SportMilestone[]> {
 
 export async function entferneMeilenstein(kilometer: number): Promise<void> {
     await sportService.removeMilestone(kilometer);
-}
-
-export async function sammleEinstellungen(): Promise<Einstellung[]> {
-    const einstellungen: Einstellung[] = [];
-
-    einstellungen.push(await kanalEinstellung('Twitch-Benachrichtigungskanal', await twitchUserService.getNotificationChannel()));
-    einstellungen.push(await rolleEinstellung('Twitch-Benachrichtigungsrolle', await twitchUserService.getNotificationRole()));
-    einstellungen.push(await kanalEinstellung('Sport-Ankündigungskanal', await sportService.getAnnouncementChannel()));
-    einstellungen.push(await kanalEinstellung('Protokoll-Kanal', await loggingService.getLogChannel()));
-    einstellungen.push(await kanalEinstellung('Morgengruß-Kanal', await greetingService.getChannel()));
-
-    const event = await eventService.getEvent();
-    einstellungen.push(event
-        ? {label: 'Nächstes Event', wert: formatEvent(event), status: 'ok'}
-        : {label: 'Nächstes Event', wert: 'kein Event gesetzt', status: 'leer'});
-
-    return einstellungen;
 }

@@ -159,6 +159,16 @@ describe('DiagnoseHandler', () => {
             expect(report(interaction)).toContain('Login konfiguriert');
         });
 
+        // Die URL steht sonst NIRGENDS im Bot (die Seite hat bewusst keinen eigenen Command) -
+        // Admins mussten sie auswendig kennen.
+        it('nennt die Adresse der Verwaltungsseite', async () => {
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('/config');
+        });
+
         it('nennt das fehlende Secret, wenn der Login nicht konfiguriert ist', async () => {
             oauth.oauthConfigured.mockReturnValue(true);
             session.sessionConfigured.mockReturnValue(false);

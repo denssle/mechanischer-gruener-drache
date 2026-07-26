@@ -264,7 +264,9 @@ class SportHandler {
     // eine erfolgreich eingetragene Aktivität niemals nachträglich scheitern lassen (daher try/catch).
     // Ohne konfigurierten/abrufbaren Kanal wird NICHT als announced markiert - so wird die Feier
     // nachgeholt, sobald ein Kanal existiert und die Summe erneut steigt.
-    private async announceReachedMilestones(): Promise<void> {
+    // Public, weil die summen-erhöhenden ADMIN-Aktionen seit der /config-Migration nicht mehr hier
+    // liegen, sondern in config.settings.ts - die rufen das hier auf (siehe dort).
+    async announceReachedMilestones(): Promise<void> {
         try {
             const channel = await this.holeAnkuendigungskanal();
             if (!channel) {

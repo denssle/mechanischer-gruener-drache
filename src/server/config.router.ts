@@ -26,18 +26,17 @@ import {
 import {SportMilestone} from '../types/sport.js';
 import {
     addiereLegacyKilometer,
-    Einstellung,
-    EinstellungStatus,
     entferneEvent,
     entferneMeilenstein,
     EventFelder,
+    FeldStatus,
     holeEventFelder,
     holeLegacyKilometer,
     holeMeilensteine,
     holeMitglieder,
     holeRollen,
     holeTextKanaele,
-    holeTwitchRolleId,
+    holeTwitchRolle,
     istGueltigerTextKanal,
     istGueltigeRolle,
     istGueltigesMitglied,
@@ -46,8 +45,8 @@ import {
     KanalOption,
     ladeKanalFelder,
     MitgliedOption,
+    RollenFeld,
     RollenOption,
-    sammleEinstellungen,
     setzeLegacyKilometer,
     speichereEventDaten,
     speichereKanal,
@@ -92,7 +91,7 @@ function renderPage(bodyHtml: string): string {
         a.button { display: inline-block; padding: 0.6rem 1rem; border-radius: 0.5rem; background: #5865F2; color: #fff; text-decoration: none; }
         a.logout { font-size: 0.9rem; }
         form.setting { display: flex; align-items: center; gap: 0.75rem; margin: 0.4rem 0; flex-wrap: wrap; }
-        form.setting label { flex: 0 0 16rem; }
+        form.setting label, form.setting span.pseudo-label { flex: 0 0 16rem; }
         form.setting select { flex: 0 0 14rem; padding: 0.3rem; }
         form.setting button { padding: 0.3rem 0.8rem; }
         form.setting input { padding: 0.3rem; }
@@ -103,15 +102,13 @@ function renderPage(bodyHtml: string): string {
         form.event-form input { padding: 0.3rem; }
         form.event-form input[type="text"] { flex: 1; min-width: 8rem; }
         form.event-form button { padding: 0.3rem 0.8rem; }
+        p.meldung { margin: 0.2rem 0 0.8rem; font-weight: 600; }
+        p.feld-hinweis { margin: 0.4rem 0 0; font-size: 0.85rem; opacity: 0.7; }
         p.meilenstein-titel { margin: 0.9rem 0 0.3rem; }
         ul.meilensteine { list-style: none; padding: 0; margin: 0.3rem 0; }
         li.meilenstein { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(128,128,128,0.2); }
         li.meilenstein form { margin: 0; }
         li.meilenstein button { padding: 0.2rem 0.7rem; }
-        table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
-        th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(128,128,128,0.3); }
-        th { font-weight: 600; }
-        td.wert { white-space: nowrap; }
         .status-ok { color: #2e7d32; }
         .status-warnung { color: #b26a00; }
         .status-leer { opacity: 0.6; }
@@ -145,17 +142,20 @@ export function escapeHtml(text: string): string {
         .replaceAll("'", '&#39;');
 }
 
-const STATUS_SYMBOL: Record<EinstellungStatus, string> = {ok: '✓', warnung: '⚠', leer: '–'};
-
-export function renderEinstellungen(einstellungen: Einstellung[]): string {
-    const rows = einstellungen.map(e =>
-        `<tr><td>${escapeHtml(e.label)}</td>` +
-        `<td class="wert status-${e.status}">${STATUS_SYMBOL[e.status]} ${escapeHtml(e.wert)}</td></tr>`
-    ).join('\n');
-    return `<table>
-        <thead><tr><th>Einstellung</th><th>Aktueller Wert</th></tr></thead>
-        <tbody>${rows}</tbody>
-    </table>`;
+// Platzhalter-Option für ein Feld ohne gültige Vorauswahl. `disabled` = nicht wieder wählbar und
+// wird nicht mitgeschickt; zusammen mit `required` am <select> erzwingt das eine echte Wahl.
+// Wichtig, weil ein <select> immer irgendetwas selektiert: ohne Platzhalter stünde bei "nicht
+// gesetzt" einfach der erste Kanal im Feld und sähe aus, als wäre er konfiguriert. Bei 'warnung'
+// (Kanal/Rolle gelöscht oder kein Zugriff) taucht die gespeicherte ID gar nicht in der Liste auf -
+// hier steht sie deshalb im Klartext, sonst wäre der kaputte Zustand unsichtbar.
+function platzhalterOption(status: FeldStatus, aktuelleId: string | null, leerText: string): string {
+    if (status === 'ok') {
+        return '';
+    }
+    const text = status === 'leer'
+        ? leerText
+        : `— gesetzt (${escapeHtml(aktuelleId ?? '')}), aber nicht abrufbar —`;
+    return `<option value="" disabled selected>${text}</option>`;
 }
 
 // Ein Bearbeiten-Formular für eine Kanal-Einstellung. Auswahl statt Freitext-ID - die Liste kommt aus
@@ -168,26 +168,34 @@ export function renderKanalFormular(feld: KanalFeld, kanaele: KanalOption[], csr
     const optionen = kanaele.map(kanal =>
         `<option value="${escapeHtml(kanal.id)}"${kanal.id === feld.aktuelleId ? ' selected' : ''}>#${escapeHtml(kanal.name)}</option>`
     ).join('\n');
+    // id/for-Paar: ohne die Verknüpfung liest ein Screenreader das Feld unbeschriftet vor, und der
+    // Klick aufs Label fokussiert nichts. Der Schlüssel ist pro Seite eindeutig.
+    const id = `kanal-${feld.schluessel}`;
     return `<form class="setting" method="post" action="/config/kanal">
         <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
         <input type="hidden" name="feld" value="${escapeHtml(feld.schluessel)}">
-        <label>${escapeHtml(feld.label)}</label>
-        <select name="kanal">${optionen}</select>
+        <label for="${escapeHtml(id)}">${escapeHtml(feld.label)}</label>
+        <select id="${escapeHtml(id)}" name="kanal" required class="status-${feld.status}">
+            ${platzhalterOption(feld.status, feld.aktuelleId, '— nicht gesetzt —')}${optionen}
+        </select>
         <button type="submit">Speichern</button>
     </form>`;
 }
 
 // Twitch-Benachrichtigungsrolle: wie ein Kanal-Feld, aber die Rolle ist optional -> eine
-// "— keine —"-Option (leerer Wert) zum Entfernen. `aktuelleId === null` heisst "keine gesetzt".
-export function renderRollenFormular(rollen: RollenOption[], aktuelleId: string | null, csrfToken: string): string {
-    const keineOption = `<option value=""${aktuelleId === null ? ' selected' : ''}>— keine —</option>`;
+// "— keine —"-Option (leerer Wert) zum Entfernen. Die ist zugleich der Platzhalter für 'leer',
+// deshalb hier kein disabled/required: "keine Rolle" ist ein gültiger Zustand, kein fehlender.
+export function renderRollenFormular(rollen: RollenOption[], feld: RollenFeld, csrfToken: string): string {
+    const keineOption = `<option value=""${feld.status === 'leer' ? ' selected' : ''}>— keine —</option>`;
     const optionen = rollen.map(rolle =>
-        `<option value="${escapeHtml(rolle.id)}"${rolle.id === aktuelleId ? ' selected' : ''}>@${escapeHtml(rolle.name)}</option>`
+        `<option value="${escapeHtml(rolle.id)}"${rolle.id === feld.aktuelleId ? ' selected' : ''}>@${escapeHtml(rolle.name)}</option>`
     ).join('\n');
     return `<form class="setting rolle-abstand" method="post" action="/config/rolle">
         <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
-        <label>Twitch-Benachrichtigungsrolle</label>
-        <select name="rolle">${keineOption}${optionen}</select>
+        <label for="twitch-rolle">Twitch-Benachrichtigungsrolle</label>
+        <select id="twitch-rolle" name="rolle" class="status-${feld.status}">
+            ${feld.status === 'warnung' ? platzhalterOption(feld.status, feld.aktuelleId, '') : ''}${keineOption}${optionen}
+        </select>
         <button type="submit">Speichern</button>
     </form>`;
 }
@@ -234,30 +242,48 @@ export function renderEventFormular(felder: EventFelder, csrfToken: string): str
         <input type="text" name="titel" placeholder="Titel (optional)" maxlength="100" value="${escapeHtml(felder.titel)}" aria-label="Titel">
         <button type="submit" name="aktion" value="speichern">Speichern</button>
         <button type="submit" name="aktion" value="entfernen" formnovalidate>Event entfernen</button>
-    </form>`;
+    </form>
+    <p class="feld-hinweis">Datum und Uhrzeit gelten in der Zeitzone des Servers (Europe/Berlin).
+    Ohne Uhrzeit wird Mitternacht angenommen.</p>`;
+}
+
+// Kilometerstand fürs Dropdown-Label: auf zwei Nachkommastellen, damit aufsummierte Float-Reste
+// ("12.340000000000002") nicht als Wert erscheinen. Bewusst NICHT rundeKilometer (ganze km) - ein
+// Admin korrigiert hier einen konkreten Stand und muss den echten Wert sehen.
+function formatKilometerstand(km: number): string {
+    return String(Math.round(km * 100) / 100);
 }
 
 // Sport-Admin-Formulare: Kilometerstand eines Mitglieds setzen (Mitglied-Dropdown = Whitelist) und
 // Bestandskilometer (Addieren / Setzen; 0 = entfernen). Alle posten an /config/sport mit name="aktion".
+// Das Setzen ist die gefährlichste Aktion der Seite (überschreibt fremde Kilometer dauerhaft, legt
+// keinen SportEntry an, also auch per /sport bearbeiten nicht zu reparieren). Deshalb drei Bremsen:
+// der aktuelle Stand steht im Label, vorausgewählt ist NICHTS (leere Pflicht-Option statt des ersten
+// Mitglieds - ein Fehlklick trifft sonst irgendwen), und der Button fragt nach.
 export function renderSportAdmin(mitglieder: MitgliedOption[], legacyKilometer: number, csrfToken: string): string {
     const mitgliedFeld = mitglieder.length
-        ? `<select name="mitglied">${mitglieder.map(m =>
-            `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join('\n')}</select>`
+        ? `<select id="sport-mitglied" name="mitglied" required>
+            <option value="" selected>— Mitglied wählen —</option>
+            ${mitglieder.map(m =>
+            `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)} (${formatKilometerstand(m.kilometer)} km)</option>`).join('\n')}
+        </select>`
         : '<span class="status-leer">keine Mitglieder gefunden</span>';
+    // Das Label zeigt aufs Mitglied-Dropdown (die eigentliche Wahl); das Kilometer-Feld daneben
+    // traegt sein eigenes aria-label, weil eine zweite sichtbare Beschriftung die Zeile sprengen wuerde.
     return `<form class="setting" method="post" action="/config/sport">
         <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
         <input type="hidden" name="aktion" value="kilometer-setzen">
-        <label>Kilometerstand eines Mitglieds setzen</label>
+        <label for="sport-mitglied">Kilometerstand eines Mitglieds setzen</label>
         ${mitgliedFeld}
         <input type="number" name="kilometer" min="0" step="0.01" placeholder="km" required aria-label="Kilometer">
-        <button type="submit">Setzen</button>
+        <button type="submit" onclick="return confirm('Kilometerstand des gewählten Mitglieds wirklich überschreiben? Der bisherige Wert ist danach weg.')">Setzen</button>
     </form>
     <form class="setting" method="post" action="/config/sport">
         <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
-        <label>Bestandskilometer (aktuell ${legacyKilometer} km)</label>
-        <input type="number" name="kilometer" min="0" step="0.01" placeholder="km" required aria-label="Bestandskilometer">
+        <label for="sport-altkilometer">Bestandskilometer (aktuell ${formatKilometerstand(legacyKilometer)} km)</label>
+        <input id="sport-altkilometer" type="number" name="kilometer" min="0" step="0.01" placeholder="km" required>
         <button type="submit" name="aktion" value="altkilometer-addieren">Addieren</button>
-        <button type="submit" name="aktion" value="altkilometer-setzen">Setzen (0 = entfernen)</button>
+        <button type="submit" name="aktion" value="altkilometer-setzen" onclick="return confirm('Bestandskilometer wirklich auf den eingegebenen Wert setzen? 0 entfernt sie ganz.')">Setzen (0 = entfernen)</button>
     </form>`;
 }
 
@@ -273,12 +299,12 @@ export function renderMeilensteinListe(meilensteine: SportMilestone[], csrfToken
             const vorschau = m.text.replace(/\s+/g, ' ').trim();
             const gekuerzt = vorschau.length > 60 ? `${vorschau.slice(0, 60)}…` : vorschau;
             return `<li class="meilenstein">
-            <span><strong>${m.kilometers} km</strong> – ${escapeHtml(gekuerzt)}${m.announced ? ' <em>(angekündigt)</em>' : ''}</span>
+            <span><strong>${Number(m.kilometers)} km</strong> – ${escapeHtml(gekuerzt)}${m.announced ? ' <em>(angekündigt)</em>' : ''}</span>
             <form method="post" action="/config/sport">
                 <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
                 <input type="hidden" name="aktion" value="meilenstein-entfernen">
-                <input type="hidden" name="kilometer" value="${m.kilometers}">
-                <button type="submit">Entfernen</button>
+                <input type="hidden" name="kilometer" value="${Number(m.kilometers)}">
+                <button type="submit" onclick="return confirm('Meilenstein bei ${Number(m.kilometers)} km wirklich entfernen? Der Ankündigungstext ist danach weg.')">Entfernen</button>
             </form>
         </li>`;
         }).join('\n');
@@ -290,23 +316,18 @@ export function renderMeilensteinListe(meilensteine: SportMilestone[], csrfToken
 // /morgengruss lernen). Der Kanal wird oben im selben Bereich gesetzt; ist keiner da, meldet das der
 // Handler nach dem Klick. Der Scan kostet ein paar API-Calls, die POST-Antwort blockt so lange.
 export function renderMorgengrussLernen(csrfToken: string): string {
+    // <span>, kein <label>: hier gibt es kein Eingabefeld, das beschriftet werden könnte (ein <label>
+    // für einen Button ist ungültiges HTML) - der Button-Text ist seine eigene Beschriftung.
     return `<form class="setting" method="post" action="/config/morgengruss">
         <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
-        <label>Persönliche Emojis aus der Chat-Historie lernen</label>
+        <span class="pseudo-label">Persönliche Emojis aus der Chat-Historie lernen</span>
         <button type="submit">Jetzt lernen</button>
     </form>`;
 }
 
-// hinweis ist ein vollständig von uns kontrollierter Text (kein User-Input, keine Escaping-Pflicht) -
-// die Zahl beim Lernen wird in handleConfigPage bewusst zu Number gecastet, damit da nichts Rohes
-// aus der Query landet.
-function configBody(einstellungenHtml: string, bereicheHtml: string, gespeichert: boolean, hinweis?: string): string {
+function configBody(bereicheHtml: string): string {
     return `<h1>Mechanischer Grüner Drache</h1>
-    <p>Aktuelle Bot-Einstellungen im Überblick, darunter nach Bereich gruppiert zum Bearbeiten.</p>
-    ${gespeichert ? '<p class="status-ok">Gespeichert.</p>' : ''}
-    ${hinweis ? `<p class="status-ok">${hinweis}</p>` : ''}
-    ${einstellungenHtml}
-    <h2>Bearbeiten</h2>
+    <p>Bot-Einstellungen, nach Bereich gruppiert.</p>
     ${bereicheHtml}
     <p><a href="/config/logs">Bot-Logs ansehen</a> · <a class="logout" href="/config/logout">Abmelden</a></p>`;
 }
@@ -319,42 +340,76 @@ function formatLogZeit(ms: number): string {
     return `${zwei(d.getHours())}:${zwei(d.getMinutes())}:${zwei(d.getSeconds())}`;
 }
 
-// Reine Darstellung der Log-Zeilen (aelteste zuerst) in einem <pre>. Jede Zeile wird escaped - Log-Text
-// kann User-/Discord-Inhalte tragen (Namen, Kanalnamen in Fehlermeldungen) -> sonst XSS auf der Seite.
-export function renderLogs(entries: LogEntry[]): string {
-    const zeilen = entries.map(e => {
+// Reine Darstellung der Log-Zeilen in einem <pre>. Jede Zeile wird escaped - Log-Text kann
+// User-/Discord-Inhalte tragen (Namen, Kanalnamen in Fehlermeldungen) -> sonst XSS auf der Seite.
+//
+// NEUESTE ZUERST (seit 2026-07-26): der Puffer ist chronologisch, angezeigt wird er umgekehrt. Wer
+// hier nachsieht, sucht "was ist gerade passiert" und musste vorher 500 Zeilen weit runterscrollen.
+// `nurProbleme` blendet die reinen log-Zeilen aus - bei einem Bot, der viel Normalbetrieb loggt, ist
+// das der Unterschied zwischen brauchbar und nicht.
+export function renderLogs(entries: LogEntry[], nurProbleme = false): string {
+    const probleme = entries.filter(e => e.level !== 'log').length;
+    const gezeigt = nurProbleme ? entries.filter(e => e.level !== 'log') : entries;
+    const zeilen = [...gezeigt].reverse().map(e => {
         const klasse = e.level === 'log' ? '' : ` class="${e.level}"`;
         return `<span class="zeit">${formatLogZeit(e.zeit)}</span> <span${klasse}>${escapeHtml(e.text)}</span>`;
     }).join('\n');
-    const inhalt = entries.length
+
+    // Der jeweils aktive Filter ist kein Link mehr (sonst klickt man sich im Kreis).
+    const filter = [
+        nurProbleme
+            ? `<a href="/config/logs">Alle (${entries.length})</a>`
+            : `<strong>Alle (${entries.length})</strong>`,
+        nurProbleme
+            ? `<strong>Nur Warnungen und Fehler (${probleme})</strong>`
+            : `<a href="/config/logs?nur=probleme">Nur Warnungen und Fehler (${probleme})</a>`,
+    ].join(' · ');
+
+    const inhalt = gezeigt.length
         ? `<pre class="logs">${zeilen}</pre>`
-        : '<p class="status-leer">Noch keine Log-Zeilen im Puffer (der Bot wurde gerade erst gestartet?).</p>';
+        : `<p class="status-leer">${nurProbleme
+            ? 'Keine Warnungen oder Fehler im Puffer.'
+            : 'Noch keine Log-Zeilen im Puffer (der Bot wurde gerade erst gestartet?).'}</p>`;
+
     return `<h1>Bot-Logs</h1>
-    <p>Die letzten ${entries.length} Zeilen aus dem laufenden Prozess (nach Neustart leer, keine Nachrichteninhalte).</p>
+    <p>${gezeigt.length} Zeilen aus dem laufenden Prozess, <strong>neueste zuerst</strong>
+    (nach Neustart leer, keine Nachrichteninhalte).</p>
+    <p>${filter}</p>
     ${inhalt}
-    <p><a href="/config/logs">Aktualisieren</a> · <a href="/config">Zurück</a></p>`;
+    <p><a href="${nurProbleme ? '/config/logs?nur=probleme' : '/config/logs'}">Aktualisieren</a> · <a href="/config">Zurück</a></p>`;
+}
+
+// Rückmeldung nach einer Aktion. `bereich` ist die Bereichs-ID, in der sie erscheint - dadurch
+// steht sie dort, wo geklickt wurde, statt als anonymes "Gespeichert." ganz oben.
+export interface Meldung {
+    bereich: string;
+    text: string;
+    art: 'ok' | 'warnung';
 }
 
 export interface ConfigSeiteDaten {
-    einstellungen: Einstellung[];
     kanalFelder: KanalFeld[];
     kanaele: KanalOption[];
     rollen: RollenOption[];
-    twitchRolleId: string | null;
+    twitchRolle: RollenFeld;
     eventFelder: EventFelder;
     mitglieder: MitgliedOption[];
     legacyKilometer: number;
     meilensteine: SportMilestone[];
     csrfToken: string;
-    gespeichert: boolean;
-    hinweis?: string;
+    meldung?: Meldung;
 }
 
 // Ein fachlich abgegrenzter Bereich als <fieldset> (semantisch die Formular-Gruppierung),
-// die <legend> ist die Bereichs-Überschrift.
-function renderBereich(titel: string, inhaltHtml: string): string {
-    return `<fieldset class="bereich">
+// die <legend> ist die Bereichs-Überschrift. Die id ist das Sprungziel des Redirects nach dem
+// Speichern (#bereich-sport), damit man nicht am Seitenanfang landet.
+function renderBereich(id: string, titel: string, inhaltHtml: string, meldung?: Meldung): string {
+    const hinweis = meldung
+        ? `<p class="meldung status-${meldung.art}">${escapeHtml(meldung.text)}</p>`
+        : '';
+    return `<fieldset class="bereich" id="bereich-${escapeHtml(id)}">
         <legend>${escapeHtml(titel)}</legend>
+        ${hinweis}
         ${inhaltHtml}
     </fieldset>`;
 }
@@ -368,14 +423,26 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
         const feld = daten.kanalFelder.find(f => f.schluessel === schluessel);
         return feld ? renderKanalFormular(feld, daten.kanaele, csrf) : '';
     };
+    const meldungFuer = (bereich: string): Meldung | undefined =>
+        daten.meldung?.bereich === bereich ? daten.meldung : undefined;
     // Nach Feature gruppiert, damit fachlich Zusammengehöriges zusammensteht.
     const bereiche =
-        renderBereich('Twitch', kanal('twitch-kanal') + renderRollenFormular(daten.rollen, daten.twitchRolleId, csrf)) +
-        renderBereich('Sport', kanal('sport-kanal') + renderSportAdmin(daten.mitglieder, daten.legacyKilometer, csrf) + renderMeilensteinListe(daten.meilensteine, csrf)) +
-        renderBereich('Nachrichten-Protokoll', kanal('protokoll')) +
-        renderBereich('Morgengruß', kanal('morgengruss-kanal') + renderMorgengrussLernen(csrf)) +
-        renderBereich('Event', renderEventFormular(daten.eventFelder, csrf));
-    return renderPage(configBody(renderEinstellungen(daten.einstellungen), bereiche, daten.gespeichert, daten.hinweis));
+        renderBereich('twitch', 'Twitch',
+            kanal('twitch-kanal') + renderRollenFormular(daten.rollen, daten.twitchRolle, csrf),
+            meldungFuer('twitch')) +
+        renderBereich('sport', 'Sport',
+            kanal('sport-kanal') + renderSportAdmin(daten.mitglieder, daten.legacyKilometer, csrf) + renderMeilensteinListe(daten.meilensteine, csrf),
+            meldungFuer('sport')) +
+        renderBereich('protokoll', 'Nachrichten-Protokoll',
+            kanal('protokoll'),
+            meldungFuer('protokoll')) +
+        renderBereich('morgengruss', 'Morgengruß',
+            kanal('morgengruss-kanal') + renderMorgengrussLernen(csrf),
+            meldungFuer('morgengruss')) +
+        renderBereich('event', 'Event',
+            renderEventFormular(daten.eventFelder, csrf),
+            meldungFuer('event'));
+    return renderPage(configBody(bereiche));
 }
 
 const LOGIN_BODY = `<h1>Mechanischer Grüner Drache</h1>
@@ -411,6 +478,19 @@ async function pruefeAdmin(userId: string): Promise<boolean> {
     }
 }
 
+// Nicht (mehr) angemeldet. Bei GET die Login-Seite mit 200 - das ist die normale Einstiegsseite.
+// Bei POST dagegen 401 samt Hinweis: dort hat gerade ein Formular abgeschickt und die Eingaben sind
+// weg. Ein 200 mit Login-HTML wäre semantisch falsch und sähe aus, als hätte das Speichern geklappt.
+function antworteNichtAngemeldet(req: Request, res: Response): void {
+    if (req.method === 'POST') {
+        res.status(401).type('html').send(renderPage(`<h1>Sitzung abgelaufen</h1>
+    <p>Deine Anmeldung gilt nicht mehr, die Eingabe wurde <strong>nicht</strong> gespeichert.</p>
+    <p><a class="button" href="/config/login">Neu anmelden</a></p>`));
+        return;
+    }
+    res.type('html').send(renderPage(LOGIN_BODY));
+}
+
 // Middleware: nur mit gueltigem Session-Cookie UND aktuell noch bestehenden Admin-Rechten weiter,
 // sonst Login-Seite. Fail-closed, wenn der OAuth-Login gar nicht konfiguriert ist.
 export async function requireConfigAuth(req: Request, res: Response, next: () => void): Promise<void> {
@@ -421,7 +501,7 @@ export async function requireConfigAuth(req: Request, res: Response, next: () =>
     const cookies = parseCookies(req.headers.cookie);
     const userId = verifySession(cookies[SESSION_COOKIE]);
     if (!userId) {
-        res.type('html').send(renderPage(LOGIN_BODY));
+        antworteNichtAngemeldet(req, res);
         return;
     }
     // Frische Admin-Pruefung bei JEDEM Aufruf, nicht nur beim Login: verliert jemand die
@@ -429,7 +509,7 @@ export async function requireConfigAuth(req: Request, res: Response, next: () =>
     // Das tote Cookie wird dabei gleich geloescht (sonst loest es bei jedem Request erneut ein fetch aus).
     if (!(await pruefeAdmin(userId))) {
         res.setHeader('Set-Cookie', buildSetCookie(SESSION_COOKIE, '', 0, COOKIE_SECURE));
-        res.type('html').send(renderPage(LOGIN_BODY));
+        antworteNichtAngemeldet(req, res);
         return;
     }
     // Fuer nachgelagerte Handler: wer ist eingeloggt (Basis des CSRF-Tokens).
@@ -437,15 +517,53 @@ export async function requireConfigAuth(req: Request, res: Response, next: () =>
     next();
 }
 
-// Rückmeldung des Morgengruß-Lernen-Buttons (Post/Redirect/Get). Die Zahl bewusst zu Number casten,
-// nicht die rohe Query interpolieren (sonst XSS über ?gelernt=). null-Kanal-Fall verweist nach oben.
-function morgengrussHinweis(req: Request): string | undefined {
+// Was nach welcher Aktion gemeldet wird - und in welchem Bereich. Bewusst eine feste Tabelle statt
+// eines aus der Query gebauten Textes: der Wert aus ?gespeichert= wird nur als Schlüssel benutzt,
+// nie ausgegeben. Die Kanal-Schlüssel sind dieselben wie in KANAL_SERVICES (config.settings.ts).
+const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
+    'protokoll': {bereich: 'protokoll', text: 'Protokoll-Kanal gespeichert.'},
+    'twitch-kanal': {bereich: 'twitch', text: 'Twitch-Benachrichtigungskanal gespeichert.'},
+    'sport-kanal': {bereich: 'sport', text: 'Sport-Ankündigungskanal gespeichert.'},
+    'morgengruss-kanal': {bereich: 'morgengruss', text: 'Morgengruß-Kanal gespeichert.'},
+    'twitch-rolle': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle gespeichert.'},
+    'twitch-rolle-entfernt': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle entfernt.'},
+    'event': {bereich: 'event', text: 'Event gespeichert.'},
+    'event-entfernt': {bereich: 'event', text: 'Event entfernt.'},
+    'kilometer-setzen': {bereich: 'sport', text: 'Kilometerstand gesetzt.'},
+    'altkilometer-addieren': {bereich: 'sport', text: 'Bestandskilometer addiert.'},
+    'altkilometer-setzen': {bereich: 'sport', text: 'Bestandskilometer gesetzt.'},
+    'meilenstein-entfernen': {bereich: 'sport', text: 'Meilenstein entfernt.'},
+};
+
+// Post/Redirect/Get (kein Doppel-Speichern beim Reload) + Anker auf den Bereich, damit man dort
+// landet, wo man geklickt hat. Der Schlüssel sagt zugleich, WAS gespeichert wurde.
+function zurueckZumBereich(res: Response, schluessel: string): void {
+    const ziel = MELDUNGEN[schluessel];
+    res.redirect(`/config?gespeichert=${encodeURIComponent(schluessel)}#bereich-${ziel.bereich}`);
+}
+
+// Liest die Rückmeldung aus der Query. hasOwnProperty statt direktem Zugriff, damit ?gespeichert=
+// constructor o.ä. nicht in der Prototypenkette landet (wie istKanalFeld). Die gelernte Anzahl wird
+// zu Number gecastet, nicht roh interpoliert - sonst wäre ?gelernt= ein XSS-Vektor.
+export function leseMeldung(req: Request): Meldung | undefined {
+    const gespeichert = req.query.gespeichert;
+    if (typeof gespeichert === 'string' && Object.prototype.hasOwnProperty.call(MELDUNGEN, gespeichert)) {
+        return {...MELDUNGEN[gespeichert], art: 'ok'};
+    }
     const gelernt = Number(req.query.gelernt);
     if (typeof req.query.gelernt === 'string' && Number.isFinite(gelernt)) {
-        return `Aus der Historie habe ich ${gelernt} persönliche Emojis gelernt.`;
+        return {
+            bereich: 'morgengruss',
+            text: `Aus der Historie habe ich ${gelernt} persönliche Emojis gelernt.`,
+            art: 'ok',
+        };
     }
     if (req.query.morgengruss === 'kein-kanal') {
-        return 'Es ist kein (abrufbarer) Morgengruß-Kanal gesetzt. Setze ihn zuerst oben im Bereich „Morgengruß".';
+        return {
+            bereich: 'morgengruss',
+            text: 'Es ist kein (abrufbarer) Morgengruß-Kanal gesetzt. Setze ihn zuerst hier im Bereich Morgengruß.',
+            art: 'warnung',
+        };
     }
     return undefined;
 }
@@ -453,25 +571,33 @@ function morgengrussHinweis(req: Request): string | undefined {
 export async function handleConfigPage(req: Request, res: Response): Promise<void> {
     try {
         const userId = res.locals.configUserId as string;
+        // Parallel: die Abfragen hängen nicht voneinander ab, und jede ist mindestens ein
+        // Redis-Roundtrip (ladeKanalFelder zusätzlich vier channels.fetch).
+        const [kanalFelder, twitchRolle, eventFelder, mitglieder, legacyKilometer, meilensteine] = await Promise.all([
+            ladeKanalFelder(),
+            holeTwitchRolle(),
+            holeEventFelder(),
+            holeMitglieder(),
+            holeLegacyKilometer(),
+            holeMeilensteine(),
+        ]);
         const html = renderConfigSeite({
-            einstellungen: await sammleEinstellungen(),
-            kanalFelder: await ladeKanalFelder(),
+            kanalFelder,
             kanaele: holeTextKanaele(),
             rollen: holeRollen(),
-            twitchRolleId: await holeTwitchRolleId(),
-            eventFelder: await holeEventFelder(),
-            mitglieder: holeMitglieder(),
-            legacyKilometer: await holeLegacyKilometer(),
-            meilensteine: await holeMeilensteine(),
+            twitchRolle,
+            eventFelder,
+            mitglieder,
+            legacyKilometer,
+            meilensteine,
             csrfToken: createCsrfToken(userId),
-            gespeichert: req.query.gespeichert === '1',
-            hinweis: morgengrussHinweis(req),
+            meldung: leseMeldung(req),
         });
         res.type('html').send(html);
     } catch (error) {
         // Ein Redis-/Discord-Problem darf die Seite nicht komplett kosten - lieber ein Hinweis.
         console.error('Fehler beim Laden der Config-Einstellungen:', error);
-        res.type('html').send(renderPage(configBody('<p>Die Einstellungen konnten gerade nicht geladen werden.</p>', '', false)));
+        res.type('html').send(renderPage(configBody('<p>Die Einstellungen konnten gerade nicht geladen werden.</p>')));
     }
 }
 
@@ -501,7 +627,7 @@ export async function handleKanalSpeichern(req: Request, res: Response): Promise
     }
 
     await speichereKanal(feld, kanalId);
-    res.redirect('/config?gespeichert=1');
+    zurueckZumBereich(res, feld);
 }
 
 // Speichert die Twitch-Benachrichtigungsrolle. Leerer Wert = Rolle entfernen (sie ist optional).
@@ -519,7 +645,7 @@ export async function handleRolleSpeichern(req: Request, res: Response): Promise
     const rolleId = typeof body.rolle === 'string' ? body.rolle : '';
     if (rolleId === '') {
         await speichereTwitchRolle(null);
-        res.redirect('/config?gespeichert=1');
+        zurueckZumBereich(res, 'twitch-rolle-entfernt');
         return;
     }
 
@@ -529,7 +655,7 @@ export async function handleRolleSpeichern(req: Request, res: Response): Promise
     }
 
     await speichereTwitchRolle(rolleId);
-    res.redirect('/config?gespeichert=1');
+    zurueckZumBereich(res, 'twitch-rolle');
 }
 
 // Speichert oder entfernt das nächste Event. Zwei Aktionen über name="aktion" (speichern/entfernen).
@@ -546,7 +672,7 @@ export async function handleEventSpeichern(req: Request, res: Response): Promise
 
     if (body.aktion === 'entfernen') {
         await entferneEvent();
-        res.redirect('/config?gespeichert=1');
+        zurueckZumBereich(res, 'event-entfernt');
         return;
     }
 
@@ -565,7 +691,7 @@ export async function handleEventSpeichern(req: Request, res: Response): Promise
     }
 
     await speichereEventDaten(timestamp, titel);
-    res.redirect('/config?gespeichert=1');
+    zurueckZumBereich(res, 'event');
 }
 
 // Sport-Admin: drei Aktionen über name="aktion". Kilometer werden als Zahl >= 0 validiert; beim
@@ -605,7 +731,7 @@ export async function handleSportSpeichern(req: Request, res: Response): Promise
         return;
     }
 
-    res.redirect('/config?gespeichert=1');
+    zurueckZumBereich(res, aktion);
 }
 
 // Morgengruß: stößt den Historien-Scan an (früher /morgengruss lernen). CSRF zuerst, dann scannen -
@@ -621,12 +747,14 @@ export async function handleMorgengrussLernen(req: Request, res: Response): Prom
         return;
     }
 
+    // Eigene Query-Parameter statt eines MELDUNGEN-Schlüssels: die Rückmeldung trägt eine Zahl
+    // bzw. ist eine Warnung. Anker wie bei zurueckZumBereich, damit man im Bereich landet.
     const anzahl = await greetingHandler.lerneAusHistorie();
     if (anzahl === null) {
-        res.redirect('/config?morgengruss=kein-kanal');
+        res.redirect('/config?morgengruss=kein-kanal#bereich-morgengruss');
         return;
     }
-    res.redirect('/config?gelernt=' + anzahl);
+    res.redirect(`/config?gelernt=${anzahl}#bereich-morgengruss`);
 }
 
 // Startet den OAuth-Flow: zufaelligen state als kurzlebiges Cookie setzen (CSRF, Double-Submit)
@@ -687,148 +815,75 @@ export function handleLogout(_req: Request, res: Response): void {
 }
 
 // Zeigt die gepufferten Log-Zeilen des laufenden Prozesses. Reines Lesen aus dem RAM-Ringpuffer.
-export function handleLogs(_req: Request, res: Response): void {
-    res.type('html').send(renderPage(renderLogs(getLogEntries())));
+export function handleLogs(req: Request, res: Response): void {
+    res.type('html').send(renderPage(renderLogs(getLogEntries(), req.query.nur === 'probleme')));
 }
 
 const configRouter = Router();
-// requireConfigAuth ist async (frische Admin-Pruefung) - eigenes .catch als Sicherheitsnetz,
-// obwohl pruefeAdmin selbst schon alle Fehler abfaengt (kein unhandled reject).
-configRouter.get('/config', (req, res, next) => {
+
+// Admin-Bereich: nichts davon gehoert in einen Browser-/Proxy-Cache (der Back-Button wuerde sonst
+// nach dem Abmelden noch die Einstellungen zeigen) und nichts in einen Suchindex - die Login-Seite
+// ist oeffentlich erreichbar. Benannt exportiert wie die uebrigen Handler, damit der Test ihn direkt
+// mit Mock-req/res aufrufen kann (kein supertest im Projekt).
+export function setzeAdminHeader(_req: Request, res: Response, next: () => void): void {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    next();
+}
+
+// Gilt fuer /config und alles darunter.
+configRouter.use('/config', setzeAdminHeader);
+
+// Alle Handler der Seite sind async. Ohne .catch killt eine unhandled rejection den kompletten
+// Bot-Prozess (siehe CLAUDE.md) - deshalb dieser Wrapper statt sechs handgeschriebener Kopien.
+type AsyncHandler = (req: Request, res: Response) => Promise<void>;
+
+function fangeFehler(handler: AsyncHandler, kontext: string, meldung: string) {
+    return (req: Request, res: Response): void => {
+        handler(req, res).catch((error) => {
+            console.error(`${kontext}:`, error);
+            if (!res.headersSent) {
+                res.status(500).type('html').send(renderPage(forbiddenBody(meldung)));
+            }
+        });
+    };
+}
+
+// requireConfigAuth ist async (frische Admin-Pruefung bei JEDEM Aufruf) - das .catch ist das
+// Sicherheitsnetz, obwohl pruefeAdmin selbst schon alle Fehler abfaengt.
+function geschuetzt(req: Request, res: Response, next: () => void): void {
     requireConfigAuth(req, res, next).catch((error) => {
         console.error('Fehler in requireConfigAuth:', error);
         if (!res.headersSent) {
             res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
         }
     });
-}, (req, res) => {
-    // handleConfigPage ist async (sammelt Einstellungen) - eigenes .catch, auch wenn es intern faengt.
-    handleConfigPage(req, res).catch((error) => {
-        console.error('Fehler beim Rendern der Config-Seite:', error);
-        if (!res.headersSent) {
-            res.status(500).type('html').send(renderPage('<p>Interner Fehler.</p>'));
-        }
-    });
-});
-// Body-Parser NUR an dieser Route (nicht global!) - global gemountet wuerde er den Rohkoerper des
-// Twitch-Webhooks zerstoeren und dessen Signaturpruefung brechen. Auth laeuft davor, damit fuer
-// Unbefugte gar nichts geparst wird.
-configRouter.post('/config/kanal',
-    (req, res, next) => {
-        requireConfigAuth(req, res, next).catch((error) => {
-            console.error('Fehler in requireConfigAuth:', error);
-            if (!res.headersSent) {
-                res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
-            }
-        });
-    },
-    urlencoded({extended: false}),
-    (req, res) => {
-        handleKanalSpeichern(req, res).catch((error) => {
-            console.error('Fehler beim Speichern des Kanals:', error);
-            if (!res.headersSent) {
-                res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
-            }
-        });
-    }
-);
-configRouter.post('/config/rolle',
-    (req, res, next) => {
-        requireConfigAuth(req, res, next).catch((error) => {
-            console.error('Fehler in requireConfigAuth:', error);
-            if (!res.headersSent) {
-                res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
-            }
-        });
-    },
-    urlencoded({extended: false}),
-    (req, res) => {
-        handleRolleSpeichern(req, res).catch((error) => {
-            console.error('Fehler beim Speichern der Rolle:', error);
-            if (!res.headersSent) {
-                res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
-            }
-        });
-    }
-);
-configRouter.post('/config/event',
-    (req, res, next) => {
-        requireConfigAuth(req, res, next).catch((error) => {
-            console.error('Fehler in requireConfigAuth:', error);
-            if (!res.headersSent) {
-                res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
-            }
-        });
-    },
-    urlencoded({extended: false}),
-    (req, res) => {
-        handleEventSpeichern(req, res).catch((error) => {
-            console.error('Fehler beim Speichern des Events:', error);
-            if (!res.headersSent) {
-                res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
-            }
-        });
-    }
-);
-configRouter.post('/config/sport',
-    (req, res, next) => {
-        requireConfigAuth(req, res, next).catch((error) => {
-            console.error('Fehler in requireConfigAuth:', error);
-            if (!res.headersSent) {
-                res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
-            }
-        });
-    },
-    urlencoded({extended: false}),
-    (req, res) => {
-        handleSportSpeichern(req, res).catch((error) => {
-            console.error('Fehler beim Speichern der Sport-Einstellung:', error);
-            if (!res.headersSent) {
-                res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
-            }
-        });
-    }
-);
-configRouter.post('/config/morgengruss',
-    (req, res, next) => {
-        requireConfigAuth(req, res, next).catch((error) => {
-            console.error('Fehler in requireConfigAuth:', error);
-            if (!res.headersSent) {
-                res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
-            }
-        });
-    },
-    urlencoded({extended: false}),
-    (req, res) => {
-        handleMorgengrussLernen(req, res).catch((error) => {
-            console.error('Fehler beim Morgengruß-Lernen:', error);
-            if (!res.headersSent) {
-                res.status(500).type('html').send(renderPage(forbiddenBody('Lernen fehlgeschlagen.')));
-            }
-        });
-    }
-);
+}
+
+// Jede POST-Route hat denselben Aufbau, deshalb hier gebuendelt:
+// 1. Auth VOR dem Body-Parser, damit fuer Unbefugte gar nichts geparst wird.
+// 2. Der urlencoded-Parser NUR HIER, nie global (!) - global gemountet wuerde er den Rohkoerper des
+//    Twitch-Webhooks zerstoeren und dessen Signaturpruefung brechen. Absicherung dagegen ist der
+//    Integrationstest `npm run test:twitch`, der weiter 204 liefern muss.
+// 3. Der Handler mit .catch.
+function postRoute(pfad: string, handler: AsyncHandler, kontext: string, meldung = 'Speichern fehlgeschlagen.'): void {
+    configRouter.post(pfad, geschuetzt, urlencoded({extended: false}), fangeFehler(handler, kontext, meldung));
+}
+
+configRouter.get('/config', geschuetzt,
+    fangeFehler(handleConfigPage, 'Fehler beim Rendern der Config-Seite', 'Interner Fehler.'));
+
+postRoute('/config/kanal', handleKanalSpeichern, 'Fehler beim Speichern des Kanals');
+postRoute('/config/rolle', handleRolleSpeichern, 'Fehler beim Speichern der Rolle');
+postRoute('/config/event', handleEventSpeichern, 'Fehler beim Speichern des Events');
+postRoute('/config/sport', handleSportSpeichern, 'Fehler beim Speichern der Sport-Einstellung');
+postRoute('/config/morgengruss', handleMorgengrussLernen, 'Fehler beim Morgengruß-Lernen', 'Lernen fehlgeschlagen.');
+
 configRouter.get('/config/login', handleLogin);
-// async void: eigenes .catch, sonst killt eine unhandled rejection den Prozess (siehe CLAUDE.md).
-configRouter.get('/config/callback', (req, res) => {
-    handleCallback(req, res).catch((error) => {
-        console.error('Fehler im Config-OAuth-Callback:', error);
-        if (!res.headersSent) {
-            res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
-        }
-    });
-});
-configRouter.get('/config/logs',
-    (req, res, next) => {
-        requireConfigAuth(req, res, next).catch((error) => {
-            console.error('Fehler in requireConfigAuth:', error);
-            if (!res.headersSent) {
-                res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
-            }
-        });
-    },
-    handleLogs
-);
+configRouter.get('/config/callback',
+    fangeFehler(handleCallback, 'Fehler im Config-OAuth-Callback', 'Interner Fehler bei der Anmeldung.'));
+// Reines Lesen (GET) - kein Body-Parser, kein CSRF noetig.
+configRouter.get('/config/logs', geschuetzt, handleLogs);
 configRouter.get('/config/logout', handleLogout);
 
 export default configRouter;

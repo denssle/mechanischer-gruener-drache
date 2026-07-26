@@ -63,21 +63,40 @@ export function verifySession(value: string | undefined): string | null {
 // CSRF-Token fuer Bearbeiten-Formulare: zustandslos aus der User-ID abgeleitet (HMAC mit demselben
 // Secret wie die Session) - kein Redis, kein Formular-State. Ein fremder Angreifer kann es weder
 // erraten noch auslesen (Same-Origin-Policy); zusammen mit SameSite=Lax am Session-Cookie ist das
-// fuer ein Admin-Panel ausreichend. Bewusst kein Ablauf: das Token gilt so lange wie die Session.
+// fuer ein Admin-Panel ausreichend.
+//
+// Aufbau wie signSession: "<ablauf>.<hmac>". Bis 2026-07-26 war es ein reiner HMAC ueber die User-ID,
+// also fuer die Lebensdauer des Secrets *unveraenderlich* gueltig - ein einmal mitgelesenes Token
+// (Screenshot des Seitenquelltexts, Browser-Erweiterung) haette nie aufgehoert zu gelten. Die
+// Gueltigkeit ist deshalb begrenzt; dieselbe Dauer wie die Session, damit ein offener Tab nicht
+// vorzeitig in ein 403 laeuft (laenger als die Session kann es nichts nuetzen - ohne gueltige
+// Session kommt der Request gar nicht bis zur CSRF-Pruefung).
+export const CSRF_MAX_AGE_SECONDS = SESSION_MAX_AGE_SECONDS;
+
 export function createCsrfToken(userId: string): string {
     if (!sessionConfigured()) {
         throw new Error('CONFIG_SESSION_SECRET ist nicht gesetzt - CSRF-Token kann nicht erzeugt werden.');
     }
-    return hmac(`csrf:${userId}`);
+    const ablauf = Date.now() + CSRF_MAX_AGE_SECONDS * 1000;
+    return `${ablauf}.${hmac(`csrf:${userId}.${ablauf}`)}`;
 }
 
 export function verifyCsrfToken(userId: string, token: string | undefined): boolean {
     if (!token || !sessionConfigured()) {
         return false;
     }
-    const expected = Buffer.from(createCsrfToken(userId), 'hex');
-    const actual = Buffer.from(token, 'hex');
-    return expected.length === actual.length && timingSafeEqual(expected, actual);
+    const [ablaufRaw, signatur] = token.split('.');
+    if (!ablaufRaw || !signatur) {
+        return false;
+    }
+    const expected = Buffer.from(hmac(`csrf:${userId}.${ablaufRaw}`), 'hex');
+    const actual = Buffer.from(signatur, 'hex');
+    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+        return false;
+    }
+    // Erst nach der Signaturpruefung: ein gefaelschter Ablauf ist damit schon aussortiert.
+    const ablauf = Number(ablaufRaw);
+    return Number.isFinite(ablauf) && ablauf >= Date.now();
 }
 
 // Manuelles Parsen von req.headers.cookie ("a=1; b=2") - spart die cookie-parser-Dependency.

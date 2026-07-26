@@ -9,6 +9,11 @@ import eventService from '../services/event.service.js';
 import characterService, {CharacterLink, findInRoster} from '../services/character.service.js';
 import {oauthConfigured} from '../services/discordOAuth.service.js';
 import {sessionConfigured} from '../server/config.session.js';
+import config from '../../config.json' with {type: 'json'};
+
+// Adresse der Verwaltungsseite. Optionales Config-Feld per Cast (Muster twitch.service.ts), Default
+// wie in config.router.ts.
+const CONFIG_URL = `${(config as {CONFIG_BASE_URL?: string}).CONFIG_BASE_URL ?? 'http://localhost:3000'}/config`;
 
 // Feature-übergreifende Admin-Diagnose: zeigt auf einen Blick, ob alle setzbaren Kanäle/Einstellungen
 // gesetzt UND abrufbar sind, und faltet den früheren Twitch-EventSub-Check mit ein (ersetzt
@@ -60,7 +65,9 @@ class DiagnoseHandler {
         const login = oauthConfigured();
         const session = sessionConfigured();
         if (login && session) {
-            lines.push('✅ Login konfiguriert – die Seite ist erreichbar (sofern das Web-Backend-Mapping steht).');
+            // Nennt die URL: sie steht sonst NIRGENDS im Bot (die Seite hat bewusst keinen eigenen
+            // Command), Admins mussten sie auswendig kennen. /diagnose ist der natürliche Ort dafür.
+            lines.push(`✅ Login konfiguriert – ${CONFIG_URL} (sofern das Web-Backend-Mapping steht).`);
             return;
         }
         const fehlt = [!login && 'DISCORD_CLIENT_SECRET', !session && 'CONFIG_SESSION_SECRET']

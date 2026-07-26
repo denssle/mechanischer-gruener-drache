@@ -35,24 +35,21 @@ vi.mock('../services/logBuffer.service.js', () => ({
 }));
 
 vi.mock('./config.settings.js', () => ({
-    sammleEinstellungen: vi.fn(() => Promise.resolve([
-        {label: 'Protokoll-Kanal', wert: '#log', status: 'ok'}
-    ])),
     holeTextKanaele: vi.fn(() => [{id: 'c1', name: 'allgemein'}]),
     ladeKanalFelder: vi.fn(() => Promise.resolve([
-        {schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'c1'}
+        {schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'c1', status: 'ok'}
     ])),
     istGueltigerTextKanal: vi.fn((id: string) => id === 'c1'),
     istKanalFeld: vi.fn((feld: string) => feld === 'protokoll'),
     speichereKanal: vi.fn(() => Promise.resolve()),
     holeRollen: vi.fn(() => [{id: 'r1', name: 'Abonnenten'}]),
-    holeTwitchRolleId: vi.fn(() => Promise.resolve('r1')),
+    holeTwitchRolle: vi.fn(() => Promise.resolve({aktuelleId: 'r1', status: 'ok'})),
     istGueltigeRolle: vi.fn((id: string) => id === 'r1'),
     speichereTwitchRolle: vi.fn(() => Promise.resolve()),
     holeEventFelder: vi.fn(() => Promise.resolve({datum: '2026-12-24', uhrzeit: '18:00', titel: 'Weihnachtstreffen'})),
     speichereEventDaten: vi.fn(() => Promise.resolve()),
     entferneEvent: vi.fn(() => Promise.resolve()),
-    holeMitglieder: vi.fn(() => [{id: 'm1', name: 'Tirsis'}]),
+    holeMitglieder: vi.fn(async () => [{id: 'm1', name: 'Tirsis', kilometer: 128.5}]),
     istGueltigesMitglied: vi.fn((id: string) => id === 'm1'),
     speichereKilometer: vi.fn(() => Promise.resolve()),
     holeLegacyKilometer: vi.fn(() => Promise.resolve(1250)),
@@ -67,7 +64,7 @@ import * as oauth from '../services/discordOAuth.service.js';
 import * as settings from './config.settings.js';
 import greetingHandler from '../handlers/greeting.handler.js';
 import * as logBuffer from '../services/logBuffer.service.js';
-import {createCsrfToken, signSession, SESSION_COOKIE, STATE_COOKIE} from './config.session.js';
+import {createCsrfToken, signSession, verifyCsrfToken, SESSION_COOKIE, STATE_COOKIE} from './config.session.js';
 import {
     escapeHtml,
     handleCallback,
@@ -81,8 +78,8 @@ import {
     handleRolleSpeichern,
     handleSportSpeichern,
     parseIsoDateTime,
+    leseMeldung,
     renderConfigSeite,
-    renderEinstellungen,
     renderEventFormular,
     renderKanalFormular,
     renderLogs,
@@ -90,7 +87,8 @@ import {
     renderMorgengrussLernen,
     renderRollenFormular,
     renderSportAdmin,
-    requireConfigAuth
+    requireConfigAuth,
+    setzeAdminHeader
 } from './config.router.js';
 
 const mockResponse = () => {
@@ -181,6 +179,33 @@ describe('config.router', () => {
             expect(res.send.mock.calls[0][0]).toContain('Mit Discord anmelden');
         });
 
+        // Bei GET ist die Login-Seite mit 200 die normale Einstiegsseite. Bei POST hat gerade jemand
+        // ein Formular abgeschickt - ein 200 mit Login-HTML sähe aus, als hätte das Speichern geklappt.
+        it('antwortet bei POST ohne Session mit 401 und sagt, dass nichts gespeichert wurde', async () => {
+            const req = mockRequest();
+            req.method = 'POST';
+            const res = mockResponse();
+            const next = vi.fn();
+
+            await requireConfigAuth(req, res, next);
+
+            expect(next).not.toHaveBeenCalled();
+            expect(res.status).toHaveBeenCalledWith(401);
+            expect(res.send.mock.calls[0][0]).toContain('nicht');
+            expect(res.send.mock.calls[0][0]).toContain('Sitzung abgelaufen');
+        });
+
+        it('antwortet bei GET ohne Session weiterhin mit der Login-Seite (kein Fehlerstatus)', async () => {
+            const req = mockRequest();
+            req.method = 'GET';
+            const res = mockResponse();
+
+            await requireConfigAuth(req, res, vi.fn());
+
+            expect(res.status).not.toHaveBeenCalled();
+            expect(res.send.mock.calls[0][0]).toContain('Mit Discord anmelden');
+        });
+
         it('bleibt fail-closed, wenn der Login nicht konfiguriert ist', async () => {
             (oauth.oauthConfigured as any).mockReturnValue(false);
             const req = mockRequest({cookie: `${SESSION_COOKIE}=${signSession('12345')}`});
@@ -203,11 +228,17 @@ describe('config.router', () => {
         const html = res.send.mock.calls[0][0] as string;
         expect(html).toContain('<!doctype html>');
         expect(html).toContain('Protokoll-Kanal');
-        expect(html).toContain('#log');
+        // Bereiche als Sprungziele für den Redirect nach dem Speichern
+        expect(html).toContain('id="bereich-sport"');
+        expect(html).toContain('id="bereich-event"');
         // Kanal-Formular inkl. CSRF-Token, Feld-Kennung und vorausgewähltem Kanal
         expect(html).toContain('action="/config/kanal"');
         expect(html).toContain('name="feld" value="protokoll"');
-        expect(html).toContain(createCsrfToken('12345'));
+        // Das Token traegt seit 2026-07-26 einen Ablauf, ist also nicht mehr Zeichen-fuer-Zeichen
+        // vorhersagbar - deshalb aus dem HTML lesen und pruefen lassen.
+        const token = /name="_csrf" value="([^"]+)"/.exec(html)?.[1];
+        expect(verifyCsrfToken('12345', token)).toBe(true);
+        expect(verifyCsrfToken('99999', token)).toBe(false);
         expect(html).toContain('value="c1" selected');
         // Rollen-Formular mit "— keine —" und vorausgewählter Rolle
         expect(html).toContain('action="/config/rolle"');
@@ -226,13 +257,52 @@ describe('config.router', () => {
         expect(html).toContain('value="meilenstein-entfernen"');
     });
 
-    it('handleConfigPage zeigt den Gespeichert-Hinweis nach dem Redirect', async () => {
+    // Die Rückmeldung sagt WAS gespeichert wurde und steht im betroffenen Bereich - bis 2026-07-26
+    // war es ein anonymes "Gespeichert." ganz oben, bei zehn Formularen auf der Seite nutzlos.
+    it('handleConfigPage zeigt die Rückmeldung im betroffenen Bereich', async () => {
         const res = mockResponse();
         res.locals.configUserId = '12345';
 
-        await handleConfigPage(mockRequest({query: {gespeichert: '1'}}), res);
+        await handleConfigPage(mockRequest({query: {gespeichert: 'kilometer-setzen'}}), res);
 
-        expect(res.send.mock.calls[0][0]).toContain('Gespeichert.');
+        const html = res.send.mock.calls[0][0] as string;
+        expect(html).toContain('Kilometerstand gesetzt.');
+        // ... und zwar im Sport-Bereich, nicht irgendwo sonst.
+        const sportBereich = html.slice(html.indexOf('id="bereich-sport"'), html.indexOf('id="bereich-protokoll"'));
+        expect(sportBereich).toContain('Kilometerstand gesetzt.');
+    });
+
+    describe('leseMeldung', () => {
+        it('übersetzt einen bekannten Schlüssel in Text + Bereich', () => {
+            expect(leseMeldung(mockRequest({query: {gespeichert: 'twitch-rolle-entfernt'}}) as any)).toEqual({
+                bereich: 'twitch',
+                text: 'Twitch-Benachrichtigungsrolle entfernt.',
+                art: 'ok',
+            });
+        });
+
+        it('ignoriert unbekannte und Prototyp-Schlüssel (der Wert wird nie ausgegeben)', () => {
+            expect(leseMeldung(mockRequest({query: {gespeichert: 'quatsch'}}) as any)).toBeUndefined();
+            expect(leseMeldung(mockRequest({query: {gespeichert: '__proto__'}}) as any)).toBeUndefined();
+            expect(leseMeldung(mockRequest({query: {gespeichert: 'constructor'}}) as any)).toBeUndefined();
+            expect(leseMeldung(mockRequest() as any)).toBeUndefined();
+        });
+
+        it('meldet die gelernten Emojis als Zahl im Morgengruß-Bereich', () => {
+            expect(leseMeldung(mockRequest({query: {gelernt: '3'}}) as any)).toEqual({
+                bereich: 'morgengruss',
+                text: 'Aus der Historie habe ich 3 persönliche Emojis gelernt.',
+                art: 'ok',
+            });
+        });
+
+        it('nimmt keine rohe Query in den Text (kein XSS über ?gelernt=)', () => {
+            expect(leseMeldung(mockRequest({query: {gelernt: '<script>'}}) as any)).toBeUndefined();
+        });
+
+        it('meldet den fehlenden Morgengruß-Kanal als Warnung', () => {
+            expect(leseMeldung(mockRequest({query: {morgengruss: 'kein-kanal'}}) as any)?.art).toBe('warnung');
+        });
     });
 
     describe('handleKanalSpeichern', () => {
@@ -247,7 +317,7 @@ describe('config.router', () => {
             );
 
             expect(settings.speichereKanal).toHaveBeenCalledWith('protokoll', 'c1');
-            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=protokoll#bereich-protokoll');
         });
 
         it('lehnt ein fehlendes/falsches CSRF-Token ab und speichert nicht', async () => {
@@ -287,7 +357,7 @@ describe('config.router', () => {
 
     it('renderKanalFormular escaped Kanalnamen, markiert den aktuellen Kanal und trägt die Feld-Kennung', () => {
         const html = renderKanalFormular(
-            {schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'b'},
+            {schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'b', status: 'ok'},
             [{id: 'a', name: '<böse>'}, {id: 'b', name: 'log'}],
             'token-123'
         );
@@ -296,6 +366,34 @@ describe('config.router', () => {
         expect(html).toContain('value="b" selected');
         expect(html).toContain('value="token-123"');
         expect(html).toContain('name="feld" value="protokoll"');
+        // Bei 'ok' ist der echte Kanal vorausgewählt - kein Platzhalter davor.
+        expect(html).not.toContain('disabled');
+    });
+
+    // Ein <select> selektiert immer irgendetwas: ohne Platzhalter stünde bei "nicht gesetzt" der
+    // erste Kanal im Feld und sähe aus, als wäre er konfiguriert. Bis 2026-07-26 war das so - die
+    // read-only-Tabelle darüber verdeckte es.
+    it('renderKanalFormular wählt bei "nicht gesetzt" keinen Kanal vor', () => {
+        const html = renderKanalFormular(
+            {schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: null, status: 'leer'},
+            [{id: 'a', name: 'allgemein'}, {id: 'b', name: 'log'}],
+            'token-123'
+        );
+        expect(html).toContain('<option value="" disabled selected>— nicht gesetzt —</option>');
+        expect(html).not.toContain('selected>#allgemein');
+        expect(html).toContain('required');
+    });
+
+    it('renderKanalFormular macht einen gelöschten Kanal mit seiner ID sichtbar', () => {
+        const html = renderKanalFormular(
+            {schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'weg-123', status: 'warnung'},
+            [{id: 'a', name: 'allgemein'}],
+            'token-123'
+        );
+        expect(html).toContain('disabled selected');
+        expect(html).toContain('weg-123');
+        expect(html).toContain('nicht abrufbar');
+        expect(html).toContain('status-warnung');
     });
 
     describe('handleRolleSpeichern', () => {
@@ -310,7 +408,7 @@ describe('config.router', () => {
             );
 
             expect(settings.speichereTwitchRolle).toHaveBeenCalledWith('r1');
-            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=twitch-rolle#bereich-twitch');
         });
 
         it('entfernt die Rolle bei leerem Wert (— keine —)', async () => {
@@ -322,7 +420,7 @@ describe('config.router', () => {
             );
 
             expect(settings.speichereTwitchRolle).toHaveBeenCalledWith(null);
-            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=twitch-rolle-entfernt#bereich-twitch');
         });
 
         it('lehnt ein fehlendes CSRF-Token ab', async () => {
@@ -350,7 +448,8 @@ describe('config.router', () => {
 
     it('renderRollenFormular bietet "— keine —" und markiert die aktuelle Rolle', () => {
         const html = renderRollenFormular(
-            [{id: 'r1', name: '<b>Abo</b>'}, {id: 'r2', name: 'Zuschauer'}], 'r2', 'token-9'
+            [{id: 'r1', name: '<b>Abo</b>'}, {id: 'r2', name: 'Zuschauer'}],
+            {aktuelleId: 'r2', status: 'ok'}, 'token-9'
         );
         expect(html).toContain('— keine —');
         expect(html).toContain('&lt;b&gt;Abo&lt;/b&gt;');
@@ -360,8 +459,19 @@ describe('config.router', () => {
     });
 
     it('renderRollenFormular markiert "— keine —" wenn keine Rolle gesetzt ist', () => {
-        const html = renderRollenFormular([{id: 'r1', name: 'Abo'}], null, 'token-9');
+        const html = renderRollenFormular([{id: 'r1', name: 'Abo'}], {aktuelleId: null, status: 'leer'}, 'token-9');
         expect(html).toContain('value="" selected>— keine —');
+        // "keine Rolle" ist ein gültiger Zustand - kein disabled-Platzhalter davor.
+        expect(html).not.toContain('disabled');
+    });
+
+    // Zeigt die gespeicherte ID im Klartext, wenn die Rolle gelöscht wurde: sie steht nicht in der
+    // Optionsliste, der kaputte Zustand wäre sonst unsichtbar (das Feld sähe leer aus).
+    it('renderRollenFormular macht eine gelöschte Rolle sichtbar', () => {
+        const html = renderRollenFormular([{id: 'r1', name: 'Abo'}], {aktuelleId: 'r-weg', status: 'warnung'}, 'token-9');
+        expect(html).toContain('disabled selected');
+        expect(html).toContain('r-weg');
+        expect(html).toContain('nicht abrufbar');
     });
 
     describe('parseIsoDateTime', () => {
@@ -395,7 +505,7 @@ describe('config.router', () => {
             );
 
             expect(settings.speichereEventDaten).toHaveBeenCalledWith(new Date(2099, 11, 31, 20, 0).getTime(), 'Silvester');
-            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=event#bereich-event');
         });
 
         it('entfernt das Event bei aktion=entfernen', async () => {
@@ -408,7 +518,7 @@ describe('config.router', () => {
 
             expect(settings.entferneEvent).toHaveBeenCalledTimes(1);
             expect(settings.speichereEventDaten).not.toHaveBeenCalled();
-            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=event-entfernt#bereich-event');
         });
 
         it('lehnt ein fehlendes CSRF-Token ab', async () => {
@@ -467,7 +577,7 @@ describe('config.router', () => {
             );
 
             expect(settings.speichereKilometer).toHaveBeenCalledWith('m1', 42);
-            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=kilometer-setzen#bereich-sport');
         });
 
         it('lehnt ein unbekanntes Mitglied ab', async () => {
@@ -513,7 +623,7 @@ describe('config.router', () => {
             await handleSportSpeichern(anfrage({_csrf: createCsrfToken('12345'), aktion: 'meilenstein-entfernen', kilometer: '2000'}), res);
 
             expect(settings.entferneMeilenstein).toHaveBeenCalledWith(2000);
-            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=1');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=meilenstein-entfernen#bereich-sport');
         });
 
         it('lehnt ein fehlendes CSRF-Token ab', async () => {
@@ -537,13 +647,36 @@ describe('config.router', () => {
     });
 
     it('renderSportAdmin zeigt Mitglied-Dropdown und den aktuellen Bestandskilometer-Wert', () => {
-        const html = renderSportAdmin([{id: 'm1', name: 'Tirsis'}], 1250, 'token-s');
+        const html = renderSportAdmin([{id: 'm1', name: 'Tirsis', kilometer: 128.5}], 1250, 'token-s');
         expect(html).toContain('action="/config/sport"');
         expect(html).toContain('value="m1"');
         expect(html).toContain('Tirsis');
         expect(html).toContain('aktuell 1250 km');
         expect(html).toContain('value="altkilometer-addieren"');
         expect(html).toContain('value="altkilometer-setzen"');
+    });
+
+    // Das Setzen überschreibt fremde Kilometer unwiederbringlich - die drei Bremsen dagegen
+    // (aktueller Stand sichtbar, nichts vorausgewählt, Rückfrage) sind hier festgenagelt.
+    it('renderSportAdmin nennt den aktuellen Kilometerstand je Mitglied', () => {
+        const html = renderSportAdmin([
+            {id: 'm1', name: 'Tirsis', kilometer: 128.5},
+            {id: 'm2', name: 'Zerix', kilometer: 0},
+        ], 0, 'token-s');
+        expect(html).toContain('Tirsis (128.5 km)');
+        expect(html).toContain('Zerix (0 km)');
+    });
+
+    it('renderSportAdmin rundet Float-Reste im Kilometerstand auf zwei Stellen', () => {
+        const html = renderSportAdmin([{id: 'm1', name: 'Tirsis', kilometer: 12.340000000000002}], 0, 'token-s');
+        expect(html).toContain('Tirsis (12.34 km)');
+    });
+
+    it('renderSportAdmin wählt kein Mitglied vor und fragt vor dem Überschreiben nach', () => {
+        const html = renderSportAdmin([{id: 'm1', name: 'Tirsis', kilometer: 5}], 0, 'token-s');
+        expect(html).toContain('<option value="" selected>— Mitglied wählen —</option>');
+        expect(html).not.toContain('value="m1" selected');
+        expect(html).toContain('confirm(');
     });
 
     it('renderMeilensteinListe zeigt Meilensteine sortiert mit Entfernen und escaped den Text', () => {
@@ -574,7 +707,7 @@ describe('config.router', () => {
             await handleMorgengrussLernen(anfrage({_csrf: createCsrfToken('12345')}), res);
 
             expect(greetingHandler.lerneAusHistorie).toHaveBeenCalledTimes(1);
-            expect(res.redirect).toHaveBeenCalledWith('/config?gelernt=3');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gelernt=3#bereich-morgengruss');
         });
 
         it('leitet auf den kein-Kanal-Hinweis, wenn kein Kanal gesetzt ist', async () => {
@@ -584,7 +717,7 @@ describe('config.router', () => {
 
             await handleMorgengrussLernen(anfrage({_csrf: createCsrfToken('12345')}), res);
 
-            expect(res.redirect).toHaveBeenCalledWith('/config?morgengruss=kein-kanal');
+            expect(res.redirect).toHaveBeenCalledWith('/config?morgengruss=kein-kanal#bereich-morgengruss');
         });
 
         it('lehnt ein fehlendes CSRF-Token ab und scannt nicht', async () => {
@@ -613,40 +746,47 @@ describe('config.router', () => {
         expect(html).toContain('value="token-mg"');
     });
 
-    it('renderConfigSeite baut die vollständige Seite (Einstellungen + beide Formular-Arten)', () => {
-        const html = renderConfigSeite({
-            einstellungen: [{label: 'Protokoll-Kanal', wert: '#log', status: 'ok'}],
-            kanalFelder: [{schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'c1'}],
-            kanaele: [{id: 'c1', name: 'allgemein'}],
-            rollen: [{id: 'r1', name: 'Streamer'}],
-            twitchRolleId: 'r1',
-            eventFelder: {datum: '2026-12-24', uhrzeit: '18:00', titel: 'Fest'},
-            mitglieder: [{id: 'm1', name: 'Tirsis'}],
-            legacyKilometer: 1250,
-            meilensteine: [{kilometers: 1000, text: 'Tausend!', announced: false}],
-            csrfToken: 'tok',
-            gespeichert: true,
-        });
+    const vollstaendigeDaten = () => ({
+        kanalFelder: [{schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'c1', status: 'ok' as const}],
+        kanaele: [{id: 'c1', name: 'allgemein'}],
+        rollen: [{id: 'r1', name: 'Streamer'}],
+        twitchRolle: {aktuelleId: 'r1', status: 'ok' as const},
+        eventFelder: {datum: '2026-12-24', uhrzeit: '18:00', titel: 'Fest'},
+        mitglieder: [{id: 'm1', name: 'Tirsis', kilometer: 128.5}],
+        legacyKilometer: 1250,
+        meilensteine: [{kilometers: 1000, text: 'Tausend!', announced: false}],
+        csrfToken: 'tok',
+    });
+
+    it('renderConfigSeite baut die vollständige Seite (alle Bereiche + Formular-Arten)', () => {
+        const html = renderConfigSeite(vollstaendigeDaten());
         expect(html).toContain('<!doctype html>');
-        expect(html).toContain('Gespeichert.');
         expect(html).toContain('action="/config/kanal"');
         expect(html).toContain('action="/config/rolle"');
         expect(html).toContain('action="/config/event"');
         expect(html).toContain('action="/config/sport"');
+        expect(html).toContain('action="/config/morgengruss"');
+        // Jeder Bereich hat sein Sprungziel.
+        for (const bereich of ['twitch', 'sport', 'protokoll', 'morgengruss', 'event']) {
+            expect(html).toContain(`id="bereich-${bereich}"`);
+        }
+        // Ohne Meldung steht keine da.
+        expect(html).not.toContain('class="meldung');
     });
 
-    describe('escapeHtml / renderEinstellungen', () => {
-        it('escapeHtml neutralisiert HTML-Sonderzeichen', () => {
-            expect(escapeHtml(`<script>&"'`)).toBe('&lt;script&gt;&amp;&quot;&#39;');
+    it('renderConfigSeite escaped den Meldungstext und zeigt ihn nur im eigenen Bereich', () => {
+        const html = renderConfigSeite({
+            ...vollstaendigeDaten(),
+            meldung: {bereich: 'event', text: '<b>böse</b>', art: 'warnung'},
         });
+        expect(html).toContain('&lt;b&gt;böse&lt;/b&gt;');
+        expect(html).not.toContain('<b>böse</b>');
+        // Genau einmal - nicht in jedem Bereich.
+        expect(html.match(/class="meldung/g)).toHaveLength(1);
+    });
 
-        it('renderEinstellungen escaped Label und Wert (kein XSS)', () => {
-            const html = renderEinstellungen([
-                {label: 'Event', wert: '<b>böse</b>', status: 'warnung'}
-            ]);
-            expect(html).toContain('&lt;b&gt;böse&lt;/b&gt;');
-            expect(html).not.toContain('<b>böse</b>');
-        });
+    it('escapeHtml neutralisiert HTML-Sonderzeichen', () => {
+        expect(escapeHtml(`<script>&"'`)).toBe('&lt;script&gt;&amp;&quot;&#39;');
     });
 
     it('handleLogin setzt ein state-Cookie und leitet zu Discord', () => {
@@ -726,6 +866,47 @@ describe('config.router', () => {
             expect(renderLogs([])).toContain('Noch keine Log-Zeilen');
         });
 
+        // Wer hier nachsieht, sucht "was ist gerade passiert" - vorher standen die neuesten Zeilen
+        // ganz unten, nach 500 Zeilen Scrollen.
+        it('renderLogs zeigt die neuesten Zeilen zuerst', () => {
+            const html = renderLogs([
+                {zeit: Date.parse('2026-07-26T08:00:00'), level: 'log', text: 'ALT'},
+                {zeit: Date.parse('2026-07-26T09:00:00'), level: 'log', text: 'NEU'},
+            ]);
+            expect(html.indexOf('NEU')).toBeLessThan(html.indexOf('ALT'));
+            expect(html).toContain('neueste zuerst');
+        });
+
+        it('renderLogs filtert auf Warnungen und Fehler', () => {
+            const eintraege = [
+                {zeit: 1, level: 'log' as const, text: 'Normalbetrieb'},
+                {zeit: 2, level: 'warn' as const, text: 'eine Warnung'},
+                {zeit: 3, level: 'error' as const, text: 'ein Fehler'},
+            ];
+            const gefiltert = renderLogs(eintraege, true);
+            expect(gefiltert).not.toContain('Normalbetrieb');
+            expect(gefiltert).toContain('eine Warnung');
+            expect(gefiltert).toContain('ein Fehler');
+            // Ungefiltert ist alles da.
+            expect(renderLogs(eintraege, false)).toContain('Normalbetrieb');
+        });
+
+        it('renderLogs zählt beide Filter-Stände und verlinkt nur den inaktiven', () => {
+            const eintraege = [
+                {zeit: 1, level: 'log' as const, text: 'a'},
+                {zeit: 2, level: 'warn' as const, text: 'b'},
+            ];
+            expect(renderLogs(eintraege, false)).toContain('href="/config/logs?nur=probleme"');
+            expect(renderLogs(eintraege, false)).toContain('<strong>Alle (2)</strong>');
+            expect(renderLogs(eintraege, true)).toContain('<strong>Nur Warnungen und Fehler (1)</strong>');
+            expect(renderLogs(eintraege, true)).toContain('href="/config/logs"');
+        });
+
+        it('renderLogs meldet einen leeren Filter-Treffer eigenständig', () => {
+            const html = renderLogs([{zeit: 1, level: 'log', text: 'a'}], true);
+            expect(html).toContain('Keine Warnungen oder Fehler');
+        });
+
         it('handleLogs rendert die gepufferten Zeilen', () => {
             (logBuffer.getLogEntries as any).mockReturnValue([
                 {zeit: Date.now(), level: 'log', text: 'eine Zeile'},
@@ -736,6 +917,20 @@ describe('config.router', () => {
 
             expect(res.send.mock.calls[0][0]).toContain('eine Zeile');
         });
+
+        it('handleLogs übernimmt den Filter aus der Query', () => {
+            (logBuffer.getLogEntries as any).mockReturnValue([
+                {zeit: Date.now(), level: 'log', text: 'Normalbetrieb'},
+                {zeit: Date.now(), level: 'warn', text: 'eine Warnung'},
+            ]);
+            const res = mockResponse();
+
+            handleLogs(mockRequest({query: {nur: 'probleme'}}), res);
+
+            const html = res.send.mock.calls[0][0] as string;
+            expect(html).not.toContain('Normalbetrieb');
+            expect(html).toContain('eine Warnung');
+        });
     });
 
     it('handleConfigPage verlinkt die Log-Ansicht', async () => {
@@ -745,6 +940,19 @@ describe('config.router', () => {
         await handleConfigPage(mockRequest(), res);
 
         expect(res.send.mock.calls[0][0]).toContain('href="/config/logs"');
+    });
+
+    // Ein Admin-Panel gehört weder in den Browser-/Proxy-Cache (Back-Button nach dem Abmelden)
+    // noch in einen Suchindex - die Login-Seite ist öffentlich erreichbar.
+    it('setzeAdminHeader verbietet Caching und Indexierung', () => {
+        const res = mockResponse();
+        const next = vi.fn();
+
+        setzeAdminHeader(mockRequest(), res, next);
+
+        expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
+        expect(res.setHeader).toHaveBeenCalledWith('X-Robots-Tag', 'noindex, nofollow');
+        expect(next).toHaveBeenCalledTimes(1);
     });
 
     it('handleLogout löscht das Session-Cookie und leitet auf /config', () => {

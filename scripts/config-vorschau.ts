@@ -5,20 +5,14 @@ import path from 'path';
 // Bot zu deployen. Nutzt die ECHTEN Render-Funktionen + das echte CSS -> keine Drift zur Live-Seite.
 import {renderConfigSeite} from '../dist/server/config.router.js';
 
+// Absichtlich alle drei Feld-Zustände dabei (ok / leer / warnung), damit die Vorschau zeigt, wie ein
+// nicht gesetztes bzw. ein auf einen gelöschten Kanal zeigendes Feld aussieht.
 const html = renderConfigSeite({
-    einstellungen: [
-        {label: 'Twitch-Benachrichtigungskanal', wert: '#stream-alerts', status: 'ok'},
-        {label: 'Twitch-Benachrichtigungsrolle', wert: '@Streamer', status: 'ok'},
-        {label: 'Sport-Ankündigungskanal', wert: 'nicht gesetzt', status: 'leer'},
-        {label: 'Protokoll-Kanal', wert: 'gesetzt (1336646220168433674), aber nicht abrufbar', status: 'warnung'},
-        {label: 'Morgengruß-Kanal', wert: '#guten-morgen', status: 'ok'},
-        {label: 'Nächstes Event', wert: '24.12.2026, 18:00 – Weihnachtstreffen', status: 'ok'},
-    ],
     kanalFelder: [
-        {schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'c2'},
-        {schluessel: 'twitch-kanal', label: 'Twitch-Benachrichtigungskanal', aktuelleId: 'c1'},
-        {schluessel: 'sport-kanal', label: 'Sport-Ankündigungskanal', aktuelleId: null},
-        {schluessel: 'morgengruss-kanal', label: 'Morgengruß-Kanal', aktuelleId: 'c3'},
+        {schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: '1336646220168433674', status: 'warnung'},
+        {schluessel: 'twitch-kanal', label: 'Twitch-Benachrichtigungskanal', aktuelleId: 'c1', status: 'ok'},
+        {schluessel: 'sport-kanal', label: 'Sport-Ankündigungskanal', aktuelleId: null, status: 'leer'},
+        {schluessel: 'morgengruss-kanal', label: 'Morgengruß-Kanal', aktuelleId: 'c3', status: 'ok'},
     ],
     kanaele: [
         {id: 'c1', name: 'stream-alerts'},
@@ -31,12 +25,12 @@ const html = renderConfigSeite({
         {id: 'r2', name: 'Streamer'},
         {id: 'r3', name: 'Zuschauer'},
     ],
-    twitchRolleId: 'r2',
+    twitchRolle: {aktuelleId: 'r2', status: 'ok'},
     eventFelder: {datum: '2026-12-24', uhrzeit: '18:00', titel: 'Weihnachtstreffen'},
     mitglieder: [
-        {id: 'm1', name: 'Tirsis'},
-        {id: 'm2', name: 'Zerix'},
-        {id: 'm3', name: 'Acaine'},
+        {id: 'm1', name: 'Tirsis', kilometer: 128.5},
+        {id: 'm2', name: 'Zerix', kilometer: 0},
+        {id: 'm3', name: 'Acaine', kilometer: 42},
     ],
     legacyKilometer: 1250,
     meilensteine: [
@@ -44,7 +38,7 @@ const html = renderConfigSeite({
         {kilometers: 2000, text: 'Auf zur nächsten Etappe – 2000 km!', announced: false},
     ],
     csrfToken: 'vorschau-token',
-    gespeichert: false,
+    meldung: {bereich: 'sport', text: 'Kilometerstand gesetzt.', art: 'ok'},
 });
 
 const ziel = path.join(process.cwd(), 'config-vorschau.html');

@@ -110,6 +110,14 @@ class SportService {
         return alle.reduce((sum, item) => sum + item.score, 0);
     }
 
+    // Alle Kilometerstände als Map userId -> km (inklusive des Legacy-Dummy-Users). Basis dafür,
+    // dass /config im Mitglied-Dropdown den aktuellen Wert anzeigen kann - setKilometer überschreibt
+    // und legt keinen SportEntry an, ohne Anzeige würde man also blind einen Beitrag vernichten.
+    async getAlleKilometer(): Promise<Record<string, number>> {
+        const alle = await redisService.getSortedSetAll(KEYS.highscore);
+        return Object.fromEntries(alle.map(item => [item.value, item.score]));
+    }
+
     async addLegacyKilometer(kilometers: number): Promise<void> {
         await redisService.incrementSortedSet(KEYS.highscore, DUMMY_USER_ID, kilometers);
     }

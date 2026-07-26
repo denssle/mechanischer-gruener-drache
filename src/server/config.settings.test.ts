@@ -15,8 +15,12 @@ vi.mock('../services/sport.service.js', () => ({
         getAnnouncementChannel: vi.fn(), setAnnouncementChannel: vi.fn(),
         setKilometer: vi.fn(), getLegacyKilometer: vi.fn(),
         addLegacyKilometer: vi.fn(), setLegacyKilometer: vi.fn(),
-        getMilestones: vi.fn(), removeMilestone: vi.fn()
+        getMilestones: vi.fn(), removeMilestone: vi.fn(),
+        getAlleKilometer: vi.fn(async () => ({}))
     }
+}));
+vi.mock('../handlers/sport.handler.js', () => ({
+    default: {announceReachedMilestones: vi.fn()}
 }));
 vi.mock('../services/logging.service.js', () => ({
     default: {getLogChannel: vi.fn(), setLogChannel: vi.fn()}
@@ -31,13 +35,13 @@ vi.mock('../services/event.service.js', () => ({
 import client from '../client.js';
 import twitchUserService from '../services/twitch.user.service.js';
 import sportService from '../services/sport.service.js';
+import sportHandler from '../handlers/sport.handler.js';
 import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import eventService from '../services/event.service.js';
 import {ChannelType, Collection} from 'discord.js';
 import {
     addiereLegacyKilometer,
-    Einstellung,
     entferneEvent,
     entferneMeilenstein,
     holeEventFelder,
@@ -46,12 +50,12 @@ import {
     holeMitglieder,
     holeRollen,
     holeTextKanaele,
+    holeTwitchRolle,
     istGueltigerTextKanal,
     istGueltigeRolle,
     istGueltigesMitglied,
     istKanalFeld,
     ladeKanalFelder,
-    sammleEinstellungen,
     setzeLegacyKilometer,
     speichereEventDaten,
     speichereKanal,
@@ -59,57 +63,10 @@ import {
     speichereTwitchRolle
 } from './config.settings.js';
 
-const finde = (einstellungen: Einstellung[], label: string): Einstellung =>
-    einstellungen.find(e => e.label === label)!;
-
-describe('config.settings – sammleEinstellungen', () => {
+describe('config.settings – Kanal-Liste', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        // Standard: alles leer.
-        (twitchUserService.getNotificationChannel as any).mockResolvedValue(null);
-        (twitchUserService.getNotificationRole as any).mockResolvedValue(null);
-        (sportService.getAnnouncementChannel as any).mockResolvedValue(null);
-        (loggingService.getLogChannel as any).mockResolvedValue(null);
-        (greetingService.getChannel as any).mockResolvedValue(null);
-        (eventService.getEvent as any).mockResolvedValue(null);
-        (client.channels.fetch as any).mockResolvedValue(null);
         (client.guilds as any).cache = new Map();
-    });
-
-    it('meldet alle Einstellungen als leer, wenn nichts gesetzt ist', async () => {
-        const einstellungen = await sammleEinstellungen();
-        expect(einstellungen).toHaveLength(6);
-        expect(einstellungen.every(e => e.status === 'leer')).toBe(true);
-        expect(finde(einstellungen, 'Nächstes Event').wert).toBe('kein Event gesetzt');
-    });
-
-    it('löst einen gesetzten, abrufbaren Kanal zum Namen auf', async () => {
-        (loggingService.getLogChannel as any).mockResolvedValue('chan-1');
-        (client.channels.fetch as any).mockResolvedValue({name: 'protokoll'});
-
-        const protokoll = finde(await sammleEinstellungen(), 'Protokoll-Kanal');
-        expect(protokoll.status).toBe('ok');
-        expect(protokoll.wert).toBe('#protokoll');
-    });
-
-    it('markiert einen gesetzten, aber nicht abrufbaren Kanal als Warnung', async () => {
-        (loggingService.getLogChannel as any).mockResolvedValue('chan-weg');
-        (client.channels.fetch as any).mockRejectedValue(new Error('unbekannt'));
-
-        const protokoll = finde(await sammleEinstellungen(), 'Protokoll-Kanal');
-        expect(protokoll.status).toBe('warnung');
-        expect(protokoll.wert).toContain('chan-weg');
-    });
-
-    it('löst eine gesetzte Twitch-Rolle zum Namen auf', async () => {
-        (twitchUserService.getNotificationRole as any).mockResolvedValue('role-1');
-        (client.guilds as any).cache = new Map([
-            ['guild-1', {roles: {cache: new Map([['role-1', {name: 'Streamer'}]])}}]
-        ]);
-
-        const rolle = finde(await sammleEinstellungen(), 'Twitch-Benachrichtigungsrolle');
-        expect(rolle.status).toBe('ok');
-        expect(rolle.wert).toBe('@Streamer');
     });
 
     describe('holeTextKanaele / istGueltigerTextKanal', () => {
@@ -158,14 +115,6 @@ describe('config.settings – sammleEinstellungen', () => {
             expect(holeTextKanaele()).toEqual([]);
         });
     });
-
-    it('zeigt ein gesetztes Event mit Titel', async () => {
-        (eventService.getEvent as any).mockResolvedValue({timestamp: Date.UTC(2026, 11, 24, 18, 0), title: 'Weihnachtstreffen'});
-
-        const event = finde(await sammleEinstellungen(), 'Nächstes Event');
-        expect(event.status).toBe('ok');
-        expect(event.wert).toContain('Weihnachtstreffen');
-    });
 });
 
 describe('config.settings – Kanal-Felder (bearbeiten)', () => {
@@ -187,12 +136,50 @@ describe('config.settings – Kanal-Felder (bearbeiten)', () => {
         (twitchUserService.getNotificationChannel as any).mockResolvedValue(null);
         (sportService.getAnnouncementChannel as any).mockResolvedValue('sport-1');
         (greetingService.getChannel as any).mockResolvedValue(null);
+        (client.channels.fetch as any).mockResolvedValue({name: 'irgendwas'});
 
         const felder = await ladeKanalFelder();
         expect(felder.map(f => f.schluessel)).toEqual(['protokoll', 'twitch-kanal', 'sport-kanal', 'morgengruss-kanal']);
         expect(felder.find(f => f.schluessel === 'protokoll')!.aktuelleId).toBe('log-1');
         expect(felder.find(f => f.schluessel === 'sport-kanal')!.aktuelleId).toBe('sport-1');
         expect(felder.find(f => f.schluessel === 'twitch-kanal')!.aktuelleId).toBeNull();
+    });
+
+    // Der Zustand hing bis 2026-07-26 an der separaten read-only-Tabelle (sammleEinstellungen) und
+    // wurde dafür ein zweites Mal aus Redis gelesen; jetzt trägt ihn das Feld selbst.
+    it('ladeKanalFelder markiert nicht gesetzte Felder als leer', async () => {
+        (loggingService.getLogChannel as any).mockResolvedValue(null);
+        (twitchUserService.getNotificationChannel as any).mockResolvedValue(null);
+        (sportService.getAnnouncementChannel as any).mockResolvedValue(null);
+        (greetingService.getChannel as any).mockResolvedValue(null);
+
+        const felder = await ladeKanalFelder();
+        expect(felder.every(f => f.status === 'leer')).toBe(true);
+        // Kein Abruf-Versuch ohne ID.
+        expect(client.channels.fetch).not.toHaveBeenCalled();
+    });
+
+    it('ladeKanalFelder markiert einen gesetzten, aber nicht abrufbaren Kanal als Warnung', async () => {
+        (loggingService.getLogChannel as any).mockResolvedValue('chan-weg');
+        (twitchUserService.getNotificationChannel as any).mockResolvedValue(null);
+        (sportService.getAnnouncementChannel as any).mockResolvedValue(null);
+        (greetingService.getChannel as any).mockResolvedValue(null);
+        (client.channels.fetch as any).mockRejectedValue(new Error('unbekannt'));
+
+        const protokoll = (await ladeKanalFelder()).find(f => f.schluessel === 'protokoll')!;
+        expect(protokoll.status).toBe('warnung');
+        expect(protokoll.aktuelleId).toBe('chan-weg');
+    });
+
+    it('ladeKanalFelder markiert einen abrufbaren Kanal als ok', async () => {
+        (loggingService.getLogChannel as any).mockResolvedValue('log-1');
+        (twitchUserService.getNotificationChannel as any).mockResolvedValue(null);
+        (sportService.getAnnouncementChannel as any).mockResolvedValue(null);
+        (greetingService.getChannel as any).mockResolvedValue(null);
+        (client.channels.fetch as any).mockResolvedValue({name: 'protokoll'});
+
+        const protokoll = (await ladeKanalFelder()).find(f => f.schluessel === 'protokoll')!;
+        expect(protokoll.status).toBe('ok');
     });
 
     it('speichereKanal ruft den passenden Service-Setter', async () => {
@@ -232,6 +219,21 @@ describe('config.settings – Twitch-Rolle (bearbeiten)', () => {
         expect(istGueltigeRolle('r1')).toBe(true);
         expect(istGueltigeRolle('guild-1')).toBe(false);
         expect(istGueltigeRolle('fremd')).toBe(false);
+    });
+
+    it('holeTwitchRolle liefert ID + Zustand (ok / leer / warnung)', async () => {
+        mitRollen();
+
+        (twitchUserService.getNotificationRole as any).mockResolvedValue('r1');
+        expect(await holeTwitchRolle()).toEqual({aktuelleId: 'r1', status: 'ok'});
+
+        // Nicht gesetzt ist bei der optionalen Rolle kein Mangel.
+        (twitchUserService.getNotificationRole as any).mockResolvedValue(null);
+        expect(await holeTwitchRolle()).toEqual({aktuelleId: null, status: 'leer'});
+
+        // Gesetzt, aber die Rolle gibt es nicht mehr.
+        (twitchUserService.getNotificationRole as any).mockResolvedValue('r-weg');
+        expect(await holeTwitchRolle()).toEqual({aktuelleId: 'r-weg', status: 'warnung'});
     });
 
     it('speichereTwitchRolle setzt eine Rolle bzw. entfernt sie bei null', async () => {
@@ -288,9 +290,18 @@ describe('config.settings – Sport-Admin', () => {
         }]]);
     };
 
-    it('holeMitglieder liefert Mitglieder ohne Bots, alphabetisch', () => {
+    it('holeMitglieder liefert Mitglieder ohne Bots, alphabetisch', async () => {
         mitMitgliedern();
-        expect(holeMitglieder().map(m => m.name)).toEqual(['Acaine', 'Zerix']);
+        expect((await holeMitglieder()).map(m => m.name)).toEqual(['Acaine', 'Zerix']);
+    });
+
+    it('holeMitglieder hängt den aktuellen Kilometerstand an (ohne Eintrag: 0)', async () => {
+        mitMitgliedern();
+        (sportService.getAlleKilometer as any).mockResolvedValue({m1: 128.5, LEGACY_KILOMETERS: 1250});
+        expect(await holeMitglieder()).toEqual([
+            {id: 'm1', name: 'Acaine', kilometer: 128.5},
+            {id: 'm2', name: 'Zerix', kilometer: 0},
+        ]);
     });
 
     it('istGueltigesMitglied akzeptiert nur echte Mitglieder (keine Bots)', () => {
@@ -312,6 +323,21 @@ describe('config.settings – Sport-Admin', () => {
 
         (sportService.getLegacyKilometer as any).mockResolvedValue(1250);
         expect(await holeLegacyKilometer()).toBe(1250);
+    });
+
+    // Regression: vor der /config-Migration hing die Meilenstein-Prüfung an den Admin-Commands
+    // (/sport setzen, /altkilometer, /altkilometer-setzen). Die sind entfernt - ohne den Aufruf hier
+    // bliebe eine überschrittene Schwelle liegen, bis zufällig jemand anders etwas einträgt.
+    it('stößt nach jeder summen-erhöhenden Aktion die Meilenstein-Prüfung an', async () => {
+        await speichereKilometer('m1', 42);
+        await addiereLegacyKilometer(10);
+        await setzeLegacyKilometer(500);
+        expect(sportHandler.announceReachedMilestones).toHaveBeenCalledTimes(3);
+    });
+
+    it('prüft Meilensteine NICHT beim Entfernen eines Meilensteins', async () => {
+        await entferneMeilenstein(2000);
+        expect(sportHandler.announceReachedMilestones).not.toHaveBeenCalled();
     });
 
     it('reicht Meilenstein-Aktionen an den Service durch', async () => {
