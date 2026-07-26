@@ -108,6 +108,16 @@ class RedisService {
         return this.#client.sMembers(key);
     }
 
+    async removeFromSet(key: string, value: string): Promise<void> {
+        await this.#client.sRem(key, value);
+    }
+
+    // Ist der Wert im Set? Für "bin ich angemeldet?"-Abfragen, ohne das ganze Set zu holen.
+    // node-redis liefert hier 0/1 statt eines Boolean, daher der explizite Vergleich.
+    async isSetMember(key: string, value: string): Promise<boolean> {
+        return Boolean(await this.#client.sIsMember(key, value));
+    }
+
     // Erhöht einen Zähler um einen (auch gebrochenen) Betrag und gibt den neuen Wert zurück.
     // node-redis liefert das Ergebnis als String, daher parseFloat.
     async incrementFloat(key: string, amount: number): Promise<number> {

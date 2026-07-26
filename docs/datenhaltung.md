@@ -36,6 +36,8 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `PING_PONG:SERIE:<userId>`, `PING_PONG:REKORD:<userId>` | Laufende Siegesserie (bei Niederlage gelöscht) und längste je erreichte Serie | dauerhaft | Duell-Ergebnis, `/pingpong bestenliste` |
 | `TIPP:COOLDOWN:<userId>` | Marker, dass die Person heute schon einen Tipp gesehen hat | 24 Stunden (TTL) | gelegentliche Tipps/Nettigkeiten |
 | `TIPP:USED_COMMANDS:<userId>` | Set der Slash-Command-**Namen**, die die Person je benutzt hat (keine Argumente, keine Inhalte, keine Zeitpunkte) | dauerhaft | Tipps nur zu noch nie benutzten Befehlen |
+| `ANSTUPSER:ABOS` (Set) | Discord-User-IDs, die den täglichen 13:37-Anstupser abonniert haben – **Opt-in**, nur die ID | bis zur Abmeldung (`/anstupser aus`) | tägliche Anstupser-DM |
+| `ANSTUPSER:LAST_DAY` | Tag (YYYY-MM-DD) der zuletzt verschickten Anstupser-Runde | bis zum Überschreiben | Doppelversand-Schutz |
 | `MEMBER:JOIN_COUNT:<userId>` | Zahl: wie oft die Person dem Server schon beigetreten ist | dauerhaft | Beitritts-Meldung im Audit-Log |
 | `BLAHAJ:TOTAL_EUR` | eine einzige Zahl (Summe aller je erwähnten Euro-Beträge) | dauerhaft | `/blahaj` |
 | `EVENT:NEXT` | Timestamp + optionaler Titel des nächsten Community-Events | bis `/event entfernen` | `/event countdown` |

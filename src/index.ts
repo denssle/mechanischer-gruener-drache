@@ -14,6 +14,7 @@ import twitchHandler from "./handlers/twitch.handler.js";
 import blahajHandler from "./handlers/blahaj.handler.js";
 import sportHandler from "./handlers/sport.handler.js";
 import greetingHandler from "./handlers/greeting.handler.js";
+import anstupserHandler from "./handlers/anstupser.handler.js";
 
 // console.log/warn/error in einen Ringpuffer spiegeln, damit sie auf /config einsehbar sind. Moeglichst
 // frueh, damit die Boot-/Laufzeit-Zeilen (Webhook-Server-Start, Fehler) mitgeschnitten werden.
@@ -117,9 +118,10 @@ client.on(Events.MessageBulkDelete, (messages, channel) => {
     });
 });
 
-// Prüfintervall für den täglichen Kilometerstand-Post. Der Handler entscheidet selbst per
-// Tagesmarker, ob wirklich gepostet wird - der Timer stupst nur regelmäßig an (jede Minute reicht
-// für eine "um Mitternacht"-Meldung und holt einen verpassten Tag nach dem Neustart nach).
+// Prüfintervall für die täglichen Aufgaben. Die Handler entscheiden selbst per Tagesmarker, ob
+// wirklich etwas zu tun ist - der Timer stupst nur regelmäßig an (jede Minute reicht für eine
+// "um Mitternacht"-Meldung und holt einen verpassten Tag nach dem Neustart nach). BEWUSST EIN
+// EINZIGER TIMER für alle täglichen Aufgaben, kein zweiter Mechanismus und keine Cron-Dependency.
 const TAEGLICHER_POST_INTERVALL_MS = 60 * 1000;
 
 client.once(Events.ClientReady, async () => {
@@ -133,6 +135,11 @@ client.once(Events.ClientReady, async () => {
         setInterval(() => {
             sportHandler.posteTaeglichenKilometerstand().catch((error) => {
                 console.error('Fehler im täglichen Kilometerstand-Post:', error);
+            });
+            // Prüft selbst auf 13:37 und den eigenen Tagesmarker; holt einen verpassten Tag
+            // bewusst NICHT nach (ein Anstupser um 15 Uhr wäre sinnlos).
+            anstupserHandler.sendeAnstupser().catch((error) => {
+                console.error('Fehler beim täglichen Anstupser:', error);
             });
         }, TAEGLICHER_POST_INTERVALL_MS);
     } catch (error) {

@@ -13,6 +13,7 @@ import hilfe from "./hilfe.command.js";
 import blahaj from "./blahaj.command.js";
 import diagnose from "./diagnose.command.js";
 import rollenspiel from "./rollenspiel.command.js";
+import anstupser from "./anstupser.command.js";
 
 export default [
     ping,
@@ -29,5 +30,6 @@ export default [
     hilfe,
     blahaj,
     diagnose,
-    rollenspiel
+    rollenspiel,
+    anstupser
 ];
