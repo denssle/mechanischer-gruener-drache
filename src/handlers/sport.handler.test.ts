@@ -35,7 +35,7 @@ vi.mock('../client.js', () => ({
 
 import sportService from '../services/sport.service.js';
 import client from '../client.js';
-import sportHandler, { parseKilometer, erkenneAktivitaet, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, formatTag } from './sport.handler.js';
+import sportHandler, { parseKilometer, erkenneAktivitaet, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, formatTag, rundeKilometer } from './sport.handler.js';
 
 const mockEntry = (overrides = {}) => ({
     id: 'entry-1',
@@ -543,6 +543,24 @@ describe('SportHandler', () => {
             await sportHandler.handleGesamt(interaction);
 
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('123 km'));
+        });
+
+        it('rundet die angezeigte Gesamtsumme kaufmännisch (ganze Kilometer)', async () => {
+            vi.mocked(sportService.getGesamtKilometer).mockResolvedValue(249.6);
+            const interaction = { reply: vi.fn() } as any;
+
+            await sportHandler.handleGesamt(interaction);
+
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('250 km'));
+            expect(interaction.reply).not.toHaveBeenCalledWith(expect.stringContaining('249.6'));
+        });
+    });
+
+    describe('rundeKilometer', () => {
+        it('rundet kaufmännisch auf ganze Kilometer', () => {
+            expect(rundeKilometer(249.4)).toBe(249);
+            expect(rundeKilometer(249.5)).toBe(250);
+            expect(rundeKilometer(1000)).toBe(1000);
         });
     });
 

@@ -30,6 +30,15 @@ export function formatTag(date: Date): string {
     return `${jahr}-${monat}-${tag}`;
 }
 
+// Kaufmännisch auf ganze Kilometer runden - NUR für die Anzeige der gemeinsamen Gesamtsumme
+// (Eintrags-Embed, /sport gesamt, Mitternachts-Post). Der gespeicherte Wert bleibt exakt (sonst gingen
+// bei jedem Eintrag Nachkommastellen verloren und die Summe driftete), und die Meilenstein-
+// Schwellenprüfung (`checkAndMarkReachedMilestones` im Service) rechnet bewusst weiter mit dem exakten
+// Wert - sonst gälte eine Schwelle bei 1999,5 km schon als erreicht. Exportiert + getestet.
+export function rundeKilometer(km: number): number {
+    return Math.round(km);
+}
+
 // Schlüsselwörter je Aktivität für den Auto-Listener. Bewusst am WORTANFANG verankert (\b) statt
 // als simples includes: "rad" steckt sonst in "Grad" ("12 km bei 30 Grad") und "gerad" in "gerade"
 // ("ich bin gerade 12 km") - beides würde fälschlich als Radfahren eingetragen.
@@ -149,7 +158,7 @@ class SportHandler {
                 iconURL: interaction.user.displayAvatarURL(),
             })
             .setDescription(
-                `${aktivitaetLabel} – **${kilometer} km**, gemeinsam schon **${gesamtKilometer} km**.`
+                `${aktivitaetLabel} – **${kilometer} km**, gemeinsam schon **${rundeKilometer(gesamtKilometer)} km**.`
             );
 
         await interaction.reply({embeds: [embed], flags: MessageFlags.Ephemeral});
@@ -233,7 +242,7 @@ class SportHandler {
         const gesamtKilometer = await sportService.getGesamtKilometer();
 
         return interaction.reply(
-            `Zusammen habt ihr bereits **${gesamtKilometer} km** zurückgelegt!`
+            `Zusammen habt ihr bereits **${rundeKilometer(gesamtKilometer)} km** zurückgelegt!`
         );
     }
 
@@ -325,7 +334,7 @@ class SportHandler {
             }
 
             const gesamtKilometer = await sportService.getGesamtKilometer();
-            await channel.send(`Kilometerstand um Mitternacht: gemeinsam **${gesamtKilometer} km**.`);
+            await channel.send(`Kilometerstand um Mitternacht: gemeinsam **${rundeKilometer(gesamtKilometer)} km**.`);
             await sportService.setLastDailyPostDay(heute);
         } catch (error) {
             console.error('Fehler beim Posten des täglichen Kilometerstands:', error);
