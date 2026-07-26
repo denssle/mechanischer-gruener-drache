@@ -12,6 +12,7 @@ import charakter from "./character.command.js";
 import hilfe from "./hilfe.command.js";
 import blahaj from "./blahaj.command.js";
 import diagnose from "./diagnose.command.js";
+import rollenspiel from "./rollenspiel.command.js";
 
 export default [
     ping,
@@ -27,5 +28,6 @@ export default [
     charakter,
     hilfe,
     blahaj,
-    diagnose
+    diagnose,
+    rollenspiel
 ];
