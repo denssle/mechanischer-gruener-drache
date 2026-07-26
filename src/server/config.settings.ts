@@ -281,9 +281,10 @@ export interface MorgengrussEintrag {
     // Ohne diese Unterscheidung sähe der Fallback wie eine echte Zuordnung aus.
     gelernt: boolean;
     emoji: MorgengrussEmoji;
-    // Rohwert (Unicode-Zeichen oder Custom-Emoji-ID) für die Vorauswahl im Bearbeiten-Dropdown.
-    // Bei abgeleiteten Einträgen der Fallback-Wert - der steht im Pool und ist damit wählbar.
-    aktuellerWert: string;
+    // Was im Bearbeiten-Textfeld stehen soll: das Emoji selbst bzw. `:name:` beim Server-Emoji.
+    // Bei einer kaputten Zuordnung (Server-Emoji gelöscht) LEER - dort gibt es nichts Sinnvolles
+    // vorzugeben, und ein leeres Pflichtfeld zwingt zu einer bewussten Neueingabe.
+    eingabeWert: string;
 }
 
 // Custom-Emojis liegen als blanke Snowflake-ID im Hash (siehe werteReaktionenAus: `emoji.id ?? name`),
@@ -298,55 +299,88 @@ function deuteEmoji(gespeichert: string): MorgengrussEmoji {
         : {art: 'unbekannt', id: gespeichert};
 }
 
-// Eine wählbare Option im Emoji-Dropdown. `wert` ist das, was in Redis landet (Unicode-Zeichen ODER
-// Custom-Emoji-ID - genau die zwei Formen, die auch der Lern-Scan schreibt), `label` das, was im
-// <option> steht. Custom-Emojis können dort nur als Text (`:name:`) erscheinen: ein <option> kann
-// kein <img> enthalten. Die Tabellenspalte daneben zeigt das Emoji weiterhin als Bild.
-export interface EmojiOption {
-    wert: string;
-    label: string;
-}
-
-// Whitelist UND Dropdown-Inhalt (Muster wie holeTextKanaele/holeRollen): der Fallback-Pool, alle
-// Server-Emojis und alles, was aktuell schon vergeben ist. Letzteres ist nötig, damit ein gelerntes
-// Emoji außerhalb des Pools (der Lern-Scan liefert beliebige Reaktions-Emojis) nicht beim ersten
-// Speichern verloren geht - man könnte es sonst nicht mehr auswählen.
-// Kaputte Zuordnungen (ID eines gelöschten Server-Emojis) werden BEWUSST nicht angeboten.
-export async function holeEmojiAuswahl(): Promise<EmojiOption[]> {
-    const optionen = new Map<string, EmojiOption>();
-
-    for (const zeichen of GRUSS_EMOJIS) {
-        optionen.set(zeichen, {wert: zeichen, label: zeichen});
-    }
+// Vorschläge fürs <datalist> am Eingabefeld: der Fallback-Pool, die Server-Emojis als `:name:` und
+// alles schon Vergebene. BEWUSST nur Vorschläge, keine Whitelist - eine geschlossene Liste war bis
+// 2026-07-26 der Weg und ist daran gescheitert, dass gängige Emojis (🍪) schlicht nicht drin waren.
+// Getippt werden darf alles, was deuteEmojiEingabe akzeptiert.
+export async function holeEmojiVorschlaege(): Promise<string[]> {
+    const vorschlaege = new Set<string>(GRUSS_EMOJIS);
 
     const guild = client.guilds.cache.get(config.GUILD_ID);
     const serverEmojis = [...(guild?.emojis.cache.values() ?? [])]
         .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'de'));
     for (const emoji of serverEmojis) {
-        optionen.set(emoji.id, {wert: emoji.id, label: `:${emoji.name ?? emoji.id}:`});
+        if (emoji.name) {
+            vorschlaege.add(`:${emoji.name}:`);
+        }
     }
 
     const vergeben = await greetingService.getLearnedEmojis().catch(() => ({} as Record<string, string>));
     for (const wert of Object.values(vergeben)) {
-        if (optionen.has(wert)) continue;
-        // Nur Unicode-Zeichen nachtragen: eine ID, die oben nicht als Server-Emoji auftauchte,
-        // gibt es nicht mehr - die soll man nicht erneut vergeben können.
+        // IDs nicht vorschlagen - als `:name:` stehen die Server-Emojis oben schon drin, und eine
+        // ID ohne zugehöriges Emoji gibt es nicht mehr.
         if (!/^\d+$/.test(wert)) {
-            optionen.set(wert, {wert, label: wert});
+            vorschlaege.add(wert);
         }
     }
 
-    return [...optionen.values()];
+    return [...vorschlaege];
 }
 
-// Serverseitige Validierung gegen dieselbe Liste - über das Formular kann damit nichts anderes in
-// Redis landen. Async, weil die Liste die aktuell vergebenen Emojis einschließt (ein Redis-Read).
-export async function istGueltigesEmoji(wert: string): Promise<boolean> {
-    return (await holeEmojiAuswahl()).some(option => option.wert === wert);
+// Längenobergrenze für eine Emoji-Eingabe (UTF-16-Einheiten). Zusammengesetzte Emojis (ZWJ-Sequenzen
+// wie 👩‍💻, Hautfarben, Flaggen) brauchen mehrere Einheiten; alles darüber ist kein einzelnes Emoji.
+const MAX_EMOJI_LAENGE = 16;
+
+// Nur Emoji-Bestandteile - keine Buchstaben, Ziffernfolgen, Leerzeichen oder sonstiger Text.
+// ‍ = Zero Width Joiner (verbindet ZWJ-Sequenzen), ️ = Variation Selector-16 (Emoji-Stil).
+// Bewusst als Escape geschrieben: als rohes Zeichen wären beide im Quelltext unsichtbar.
+const NUR_EMOJI_TEILE = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\p{Regional_Indicator}|‍|️)+$/u;
+// Mindestens ein "echtes" Emoji-Zeichen: \p{Emoji_Component} allein wäre z.B. auch eine blanke
+// Ziffer. ⃣ = Combining Enclosing Keycap, damit 1️⃣ & Co. durchgehen.
+const ECHTES_EMOJI = /[\p{Extended_Pictographic}\p{Regional_Indicator}⃣]/u;
+
+// Deutet die Eingabe des Textfelds und gibt zurück, was in Redis landen soll (Unicode-Zeichen ODER
+// Custom-Emoji-ID) - oder null, wenn es kein brauchbares Emoji ist. Drei akzeptierte Formen:
+//   1. `:name:`        - Server-Emoji über seinen Namen (wird zur ID aufgelöst)
+//   2. `<:name:id>`    - was Discord beim Kopieren eines Server-Emojis einfügt
+//   3. das Emoji selbst - beliebiges Unicode-Emoji, auch zusammengesetzt
+// Server-Emojis werden gegen die Guild geprüft: eine erfundene ID würde beim Gruß an message.react
+// scheitern, das soll hier auffallen und nicht später stillschweigend.
+export function deuteEmojiEingabe(eingabe: string): string | null {
+    const text = eingabe.trim();
+    if (!text || text.length > MAX_EMOJI_LAENGE) {
+        return null;
+    }
+
+    const guild = client.guilds.cache.get(config.GUILD_ID);
+    const alsMarkup = /^<a?:([a-zA-Z0-9_]{2,32}):(\d+)>$/.exec(text);
+    if (alsMarkup) {
+        return guild?.emojis.cache.has(alsMarkup[2]) ? alsMarkup[2] : null;
+    }
+
+    const alsName = /^:([a-zA-Z0-9_]{2,32}):$/.exec(text);
+    if (alsName) {
+        return guild?.emojis.cache.find(emoji => emoji.name === alsName[1])?.id ?? null;
+    }
+
+    return NUR_EMOJI_TEILE.test(text) && ECHTES_EMOJI.test(text) ? text : null;
 }
 
 export async function speichereMorgengrussEmoji(userId: string, wert: string): Promise<void> {
     await greetingService.setLearnedEmoji(userId, wert);
+}
+
+// Umkehrung von deuteEmojiEingabe: die tippbare Form eines dargestellten Emojis. Server-Emojis als
+// `:name:`, damit sie ohne ID-Abtippen wieder eingegeben werden können.
+function eingabeFuer(emoji: MorgengrussEmoji): string {
+    switch (emoji.art) {
+        case 'unicode':
+            return emoji.zeichen;
+        case 'custom':
+            return `:${emoji.name}:`;
+        case 'unbekannt':
+            return '';
+    }
 }
 
 // Übersicht Person → persönliches Morgengruß-Emoji für /config. Listet ALLE Mitglieder, nicht nur die
@@ -356,14 +390,14 @@ export async function holeMorgengrussEmojis(): Promise<MorgengrussEintrag[]> {
     const gelernt = await greetingService.getLearnedEmojis().catch(() => ({} as Record<string, string>));
     return guildMitglieder().map(mitglied => {
         const gespeichert = gelernt[mitglied.id];
-        const wert = gespeichert ?? ableiteEmoji(mitglied.id);
+        const emoji: MorgengrussEmoji = gespeichert !== undefined
+            ? deuteEmoji(gespeichert)
+            : {art: 'unicode', zeichen: ableiteEmoji(mitglied.id)};
         return {
             ...mitglied,
             gelernt: gespeichert !== undefined,
-            emoji: gespeichert !== undefined
-                ? deuteEmoji(gespeichert)
-                : {art: 'unicode' as const, zeichen: wert},
-            aktuellerWert: wert,
+            emoji,
+            eingabeWert: eingabeFuer(emoji),
         };
     });
 }

@@ -26,12 +26,12 @@ import {
 import {SportMilestone} from '../types/sport.js';
 import {
     addiereLegacyKilometer,
-    EmojiOption,
+    deuteEmojiEingabe,
     entferneEvent,
     entferneMeilenstein,
     EventFelder,
     FeldStatus,
-    holeEmojiAuswahl,
+    holeEmojiVorschlaege,
     holeEventFelder,
     holeLegacyKilometer,
     holeMeilensteine,
@@ -42,7 +42,6 @@ import {
     holeTwitchRolle,
     istGueltigerTextKanal,
     istGueltigeRolle,
-    istGueltigesEmoji,
     istGueltigesMitglied,
     istKanalFeld,
     KanalFeld,
@@ -334,36 +333,31 @@ export function renderMeilensteinListe(meilensteine: SportMilestone[], csrfToken
 // trennt Gelerntes vom abgeleiteten Fallback - sonst sähe der Fallback wie eine echte Zuordnung aus.
 export function renderMorgengrussEmojis(
     eintraege: MorgengrussEintrag[],
-    auswahl: EmojiOption[],
+    vorschlaege: string[],
     csrfToken: string
 ): string {
     if (!eintraege.length) {
         return '<p class="status-leer">Keine Mitglieder gefunden.</p>';
     }
-    // Ein Formular je Zeile, alle gegen dieselbe Route. Das Dropdown ist zugleich die Whitelist
-    // (Muster wie Kanal/Rolle); der aktuelle Wert steht vorausgewählt drin.
-    const aendern = (eintrag: MorgengrussEintrag): string => {
-        if (!auswahl.length) {
-            return '<span class="status-leer">keine Auswahl verfügbar</span>';
-        }
-        const optionen = auswahl.map(option =>
-            `<option value="${escapeHtml(option.wert)}"${option.wert === eintrag.aktuellerWert ? ' selected' : ''}>${escapeHtml(option.label)}</option>`
-        ).join('');
-        // Steht der aktuelle Wert nicht in der Auswahl (gelernte ID eines gelöschten Server-Emojis),
-        // hätte KEINE Option ein `selected` - der Browser zeigt dann einfach die erste an, als wäre
-        // sie gesetzt. Dieselbe Falle wie bei den Kanal-Dropdowns, deshalb dieselbe Lösung:
-        // deaktivierter Platzhalter + required, damit man aktiv etwas wählen muss.
-        const fehlt = !auswahl.some(option => option.wert === eintrag.aktuellerWert);
-        const platzhalter = fehlt
-            ? '<option value="" disabled selected>— nicht mehr verfügbar —</option>'
-            : '';
-        return `<form method="post" action="/config/morgengruss-emoji">
+    // Ein Formular je Zeile, alle gegen dieselbe Route. FREITEXT statt Dropdown (seit 2026-07-26):
+    // eine geschlossene Auswahl kannte gängige Emojis wie 🍪 schlicht nicht. Das <datalist> bietet
+    // Pool und Server-Emojis weiterhin zum Anklicken an, schränkt die Eingabe aber NICHT ein -
+    // geprüft wird serverseitig in deuteEmojiEingabe.
+    const aendern = (eintrag: MorgengrussEintrag): string =>
+        `<form method="post" action="/config/morgengruss-emoji">
             <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
             <input type="hidden" name="mitglied" value="${escapeHtml(eintrag.id)}">
-            <select name="emoji" required aria-label="Emoji für ${escapeHtml(eintrag.name)}">${platzhalter}${optionen}</select>
+            <input type="text" name="emoji" list="emoji-vorschlaege" required
+                   value="${escapeHtml(eintrag.eingabeWert)}"
+                   size="10" maxlength="16" autocomplete="off"
+                   aria-label="Emoji für ${escapeHtml(eintrag.name)}">
             <button type="submit">Speichern</button>
         </form>`;
-    };
+
+    // Einmal für alle Zeilen - ein <datalist> je Zeile wäre dieselbe Liste dutzendfach im HTML.
+    const datalist = `<datalist id="emoji-vorschlaege">${
+        vorschlaege.map(v => `<option value="${escapeHtml(v)}"></option>`).join('')
+    }</datalist>`;
     const zelle = (emoji: MorgengrussEmoji): string => {
         switch (emoji.art) {
             case 'unicode':
@@ -382,10 +376,12 @@ export function renderMorgengrussEmojis(
         `<td class="${e.gelernt ? '' : 'status-leer'}">${e.gelernt ? 'gelernt' : 'abgeleitet'}</td>` +
         `<td>${aendern(e)}</td></tr>`
     ).join('\n');
-    return `<table class="emojis">
+    return `${datalist}<table class="emojis">
         <thead><tr><th>Name</th><th>Emoji</th><th>Herkunft</th><th>Ändern</th></tr></thead>
         <tbody>${zeilen}</tbody>
-    </table>`;
+    </table>
+    <p class="feld-hinweis">Ein beliebiges Emoji eintippen oder einfügen. Server-Emojis als
+    <code>:name:</code> – die Vorschlagsliste am Feld zeigt Pool und Server-Emojis an.</p>`;
 }
 
 // Die Emoji-Übersicht liegt seit 2026-07-26 auf einer EIGENEN Seite (/config/morgengruss-emojis),
@@ -400,7 +396,7 @@ export function renderMorgengrussEmojiLink(anzahl: number): string {
 // damit sie sich genauso ohne Deploy in der Vorschau bauen lässt.
 export function renderMorgengrussEmojiSeite(
     eintraege: MorgengrussEintrag[],
-    auswahl: EmojiOption[],
+    vorschlaege: string[],
     csrfToken: string,
     gespeichert = false
 ): string {
@@ -408,7 +404,7 @@ export function renderMorgengrussEmojiSeite(
     <p>Womit der Bot die erste Nachricht des Tages quittiert. „Gelernt" stammt aus der Chat-Historie,
     „abgeleitet" ist der feste Fallback aus der User-ID.</p>
     ${gespeichert ? '<p class="meldung status-ok">Persönliches Emoji gespeichert.</p>' : ''}
-    ${renderMorgengrussEmojis(eintraege, auswahl, csrfToken)}
+    ${renderMorgengrussEmojis(eintraege, vorschlaege, csrfToken)}
     <p><a href="/config">Zurück zu den Einstellungen</a></p>`;
 }
 
@@ -843,12 +839,12 @@ export async function handleSportSpeichern(req: Request, res: Response): Promise
 export async function handleMorgengrussEmojiSeite(req: Request, res: Response): Promise<void> {
     try {
         const userId = res.locals.configUserId as string;
-        const [eintraege, auswahl] = await Promise.all([
+        const [eintraege, vorschlaege] = await Promise.all([
             holeMorgengrussEmojis(),
-            holeEmojiAuswahl(),
+            holeEmojiVorschlaege(),
         ]);
         res.type('html').send(renderPage(renderMorgengrussEmojiSeite(
-            eintraege, auswahl, createCsrfToken(userId), req.query.gespeichert === '1'
+            eintraege, vorschlaege, createCsrfToken(userId), req.query.gespeichert === '1'
         )));
     } catch (error) {
         console.error('Fehler beim Laden der Morgengruß-Emojis:', error);
@@ -880,13 +876,19 @@ export async function handleMorgengrussEmojiSpeichern(req: Request, res: Respons
         return;
     }
 
-    const emoji = typeof body.emoji === 'string' ? body.emoji : '';
-    if (!await istGueltigesEmoji(emoji)) {
-        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekanntes Emoji – bitte eines aus der Liste wählen.')));
+    // Freitext: deuteEmojiEingabe entscheidet, was gespeichert wird (Zeichen oder Server-Emoji-ID)
+    // und lehnt alles ab, was kein brauchbares Emoji ist - ein erfundenes `:name:` oder normaler
+    // Text würde beim Gruß sonst still an message.react scheitern.
+    const wert = deuteEmojiEingabe(typeof body.emoji === 'string' ? body.emoji : '');
+    if (wert === null) {
+        res.status(400).type('html').send(renderPage(forbiddenBody(
+            'Das ist kein Emoji, das ich setzen kann. Erlaubt sind ein einzelnes Emoji ' +
+            '(z. B. 🍪) oder ein Server-Emoji als <code>:name:</code>.'
+        )));
         return;
     }
 
-    await speichereMorgengrussEmoji(mitglied, emoji);
+    await speichereMorgengrussEmoji(mitglied, wert);
     // Zurück auf die ausgelagerte Seite (nicht auf /config), damit man dort bleibt, wo man
     // gearbeitet hat - Post/Redirect/Get wie überall.
     res.redirect('/config/morgengruss-emojis?gespeichert=1');
