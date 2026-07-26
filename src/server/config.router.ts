@@ -26,34 +26,38 @@ import {
 import {SportMilestone} from '../types/sport.js';
 import {
     addiereLegacyKilometer,
+    EmojiOption,
     entferneEvent,
     entferneMeilenstein,
     EventFelder,
     FeldStatus,
+    holeEmojiAuswahl,
     holeEventFelder,
     holeLegacyKilometer,
     holeMeilensteine,
     holeMitglieder,
     holeMorgengrussEmojis,
-    MorgengrussEintrag,
-    MorgengrussEmoji,
     holeRollen,
     holeTextKanaele,
     holeTwitchRolle,
     istGueltigerTextKanal,
     istGueltigeRolle,
+    istGueltigesEmoji,
     istGueltigesMitglied,
     istKanalFeld,
     KanalFeld,
     KanalOption,
     ladeKanalFelder,
     MitgliedOption,
+    MorgengrussEintrag,
+    MorgengrussEmoji,
     RollenFeld,
     RollenOption,
     setzeLegacyKilometer,
     speichereEventDaten,
     speichereKanal,
     speichereKilometer,
+    speichereMorgengrussEmoji,
     speichereTwitchRolle
 } from './config.settings.js';
 
@@ -325,10 +329,38 @@ export function renderMeilensteinListe(meilensteine: SportMilestone[], csrfToken
 // nirgends einsehbar und zeigte sich erst, wenn jemand am nächsten Morgen schrieb.
 // Custom-Emojis brauchen ein <img> (Discord-Markup rendert nicht im Browser), die Spalte „Herkunft"
 // trennt Gelerntes vom abgeleiteten Fallback - sonst sähe der Fallback wie eine echte Zuordnung aus.
-export function renderMorgengrussEmojis(eintraege: MorgengrussEintrag[]): string {
+export function renderMorgengrussEmojis(
+    eintraege: MorgengrussEintrag[],
+    auswahl: EmojiOption[],
+    csrfToken: string
+): string {
     if (!eintraege.length) {
         return '<p class="status-leer">Keine Mitglieder gefunden.</p>';
     }
+    // Ein Formular je Zeile, alle gegen dieselbe Route. Das Dropdown ist zugleich die Whitelist
+    // (Muster wie Kanal/Rolle); der aktuelle Wert steht vorausgewählt drin.
+    const aendern = (eintrag: MorgengrussEintrag): string => {
+        if (!auswahl.length) {
+            return '<span class="status-leer">keine Auswahl verfügbar</span>';
+        }
+        const optionen = auswahl.map(option =>
+            `<option value="${escapeHtml(option.wert)}"${option.wert === eintrag.aktuellerWert ? ' selected' : ''}>${escapeHtml(option.label)}</option>`
+        ).join('');
+        // Steht der aktuelle Wert nicht in der Auswahl (gelernte ID eines gelöschten Server-Emojis),
+        // hätte KEINE Option ein `selected` - der Browser zeigt dann einfach die erste an, als wäre
+        // sie gesetzt. Dieselbe Falle wie bei den Kanal-Dropdowns, deshalb dieselbe Lösung:
+        // deaktivierter Platzhalter + required, damit man aktiv etwas wählen muss.
+        const fehlt = !auswahl.some(option => option.wert === eintrag.aktuellerWert);
+        const platzhalter = fehlt
+            ? '<option value="" disabled selected>— nicht mehr verfügbar —</option>'
+            : '';
+        return `<form method="post" action="/config/morgengruss-emoji">
+            <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+            <input type="hidden" name="mitglied" value="${escapeHtml(eintrag.id)}">
+            <select name="emoji" required aria-label="Emoji für ${escapeHtml(eintrag.name)}">${platzhalter}${optionen}</select>
+            <button type="submit">Speichern</button>
+        </form>`;
+    };
     const zelle = (emoji: MorgengrussEmoji): string => {
         switch (emoji.art) {
             case 'unicode':
@@ -344,10 +376,11 @@ export function renderMorgengrussEmojis(eintraege: MorgengrussEintrag[]): string
     const zeilen = eintraege.map(e =>
         `<tr><td>${escapeHtml(e.name)}</td>` +
         `<td class="emoji-zelle">${zelle(e.emoji)}</td>` +
-        `<td class="${e.gelernt ? '' : 'status-leer'}">${e.gelernt ? 'gelernt' : 'abgeleitet'}</td></tr>`
+        `<td class="${e.gelernt ? '' : 'status-leer'}">${e.gelernt ? 'gelernt' : 'abgeleitet'}</td>` +
+        `<td>${aendern(e)}</td></tr>`
     ).join('\n');
     return `<table class="emojis">
-        <thead><tr><th>Name</th><th>Emoji</th><th>Herkunft</th></tr></thead>
+        <thead><tr><th>Name</th><th>Emoji</th><th>Herkunft</th><th>Ändern</th></tr></thead>
         <tbody>${zeilen}</tbody>
     </table>`;
 }
@@ -437,6 +470,7 @@ export interface ConfigSeiteDaten {
     legacyKilometer: number;
     meilensteine: SportMilestone[];
     morgengrussEmojis: MorgengrussEintrag[];
+    emojiAuswahl: EmojiOption[];
     csrfToken: string;
     meldung?: Meldung;
 }
@@ -478,7 +512,7 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
             kanal('protokoll'),
             meldungFuer('protokoll')) +
         renderBereich('morgengruss', 'Morgengruß',
-            kanal('morgengruss-kanal') + renderMorgengrussLernen(csrf) + renderMorgengrussEmojis(daten.morgengrussEmojis),
+            kanal('morgengruss-kanal') + renderMorgengrussLernen(csrf) + renderMorgengrussEmojis(daten.morgengrussEmojis, daten.emojiAuswahl, csrf),
             meldungFuer('morgengruss')) +
         renderBereich('event', 'Event',
             renderEventFormular(daten.eventFelder, csrf),
@@ -566,6 +600,7 @@ const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
     'twitch-kanal': {bereich: 'twitch', text: 'Twitch-Benachrichtigungskanal gespeichert.'},
     'sport-kanal': {bereich: 'sport', text: 'Sport-Ankündigungskanal gespeichert.'},
     'morgengruss-kanal': {bereich: 'morgengruss', text: 'Morgengruß-Kanal gespeichert.'},
+    'morgengruss-emoji': {bereich: 'morgengruss', text: 'Persönliches Emoji gespeichert.'},
     'twitch-rolle': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle gespeichert.'},
     'twitch-rolle-entfernt': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle entfernt.'},
     'event': {bereich: 'event', text: 'Event gespeichert.'},
@@ -614,7 +649,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
         const userId = res.locals.configUserId as string;
         // Parallel: die Abfragen hängen nicht voneinander ab, und jede ist mindestens ein
         // Redis-Roundtrip (ladeKanalFelder zusätzlich vier channels.fetch).
-        const [kanalFelder, twitchRolle, eventFelder, mitglieder, legacyKilometer, meilensteine, morgengrussEmojis] = await Promise.all([
+        const [kanalFelder, twitchRolle, eventFelder, mitglieder, legacyKilometer, meilensteine, morgengrussEmojis, emojiAuswahl] = await Promise.all([
             ladeKanalFelder(),
             holeTwitchRolle(),
             holeEventFelder(),
@@ -622,6 +657,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
             holeLegacyKilometer(),
             holeMeilensteine(),
             holeMorgengrussEmojis(),
+            holeEmojiAuswahl(),
         ]);
         const html = renderConfigSeite({
             kanalFelder,
@@ -633,6 +669,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
             legacyKilometer,
             meilensteine,
             morgengrussEmojis,
+            emojiAuswahl,
             csrfToken: createCsrfToken(userId),
             meldung: leseMeldung(req),
         });
@@ -775,6 +812,37 @@ export async function handleSportSpeichern(req: Request, res: Response): Promise
     }
 
     zurueckZumBereich(res, aktion);
+}
+
+// Setzt das persönliche Morgengruß-Emoji einer Person von Hand (korrigiert also, was der Lern-Scan
+// abgeleitet hat). Reihenfolge wie überall: CSRF → Mitglied gegen die Whitelist → Emoji gegen die
+// Auswahlliste → speichern → Redirect. Die Emoji-Prüfung ist async, weil die Whitelist die aktuell
+// vergebenen Werte einschließt (sonst könnte man ein gelerntes Emoji außerhalb des Pools nicht
+// wieder auswählen).
+export async function handleMorgengrussEmojiSpeichern(req: Request, res: Response): Promise<void> {
+    const userId = res.locals.configUserId as string;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const token = typeof body._csrf === 'string' ? body._csrf : undefined;
+
+    if (!verifyCsrfToken(userId, token)) {
+        res.status(403).type('html').send(renderPage(forbiddenBody('Ungültiges oder fehlendes CSRF-Token.')));
+        return;
+    }
+
+    const mitglied = typeof body.mitglied === 'string' ? body.mitglied : '';
+    if (!istGueltigesMitglied(mitglied)) {
+        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekanntes Mitglied.')));
+        return;
+    }
+
+    const emoji = typeof body.emoji === 'string' ? body.emoji : '';
+    if (!await istGueltigesEmoji(emoji)) {
+        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekanntes Emoji – bitte eines aus der Liste wählen.')));
+        return;
+    }
+
+    await speichereMorgengrussEmoji(mitglied, emoji);
+    zurueckZumBereich(res, 'morgengruss-emoji');
 }
 
 // Morgengruß: stößt den Historien-Scan an (früher /morgengruss lernen). CSRF zuerst, dann scannen -
@@ -921,6 +989,7 @@ postRoute('/config/rolle', handleRolleSpeichern, 'Fehler beim Speichern der Roll
 postRoute('/config/event', handleEventSpeichern, 'Fehler beim Speichern des Events');
 postRoute('/config/sport', handleSportSpeichern, 'Fehler beim Speichern der Sport-Einstellung');
 postRoute('/config/morgengruss', handleMorgengrussLernen, 'Fehler beim Morgengruß-Lernen', 'Lernen fehlgeschlagen.');
+postRoute('/config/morgengruss-emoji', handleMorgengrussEmojiSpeichern, 'Fehler beim Speichern des Morgengruß-Emojis');
 
 configRouter.get('/config/login', handleLogin);
 configRouter.get('/config/callback',

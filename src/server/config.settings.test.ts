@@ -28,7 +28,7 @@ vi.mock('../services/logging.service.js', () => ({
 vi.mock('../services/greeting.service.js', () => ({
     default: {
         getChannel: vi.fn(), setChannel: vi.fn(),
-        getLearnedEmojis: vi.fn(async () => ({}))
+        getLearnedEmojis: vi.fn(async () => ({})), setLearnedEmoji: vi.fn()
     }
 }));
 vi.mock('../services/event.service.js', () => ({
@@ -39,7 +39,7 @@ import client from '../client.js';
 import twitchUserService from '../services/twitch.user.service.js';
 import sportService from '../services/sport.service.js';
 import sportHandler from '../handlers/sport.handler.js';
-import {ableiteEmoji} from '../handlers/greeting.handler.js';
+import {ableiteEmoji, GRUSS_EMOJIS} from '../handlers/greeting.handler.js';
 import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import eventService from '../services/event.service.js';
@@ -52,11 +52,13 @@ import {
     holeLegacyKilometer,
     holeMeilensteine,
     holeMitglieder,
+    holeEmojiAuswahl,
     holeMorgengrussEmojis,
     holeRollen,
     holeTextKanaele,
     holeTwitchRolle,
     istGueltigerTextKanal,
+    istGueltigesEmoji,
     istGueltigeRolle,
     istGueltigesMitglied,
     istKanalFeld,
@@ -65,6 +67,7 @@ import {
     speichereEventDaten,
     speichereKanal,
     speichereKilometer,
+    speichereMorgengrussEmoji,
     speichereTwitchRolle
 } from './config.settings.js';
 
@@ -427,6 +430,74 @@ describe('config.settings – Morgengruß-Emojis', () => {
         const eintraege = await holeMorgengrussEmojis();
         expect(eintraege).toHaveLength(3);
         expect(eintraege.every(e => e.gelernt === false)).toBe(true);
+    });
+
+    // Rohwert für die Vorauswahl im Bearbeiten-Dropdown - bei Custom-Emojis die ID, nicht die URL.
+    it('liefert den Rohwert für die Dropdown-Vorauswahl', async () => {
+        mitServer();
+        (greetingService.getLearnedEmojis as any).mockResolvedValue({m1: '🦊', m2: '555'});
+
+        const eintraege = await holeMorgengrussEmojis();
+        expect(eintraege.find(e => e.id === 'm1')!.aktuellerWert).toBe('🦊');
+        expect(eintraege.find(e => e.id === 'm2')!.aktuellerWert).toBe('555');
+        // Abgeleitete tragen ihren Fallback-Wert - der steht im Pool und ist damit wählbar.
+        expect(eintraege.find(e => e.id === 'm3')!.aktuellerWert).toBe(ableiteEmoji('m3'));
+    });
+
+    describe('holeEmojiAuswahl / istGueltigesEmoji', () => {
+        it('bietet den Fallback-Pool und die Server-Emojis an', async () => {
+            mitServer();
+            (greetingService.getLearnedEmojis as any).mockResolvedValue({});
+
+            const auswahl = await holeEmojiAuswahl();
+            for (const zeichen of GRUSS_EMOJIS) {
+                expect(auswahl.some(o => o.wert === zeichen)).toBe(true);
+            }
+            // Custom-Emojis als :name: - ein <option> kann kein <img> enthalten.
+            expect(auswahl).toContainEqual({wert: '555', label: ':blahaj:'});
+        });
+
+        // Der Lern-Scan liefert beliebige Reaktions-Emojis, nicht nur die aus dem Pool. Ohne sie in
+        // der Auswahl könnte man ein gelerntes Emoji nach dem ersten Speichern nie wieder setzen.
+        it('nimmt bereits vergebene Emojis außerhalb des Pools mit auf', async () => {
+            mitServer();
+            (greetingService.getLearnedEmojis as any).mockResolvedValue({m1: '🦊'});
+
+            expect(await holeEmojiAuswahl()).toContainEqual({wert: '🦊', label: '🦊'});
+            expect(await istGueltigesEmoji('🦊')).toBe(true);
+        });
+
+        // Eine ID, die nicht (mehr) zu einem Server-Emoji gehört, wäre kaputt - damit soll man
+        // niemanden neu belegen können.
+        it('bietet die ID eines gelöschten Server-Emojis NICHT an', async () => {
+            mitServer();
+            (greetingService.getLearnedEmojis as any).mockResolvedValue({m1: '999'});
+
+            expect((await holeEmojiAuswahl()).some(o => o.wert === '999')).toBe(false);
+            expect(await istGueltigesEmoji('999')).toBe(false);
+        });
+
+        it('führt jedes Emoji nur einmal auf', async () => {
+            mitServer();
+            (greetingService.getLearnedEmojis as any).mockResolvedValue({m1: GRUSS_EMOJIS[0], m2: '555'});
+
+            const werte = (await holeEmojiAuswahl()).map(o => o.wert);
+            expect(werte).toHaveLength(new Set(werte).size);
+        });
+
+        it('lehnt alles ab, was nicht in der Auswahl steht', async () => {
+            mitServer();
+            (greetingService.getLearnedEmojis as any).mockResolvedValue({});
+
+            expect(await istGueltigesEmoji('🦊')).toBe(false);
+            expect(await istGueltigesEmoji('<script>')).toBe(false);
+            expect(await istGueltigesEmoji('')).toBe(false);
+        });
+    });
+
+    it('speichereMorgengrussEmoji schreibt in den gelernten Hash', async () => {
+        await speichereMorgengrussEmoji('m1', '🦊');
+        expect(greetingService.setLearnedEmoji).toHaveBeenCalledWith('m1', '🦊');
     });
 
     it('reicht Meilenstein-Aktionen an den Service durch', async () => {

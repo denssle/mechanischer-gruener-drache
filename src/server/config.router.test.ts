@@ -50,7 +50,10 @@ vi.mock('./config.settings.js', () => ({
     speichereEventDaten: vi.fn(() => Promise.resolve()),
     entferneEvent: vi.fn(() => Promise.resolve()),
     holeMitglieder: vi.fn(async () => [{id: 'm1', name: 'Tirsis', kilometer: 128.5}]),
-    holeMorgengrussEmojis: vi.fn(async () => [{id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}}]),
+    holeMorgengrussEmojis: vi.fn(async () => [{id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}, aktuellerWert: '🦊'}]),
+    holeEmojiAuswahl: vi.fn(async () => [{wert: '🦊', label: '🦊'}]),
+    istGueltigesEmoji: vi.fn(async () => true),
+    speichereMorgengrussEmoji: vi.fn(async () => undefined),
     istGueltigesMitglied: vi.fn((id: string) => id === 'm1'),
     speichereKilometer: vi.fn(() => Promise.resolve()),
     holeLegacyKilometer: vi.fn(() => Promise.resolve(1250)),
@@ -75,6 +78,7 @@ import {
     handleLogin,
     handleLogout,
     handleLogs,
+    handleMorgengrussEmojiSpeichern,
     handleMorgengrussLernen,
     handleRolleSpeichern,
     handleSportSpeichern,
@@ -120,6 +124,8 @@ const setGuildMember = (member: unknown, throwOnFetch = false) => {
 
 const adminMember = {permissions: {has: vi.fn().mockReturnValue(true)}};
 const normalMember = {permissions: {has: vi.fn().mockReturnValue(false)}};
+
+const AUSWAHL = [{wert: '🦊', label: '🦊'}, {wert: '123', label: ':blahaj:'}];
 
 describe('config.router', () => {
     beforeEach(() => {
@@ -745,9 +751,9 @@ describe('config.router', () => {
     describe('renderMorgengrussEmojis', () => {
         it('zeigt Name, Emoji und Herkunft je Mitglied', () => {
             const html = renderMorgengrussEmojis([
-                {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}},
-                {id: 'm2', name: 'Acaine', gelernt: false, emoji: {art: 'unicode', zeichen: '🌿'}},
-            ]);
+                {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}, aktuellerWert: '🦊'},
+                {id: 'm2', name: 'Acaine', gelernt: false, emoji: {art: 'unicode', zeichen: '🌿'}, aktuellerWert: '🌿'},
+            ], AUSWAHL, 'tok');
             expect(html).toContain('Tirsis');
             expect(html).toContain('🦊');
             expect(html).toContain('gelernt');
@@ -757,8 +763,8 @@ describe('config.router', () => {
         // Discord-Markup (<:name:id>) rendert nur in Discord - im Browser braucht es ein <img>.
         it('rendert Custom-Emojis als Bild', () => {
             const html = renderMorgengrussEmojis([
-                {id: 'm1', name: 'Zerix', gelernt: true, emoji: {art: 'custom', url: 'https://cdn/1.png', name: 'blahaj'}},
-            ]);
+                {id: 'm1', name: 'Zerix', gelernt: true, emoji: {art: 'custom', url: 'https://cdn/1.png', name: 'blahaj'}, aktuellerWert: '1'},
+            ], AUSWAHL, 'tok');
             expect(html).toContain('<img class="emoji" src="https://cdn/1.png"');
             expect(html).toContain('alt="blahaj"');
         });
@@ -767,23 +773,101 @@ describe('config.router', () => {
         // sichtbar gemacht statt als leere Zelle verschluckt.
         it('macht ein gelöschtes Server-Emoji sichtbar', () => {
             const html = renderMorgengrussEmojis([
-                {id: 'm1', name: 'Wer', gelernt: true, emoji: {art: 'unbekannt', id: '999'}},
-            ]);
+                {id: 'm1', name: 'Wer', gelernt: true, emoji: {art: 'unbekannt', id: '999'}, aktuellerWert: '999'},
+            ], AUSWAHL, 'tok');
             expect(html).toContain('gelöscht');
             expect(html).toContain('status-warnung');
         });
 
         it('escaped Namen und Emoji-Werte (kein XSS)', () => {
             const html = renderMorgengrussEmojis([
-                {id: 'm1', name: '<b>böse</b>', gelernt: true, emoji: {art: 'custom', url: '"><script>', name: '<i>x</i>'}},
-            ]);
+                {id: 'm1', name: '<b>böse</b>', gelernt: true, emoji: {art: 'custom', url: '"><script>', name: '<i>x</i>'}, aktuellerWert: '1'},
+            ], AUSWAHL, 'tok');
             expect(html).toContain('&lt;b&gt;böse&lt;/b&gt;');
             expect(html).not.toContain('<b>böse</b>');
             expect(html).not.toContain('<script>');
         });
 
         it('meldet, wenn keine Mitglieder da sind', () => {
-            expect(renderMorgengrussEmojis([])).toContain('Keine Mitglieder gefunden');
+            expect(renderMorgengrussEmojis([], AUSWAHL, 'tok')).toContain('Keine Mitglieder gefunden');
+        });
+
+        it('baut je Zeile ein Formular mit vorausgewähltem aktuellem Wert', () => {
+            const html = renderMorgengrussEmojis([
+                {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}, aktuellerWert: '🦊'},
+            ], AUSWAHL, 'tok-e');
+            expect(html).toContain('action="/config/morgengruss-emoji"');
+            expect(html).toContain('name="mitglied" value="m1"');
+            expect(html).toContain('value="tok-e"');
+            expect(html).toContain('<option value="🦊" selected>');
+            expect(html).toContain('<option value="123">:blahaj:</option>');
+        });
+
+        // Dieselbe Falle wie bei den Kanal-Dropdowns: ohne Platzhalter zeigt der Browser einfach die
+        // erste Option, als wäre sie gesetzt - obwohl die Emoji-Spalte "gelöscht" sagt.
+        it('wählt nichts vor, wenn der aktuelle Wert nicht mehr in der Auswahl steht', () => {
+            const html = renderMorgengrussEmojis([
+                {id: 'm1', name: 'Wer', gelernt: true, emoji: {art: 'unbekannt', id: '999'}, aktuellerWert: '999'},
+            ], AUSWAHL, 'tok');
+            expect(html).toContain('<option value="" disabled selected>— nicht mehr verfügbar —</option>');
+            expect(html).toContain('required');
+            expect(html).not.toContain('value="999" selected');
+        });
+    });
+
+    describe('handleMorgengrussEmojiSpeichern', () => {
+        const anfrage = (body: Record<string, string>) => mockRequest({body});
+
+        beforeEach(() => {
+            (settings.istGueltigesEmoji as any).mockResolvedValue(true);
+        });
+
+        it('speichert ein gültiges Emoji und leitet in den Bereich zurück', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussEmojiSpeichern(
+                anfrage({_csrf: createCsrfToken('12345'), mitglied: 'm1', emoji: '🦊'}), res
+            );
+
+            expect(settings.speichereMorgengrussEmoji).toHaveBeenCalledWith('m1', '🦊');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=morgengruss-emoji#bereich-morgengruss');
+        });
+
+        it('lehnt ein fehlendes CSRF-Token ab und speichert nicht', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussEmojiSpeichern(anfrage({mitglied: 'm1', emoji: '🦊'}), res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(settings.speichereMorgengrussEmoji).not.toHaveBeenCalled();
+        });
+
+        it('lehnt ein unbekanntes Mitglied ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussEmojiSpeichern(
+                anfrage({_csrf: createCsrfToken('12345'), mitglied: 'fremd', emoji: '🦊'}), res
+            );
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(settings.speichereMorgengrussEmoji).not.toHaveBeenCalled();
+        });
+
+        // Das Dropdown ist die Whitelist - über das Formular darf nichts anderes in Redis landen.
+        it('lehnt ein Emoji außerhalb der Auswahl ab', async () => {
+            (settings.istGueltigesEmoji as any).mockResolvedValue(false);
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussEmojiSpeichern(
+                anfrage({_csrf: createCsrfToken('12345'), mitglied: 'm1', emoji: '<script>'}), res
+            );
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(settings.speichereMorgengrussEmoji).not.toHaveBeenCalled();
         });
     });
 
@@ -802,7 +886,8 @@ describe('config.router', () => {
         mitglieder: [{id: 'm1', name: 'Tirsis', kilometer: 128.5}],
         legacyKilometer: 1250,
         meilensteine: [{kilometers: 1000, text: 'Tausend!', announced: false}],
-        morgengrussEmojis: [{id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode' as const, zeichen: '🦊'}}],
+        morgengrussEmojis: [{id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode' as const, zeichen: '🦊'}, aktuellerWert: '🦊'}],
+        emojiAuswahl: [{wert: '🦊', label: '🦊'}],
         csrfToken: 'tok',
     });
 

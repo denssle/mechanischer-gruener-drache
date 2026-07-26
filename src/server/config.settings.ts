@@ -8,7 +8,7 @@ import sportHandler from '../handlers/sport.handler.js';
 import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import eventService from '../services/event.service.js';
-import {ableiteEmoji} from '../handlers/greeting.handler.js';
+import {ableiteEmoji, GRUSS_EMOJIS} from '../handlers/greeting.handler.js';
 
 // Sammelt die auf /config bearbeitbaren Admin-Einstellungen als strukturierte Daten fuers
 // Web-Rendering. Jedes Feld traegt seinen aktuellen Wert UND seinen Zustand (siehe FeldStatus) -
@@ -281,6 +281,9 @@ export interface MorgengrussEintrag {
     // Ohne diese Unterscheidung sähe der Fallback wie eine echte Zuordnung aus.
     gelernt: boolean;
     emoji: MorgengrussEmoji;
+    // Rohwert (Unicode-Zeichen oder Custom-Emoji-ID) für die Vorauswahl im Bearbeiten-Dropdown.
+    // Bei abgeleiteten Einträgen der Fallback-Wert - der steht im Pool und ist damit wählbar.
+    aktuellerWert: string;
 }
 
 // Custom-Emojis liegen als blanke Snowflake-ID im Hash (siehe werteReaktionenAus: `emoji.id ?? name`),
@@ -295,6 +298,57 @@ function deuteEmoji(gespeichert: string): MorgengrussEmoji {
         : {art: 'unbekannt', id: gespeichert};
 }
 
+// Eine wählbare Option im Emoji-Dropdown. `wert` ist das, was in Redis landet (Unicode-Zeichen ODER
+// Custom-Emoji-ID - genau die zwei Formen, die auch der Lern-Scan schreibt), `label` das, was im
+// <option> steht. Custom-Emojis können dort nur als Text (`:name:`) erscheinen: ein <option> kann
+// kein <img> enthalten. Die Tabellenspalte daneben zeigt das Emoji weiterhin als Bild.
+export interface EmojiOption {
+    wert: string;
+    label: string;
+}
+
+// Whitelist UND Dropdown-Inhalt (Muster wie holeTextKanaele/holeRollen): der Fallback-Pool, alle
+// Server-Emojis und alles, was aktuell schon vergeben ist. Letzteres ist nötig, damit ein gelerntes
+// Emoji außerhalb des Pools (der Lern-Scan liefert beliebige Reaktions-Emojis) nicht beim ersten
+// Speichern verloren geht - man könnte es sonst nicht mehr auswählen.
+// Kaputte Zuordnungen (ID eines gelöschten Server-Emojis) werden BEWUSST nicht angeboten.
+export async function holeEmojiAuswahl(): Promise<EmojiOption[]> {
+    const optionen = new Map<string, EmojiOption>();
+
+    for (const zeichen of GRUSS_EMOJIS) {
+        optionen.set(zeichen, {wert: zeichen, label: zeichen});
+    }
+
+    const guild = client.guilds.cache.get(config.GUILD_ID);
+    const serverEmojis = [...(guild?.emojis.cache.values() ?? [])]
+        .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'de'));
+    for (const emoji of serverEmojis) {
+        optionen.set(emoji.id, {wert: emoji.id, label: `:${emoji.name ?? emoji.id}:`});
+    }
+
+    const vergeben = await greetingService.getLearnedEmojis().catch(() => ({} as Record<string, string>));
+    for (const wert of Object.values(vergeben)) {
+        if (optionen.has(wert)) continue;
+        // Nur Unicode-Zeichen nachtragen: eine ID, die oben nicht als Server-Emoji auftauchte,
+        // gibt es nicht mehr - die soll man nicht erneut vergeben können.
+        if (!/^\d+$/.test(wert)) {
+            optionen.set(wert, {wert, label: wert});
+        }
+    }
+
+    return [...optionen.values()];
+}
+
+// Serverseitige Validierung gegen dieselbe Liste - über das Formular kann damit nichts anderes in
+// Redis landen. Async, weil die Liste die aktuell vergebenen Emojis einschließt (ein Redis-Read).
+export async function istGueltigesEmoji(wert: string): Promise<boolean> {
+    return (await holeEmojiAuswahl()).some(option => option.wert === wert);
+}
+
+export async function speichereMorgengrussEmoji(userId: string, wert: string): Promise<void> {
+    await greetingService.setLearnedEmoji(userId, wert);
+}
+
 // Übersicht Person → persönliches Morgengruß-Emoji für /config. Listet ALLE Mitglieder, nicht nur die
 // gelernten: wer nichts Gelerntes hat, wird beim Gruß per ableiteEmoji bedient, und ohne diese Zeilen
 // fehlte die halbe Belegschaft in der Übersicht. Ein Redis-Read für alle zusammen.
@@ -302,12 +356,14 @@ export async function holeMorgengrussEmojis(): Promise<MorgengrussEintrag[]> {
     const gelernt = await greetingService.getLearnedEmojis().catch(() => ({} as Record<string, string>));
     return guildMitglieder().map(mitglied => {
         const gespeichert = gelernt[mitglied.id];
+        const wert = gespeichert ?? ableiteEmoji(mitglied.id);
         return {
             ...mitglied,
             gelernt: gespeichert !== undefined,
             emoji: gespeichert !== undefined
                 ? deuteEmoji(gespeichert)
-                : {art: 'unicode' as const, zeichen: ableiteEmoji(mitglied.id)},
+                : {art: 'unicode' as const, zeichen: wert},
+            aktuellerWert: wert,
         };
     });
 }

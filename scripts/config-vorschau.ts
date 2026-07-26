@@ -39,10 +39,16 @@ const html = renderConfigSeite({
     ],
     // Alle vier Fälle der Emoji-Übersicht, damit die Vorschau zeigt, wie jeder aussieht.
     morgengrussEmojis: [
-        {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}},
-        {id: 'm2', name: 'Zerix', gelernt: true, emoji: {art: 'custom', url: 'https://cdn.discordapp.com/emojis/123.png', name: 'blahaj'}},
-        {id: 'm3', name: 'Acaine', gelernt: false, emoji: {art: 'unicode', zeichen: '🌿'}},
-        {id: 'm4', name: 'Verwaist', gelernt: true, emoji: {art: 'unbekannt', id: '999'}},
+        {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}, aktuellerWert: '🦊'},
+        {id: 'm2', name: 'Zerix', gelernt: true, emoji: {art: 'custom', url: 'https://cdn.discordapp.com/emojis/123.png', name: 'blahaj'}, aktuellerWert: '123'},
+        {id: 'm3', name: 'Acaine', gelernt: false, emoji: {art: 'unicode', zeichen: '🌿'}, aktuellerWert: '🌿'},
+        {id: 'm4', name: 'Verwaist', gelernt: true, emoji: {art: 'unbekannt', id: '999'}, aktuellerWert: '999'},
+    ],
+    emojiAuswahl: [
+        {wert: '☀️', label: '☀️'},
+        {wert: '🌿', label: '🌿'},
+        {wert: '🦊', label: '🦊'},
+        {wert: '123', label: ':blahaj:'},
     ],
     csrfToken: 'vorschau-token',
     meldung: {bereich: 'sport', text: 'Kilometerstand gesetzt.', art: 'ok'},
