@@ -26,7 +26,10 @@ vi.mock('../services/logging.service.js', () => ({
     default: {getLogChannel: vi.fn(), setLogChannel: vi.fn()}
 }));
 vi.mock('../services/greeting.service.js', () => ({
-    default: {getChannel: vi.fn(), setChannel: vi.fn()}
+    default: {
+        getChannel: vi.fn(), setChannel: vi.fn(),
+        getLearnedEmojis: vi.fn(async () => ({}))
+    }
 }));
 vi.mock('../services/event.service.js', () => ({
     default: {getEvent: vi.fn(), setEvent: vi.fn(), clearEvent: vi.fn()}
@@ -36,6 +39,7 @@ import client from '../client.js';
 import twitchUserService from '../services/twitch.user.service.js';
 import sportService from '../services/sport.service.js';
 import sportHandler from '../handlers/sport.handler.js';
+import {ableiteEmoji} from '../handlers/greeting.handler.js';
 import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import eventService from '../services/event.service.js';
@@ -48,6 +52,7 @@ import {
     holeLegacyKilometer,
     holeMeilensteine,
     holeMitglieder,
+    holeMorgengrussEmojis,
     holeRollen,
     holeTextKanaele,
     holeTwitchRolle,
@@ -338,6 +343,90 @@ describe('config.settings – Sport-Admin', () => {
     it('prüft Meilensteine NICHT beim Entfernen eines Meilensteins', async () => {
         await entferneMeilenstein(2000);
         expect(sportHandler.announceReachedMilestones).not.toHaveBeenCalled();
+    });
+});
+
+describe('config.settings – Morgengruß-Emojis', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    // Mitglieder + Server-Emojis; das Custom-Emoji "blahaj" liegt unter der ID 555.
+    const mitServer = () => {
+        (client.guilds as any).cache = new Map([['guild-1', {
+            members: {
+                cache: new Collection<string, any>([
+                    ['m1', {id: 'm1', displayName: 'Tirsis', user: {bot: false}}],
+                    ['m2', {id: 'm2', displayName: 'Zerix', user: {bot: false}}],
+                    ['m3', {id: 'm3', displayName: 'Acaine', user: {bot: false}}],
+                    ['b1', {id: 'b1', displayName: 'DracheBot', user: {bot: true}}],
+                ])
+            },
+            emojis: {
+                cache: new Collection<string, any>([
+                    ['555', {id: '555', name: 'blahaj', imageURL: () => 'https://cdn/555.png'}],
+                ])
+            }
+        }]]);
+    };
+
+    it('nimmt das gelernte Unicode-Emoji und markiert es als gelernt', async () => {
+        mitServer();
+        (greetingService.getLearnedEmojis as any).mockResolvedValue({m1: '🦊'});
+
+        const tirsis = (await holeMorgengrussEmojis()).find(e => e.id === 'm1')!;
+        expect(tirsis.gelernt).toBe(true);
+        expect(tirsis.emoji).toEqual({art: 'unicode', zeichen: '🦊'});
+    });
+
+    // Ohne Gelerntes greift beim Gruß ableiteEmoji - diese Leute gehören mit in die Übersicht,
+    // sonst fehlte die halbe Belegschaft. Aber erkennbar als Fallback.
+    it('fällt auf das abgeleitete Emoji zurück und markiert es als nicht gelernt', async () => {
+        mitServer();
+        (greetingService.getLearnedEmojis as any).mockResolvedValue({});
+
+        const eintraege = await holeMorgengrussEmojis();
+        expect(eintraege).toHaveLength(3);
+        expect(eintraege.every(e => e.gelernt === false)).toBe(true);
+        // Deterministisch aus der User-ID, also identisch zu dem, was der Gruß verwenden würde.
+        expect(eintraege.find(e => e.id === 'm1')!.emoji).toEqual({
+            art: 'unicode', zeichen: ableiteEmoji('m1')
+        });
+    });
+
+    // Custom-Emojis liegen als blanke Snowflake-ID im Hash - ohne Auflösung stünde in der Tabelle
+    // nur eine Zahl.
+    it('löst eine gespeicherte Emoji-ID zum Server-Emoji auf', async () => {
+        mitServer();
+        (greetingService.getLearnedEmojis as any).mockResolvedValue({m2: '555'});
+
+        const zerix = (await holeMorgengrussEmojis()).find(e => e.id === 'm2')!;
+        expect(zerix.emoji).toEqual({art: 'custom', url: 'https://cdn/555.png', name: 'blahaj'});
+    });
+
+    it('meldet eine ID als unbekannt, wenn es das Server-Emoji nicht mehr gibt', async () => {
+        mitServer();
+        (greetingService.getLearnedEmojis as any).mockResolvedValue({m2: '999'});
+
+        const zerix = (await holeMorgengrussEmojis()).find(e => e.id === 'm2')!;
+        expect(zerix.emoji).toEqual({art: 'unbekannt', id: '999'});
+    });
+
+    it('lässt Bots aus der Übersicht', async () => {
+        mitServer();
+        (greetingService.getLearnedEmojis as any).mockResolvedValue({});
+
+        expect((await holeMorgengrussEmojis()).map(e => e.id)).not.toContain('b1');
+    });
+
+    // Ein Redis-Problem darf die ganze Seite nicht kosten - dann eben alles abgeleitet.
+    it('bleibt bei einem Redis-Fehler bei den abgeleiteten Emojis', async () => {
+        mitServer();
+        (greetingService.getLearnedEmojis as any).mockRejectedValue(new Error('Redis weg'));
+
+        const eintraege = await holeMorgengrussEmojis();
+        expect(eintraege).toHaveLength(3);
+        expect(eintraege.every(e => e.gelernt === false)).toBe(true);
     });
 
     it('reicht Meilenstein-Aktionen an den Service durch', async () => {

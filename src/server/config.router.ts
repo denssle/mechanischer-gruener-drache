@@ -34,6 +34,9 @@ import {
     holeLegacyKilometer,
     holeMeilensteine,
     holeMitglieder,
+    holeMorgengrussEmojis,
+    MorgengrussEintrag,
+    MorgengrussEmoji,
     holeRollen,
     holeTextKanaele,
     holeTwitchRolle,
@@ -109,6 +112,11 @@ function renderPage(bodyHtml: string): string {
         li.meilenstein { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(128,128,128,0.2); }
         li.meilenstein form { margin: 0; }
         li.meilenstein button { padding: 0.2rem 0.7rem; }
+        table.emojis { border-collapse: collapse; margin: 0.5rem 0 0; font-size: 0.95rem; }
+        table.emojis th, table.emojis td { text-align: left; padding: 0.3rem 1rem 0.3rem 0; border-bottom: 1px solid rgba(128,128,128,0.25); }
+        table.emojis th { font-weight: 600; }
+        td.emoji-zelle { font-size: 1.2rem; line-height: 1; }
+        img.emoji { width: 1.4rem; height: 1.4rem; vertical-align: middle; }
         .status-ok { color: #2e7d32; }
         .status-warnung { color: #b26a00; }
         .status-leer { opacity: 0.6; }
@@ -312,6 +320,38 @@ export function renderMeilensteinListe(meilensteine: SportMilestone[], csrfToken
     <ul class="meilensteine">${zeilen}</ul>`;
 }
 
+// Übersicht Person → persönliches Morgengruß-Emoji. Reine Anzeige (kein Formular): die Zuordnung
+// entsteht durch den Historien-Scan, hier soll man nur sehen, was dabei herauskam - vorher war sie
+// nirgends einsehbar und zeigte sich erst, wenn jemand am nächsten Morgen schrieb.
+// Custom-Emojis brauchen ein <img> (Discord-Markup rendert nicht im Browser), die Spalte „Herkunft"
+// trennt Gelerntes vom abgeleiteten Fallback - sonst sähe der Fallback wie eine echte Zuordnung aus.
+export function renderMorgengrussEmojis(eintraege: MorgengrussEintrag[]): string {
+    if (!eintraege.length) {
+        return '<p class="status-leer">Keine Mitglieder gefunden.</p>';
+    }
+    const zelle = (emoji: MorgengrussEmoji): string => {
+        switch (emoji.art) {
+            case 'unicode':
+                return escapeHtml(emoji.zeichen);
+            case 'custom':
+                return `<img class="emoji" src="${escapeHtml(emoji.url)}" alt="${escapeHtml(emoji.name)}" title="${escapeHtml(emoji.name)}">`;
+            case 'unbekannt':
+                // Gelernt, aber das Server-Emoji gibt es nicht mehr - beim Gruß würde message.react
+                // damit scheitern, das gehört sichtbar gemacht statt als leere Zelle verschluckt.
+                return `<span class="status-warnung" title="Emoji ${escapeHtml(emoji.id)} gibt es auf dem Server nicht mehr">gelöscht</span>`;
+        }
+    };
+    const zeilen = eintraege.map(e =>
+        `<tr><td>${escapeHtml(e.name)}</td>` +
+        `<td class="emoji-zelle">${zelle(e.emoji)}</td>` +
+        `<td class="${e.gelernt ? '' : 'status-leer'}">${e.gelernt ? 'gelernt' : 'abgeleitet'}</td></tr>`
+    ).join('\n');
+    return `<table class="emojis">
+        <thead><tr><th>Name</th><th>Emoji</th><th>Herkunft</th></tr></thead>
+        <tbody>${zeilen}</tbody>
+    </table>`;
+}
+
 // Morgengruß: Button, der den Historien-Scan für die persönlichen Emojis anstößt (früher
 // /morgengruss lernen). Der Kanal wird oben im selben Bereich gesetzt; ist keiner da, meldet das der
 // Handler nach dem Klick. Der Scan kostet ein paar API-Calls, die POST-Antwort blockt so lange.
@@ -396,6 +436,7 @@ export interface ConfigSeiteDaten {
     mitglieder: MitgliedOption[];
     legacyKilometer: number;
     meilensteine: SportMilestone[];
+    morgengrussEmojis: MorgengrussEintrag[];
     csrfToken: string;
     meldung?: Meldung;
 }
@@ -437,7 +478,7 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
             kanal('protokoll'),
             meldungFuer('protokoll')) +
         renderBereich('morgengruss', 'Morgengruß',
-            kanal('morgengruss-kanal') + renderMorgengrussLernen(csrf),
+            kanal('morgengruss-kanal') + renderMorgengrussLernen(csrf) + renderMorgengrussEmojis(daten.morgengrussEmojis),
             meldungFuer('morgengruss')) +
         renderBereich('event', 'Event',
             renderEventFormular(daten.eventFelder, csrf),
@@ -573,13 +614,14 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
         const userId = res.locals.configUserId as string;
         // Parallel: die Abfragen hängen nicht voneinander ab, und jede ist mindestens ein
         // Redis-Roundtrip (ladeKanalFelder zusätzlich vier channels.fetch).
-        const [kanalFelder, twitchRolle, eventFelder, mitglieder, legacyKilometer, meilensteine] = await Promise.all([
+        const [kanalFelder, twitchRolle, eventFelder, mitglieder, legacyKilometer, meilensteine, morgengrussEmojis] = await Promise.all([
             ladeKanalFelder(),
             holeTwitchRolle(),
             holeEventFelder(),
             holeMitglieder(),
             holeLegacyKilometer(),
             holeMeilensteine(),
+            holeMorgengrussEmojis(),
         ]);
         const html = renderConfigSeite({
             kanalFelder,
@@ -590,6 +632,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
             mitglieder,
             legacyKilometer,
             meilensteine,
+            morgengrussEmojis,
             csrfToken: createCsrfToken(userId),
             meldung: leseMeldung(req),
         });

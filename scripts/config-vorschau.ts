@@ -37,6 +37,13 @@ const html = renderConfigSeite({
         {kilometers: 1000, text: 'Yay, gemeinsam 1000 km geschafft!', announced: true},
         {kilometers: 2000, text: 'Auf zur nächsten Etappe – 2000 km!', announced: false},
     ],
+    // Alle vier Fälle der Emoji-Übersicht, damit die Vorschau zeigt, wie jeder aussieht.
+    morgengrussEmojis: [
+        {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}},
+        {id: 'm2', name: 'Zerix', gelernt: true, emoji: {art: 'custom', url: 'https://cdn.discordapp.com/emojis/123.png', name: 'blahaj'}},
+        {id: 'm3', name: 'Acaine', gelernt: false, emoji: {art: 'unicode', zeichen: '🌿'}},
+        {id: 'm4', name: 'Verwaist', gelernt: true, emoji: {art: 'unbekannt', id: '999'}},
+    ],
     csrfToken: 'vorschau-token',
     meldung: {bereich: 'sport', text: 'Kilometerstand gesetzt.', art: 'ok'},
 });

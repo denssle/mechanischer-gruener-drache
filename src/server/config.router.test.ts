@@ -50,6 +50,7 @@ vi.mock('./config.settings.js', () => ({
     speichereEventDaten: vi.fn(() => Promise.resolve()),
     entferneEvent: vi.fn(() => Promise.resolve()),
     holeMitglieder: vi.fn(async () => [{id: 'm1', name: 'Tirsis', kilometer: 128.5}]),
+    holeMorgengrussEmojis: vi.fn(async () => [{id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}}]),
     istGueltigesMitglied: vi.fn((id: string) => id === 'm1'),
     speichereKilometer: vi.fn(() => Promise.resolve()),
     holeLegacyKilometer: vi.fn(() => Promise.resolve(1250)),
@@ -84,6 +85,7 @@ import {
     renderKanalFormular,
     renderLogs,
     renderMeilensteinListe,
+    renderMorgengrussEmojis,
     renderMorgengrussLernen,
     renderRollenFormular,
     renderSportAdmin,
@@ -740,6 +742,51 @@ describe('config.router', () => {
         expect(res.send.mock.calls[0][0]).toContain('5 persönliche Emojis gelernt');
     });
 
+    describe('renderMorgengrussEmojis', () => {
+        it('zeigt Name, Emoji und Herkunft je Mitglied', () => {
+            const html = renderMorgengrussEmojis([
+                {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}},
+                {id: 'm2', name: 'Acaine', gelernt: false, emoji: {art: 'unicode', zeichen: '🌿'}},
+            ]);
+            expect(html).toContain('Tirsis');
+            expect(html).toContain('🦊');
+            expect(html).toContain('gelernt');
+            expect(html).toContain('abgeleitet');
+        });
+
+        // Discord-Markup (<:name:id>) rendert nur in Discord - im Browser braucht es ein <img>.
+        it('rendert Custom-Emojis als Bild', () => {
+            const html = renderMorgengrussEmojis([
+                {id: 'm1', name: 'Zerix', gelernt: true, emoji: {art: 'custom', url: 'https://cdn/1.png', name: 'blahaj'}},
+            ]);
+            expect(html).toContain('<img class="emoji" src="https://cdn/1.png"');
+            expect(html).toContain('alt="blahaj"');
+        });
+
+        // Gelernt, aber das Server-Emoji ist weg: message.react würde damit scheitern, das gehört
+        // sichtbar gemacht statt als leere Zelle verschluckt.
+        it('macht ein gelöschtes Server-Emoji sichtbar', () => {
+            const html = renderMorgengrussEmojis([
+                {id: 'm1', name: 'Wer', gelernt: true, emoji: {art: 'unbekannt', id: '999'}},
+            ]);
+            expect(html).toContain('gelöscht');
+            expect(html).toContain('status-warnung');
+        });
+
+        it('escaped Namen und Emoji-Werte (kein XSS)', () => {
+            const html = renderMorgengrussEmojis([
+                {id: 'm1', name: '<b>böse</b>', gelernt: true, emoji: {art: 'custom', url: '"><script>', name: '<i>x</i>'}},
+            ]);
+            expect(html).toContain('&lt;b&gt;böse&lt;/b&gt;');
+            expect(html).not.toContain('<b>böse</b>');
+            expect(html).not.toContain('<script>');
+        });
+
+        it('meldet, wenn keine Mitglieder da sind', () => {
+            expect(renderMorgengrussEmojis([])).toContain('Keine Mitglieder gefunden');
+        });
+    });
+
     it('renderMorgengrussLernen baut den Lern-Button mit CSRF-Token', () => {
         const html = renderMorgengrussLernen('token-mg');
         expect(html).toContain('action="/config/morgengruss"');
@@ -755,6 +802,7 @@ describe('config.router', () => {
         mitglieder: [{id: 'm1', name: 'Tirsis', kilometer: 128.5}],
         legacyKilometer: 1250,
         meilensteine: [{kilometers: 1000, text: 'Tausend!', announced: false}],
+        morgengrussEmojis: [{id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode' as const, zeichen: '🦊'}}],
         csrfToken: 'tok',
     });
 

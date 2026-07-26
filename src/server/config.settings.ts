@@ -8,6 +8,7 @@ import sportHandler from '../handlers/sport.handler.js';
 import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import eventService from '../services/event.service.js';
+import {ableiteEmoji} from '../handlers/greeting.handler.js';
 
 // Sammelt die auf /config bearbeitbaren Admin-Einstellungen als strukturierte Daten fuers
 // Web-Rendering. Jedes Feld traegt seinen aktuellen Wert UND seinen Zustand (siehe FeldStatus) -
@@ -260,6 +261,55 @@ export async function setzeLegacyKilometer(kilometer: number): Promise<void> {
 
 export async function holeMeilensteine(): Promise<SportMilestone[]> {
     return sportService.getMilestones();
+}
+
+// Wie ein persönliches Morgengruß-Emoji dargestellt wird. Bewusst eine unterschiedene Union statt
+// eines fertigen HTML-Schnipsels: das Sammeln bleibt hier (testbar mit Mocks), das Rendern im Router.
+// - 'unicode'   : direkt darstellbares Zeichen (👋, ☀️ …)
+// - 'custom'    : Server-Emoji; im Hash liegt nur die ID, im Browser braucht es ein <img> (Discord-
+//                 Markup wie <:name:id> rendert NUR in Discord, nicht auf einer Webseite)
+// - 'unbekannt' : gespeicherte ID, die es auf dem Server nicht mehr gibt (Emoji gelöscht)
+export type MorgengrussEmoji =
+    | {art: 'unicode'; zeichen: string}
+    | {art: 'custom'; url: string; name: string}
+    | {art: 'unbekannt'; id: string};
+
+export interface MorgengrussEintrag {
+    id: string;
+    name: string;
+    // true = aus der Chat-Historie gelernt, false = per ableiteEmoji aus der User-ID abgeleitet.
+    // Ohne diese Unterscheidung sähe der Fallback wie eine echte Zuordnung aus.
+    gelernt: boolean;
+    emoji: MorgengrussEmoji;
+}
+
+// Custom-Emojis liegen als blanke Snowflake-ID im Hash (siehe werteReaktionenAus: `emoji.id ?? name`),
+// Unicode-Emojis als Zeichen. Nur Ziffern = ID, sonst Zeichen.
+function deuteEmoji(gespeichert: string): MorgengrussEmoji {
+    if (!/^\d+$/.test(gespeichert)) {
+        return {art: 'unicode', zeichen: gespeichert};
+    }
+    const emoji = client.guilds.cache.get(config.GUILD_ID)?.emojis.cache.get(gespeichert);
+    return emoji
+        ? {art: 'custom', url: emoji.imageURL(), name: emoji.name ?? gespeichert}
+        : {art: 'unbekannt', id: gespeichert};
+}
+
+// Übersicht Person → persönliches Morgengruß-Emoji für /config. Listet ALLE Mitglieder, nicht nur die
+// gelernten: wer nichts Gelerntes hat, wird beim Gruß per ableiteEmoji bedient, und ohne diese Zeilen
+// fehlte die halbe Belegschaft in der Übersicht. Ein Redis-Read für alle zusammen.
+export async function holeMorgengrussEmojis(): Promise<MorgengrussEintrag[]> {
+    const gelernt = await greetingService.getLearnedEmojis().catch(() => ({} as Record<string, string>));
+    return guildMitglieder().map(mitglied => {
+        const gespeichert = gelernt[mitglied.id];
+        return {
+            ...mitglied,
+            gelernt: gespeichert !== undefined,
+            emoji: gespeichert !== undefined
+                ? deuteEmoji(gespeichert)
+                : {art: 'unicode' as const, zeichen: ableiteEmoji(mitglied.id)},
+        };
+    });
 }
 
 export async function entferneMeilenstein(kilometer: number): Promise<void> {
