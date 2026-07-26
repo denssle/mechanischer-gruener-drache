@@ -3,7 +3,7 @@ import path from 'path';
 // Import aus dem gebauten dist/ (declaration: true -> voll typisiert). Dev-Werkzeug: rendert die
 // /config-Seite mit Beispieldaten in eine HTML-Datei, damit man am Layout iterieren kann, ohne den
 // Bot zu deployen. Nutzt die ECHTEN Render-Funktionen + das echte CSS -> keine Drift zur Live-Seite.
-import {renderConfigSeite} from '../dist/server/config.router.js';
+import {renderConfigSeite, renderMorgengrussEmojiSeite, renderPage} from '../dist/server/config.router.js';
 
 // Absichtlich alle drei Feld-Zustände dabei (ok / leer / warnung), damit die Vorschau zeigt, wie ein
 // nicht gesetztes bzw. ein auf einen gelöschten Kanal zeigendes Feld aussieht.
@@ -37,19 +37,7 @@ const html = renderConfigSeite({
         {kilometers: 1000, text: 'Yay, gemeinsam 1000 km geschafft!', announced: true},
         {kilometers: 2000, text: 'Auf zur nächsten Etappe – 2000 km!', announced: false},
     ],
-    // Alle vier Fälle der Emoji-Übersicht, damit die Vorschau zeigt, wie jeder aussieht.
-    morgengrussEmojis: [
-        {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}, aktuellerWert: '🦊'},
-        {id: 'm2', name: 'Zerix', gelernt: true, emoji: {art: 'custom', url: 'https://cdn.discordapp.com/emojis/123.png', name: 'blahaj'}, aktuellerWert: '123'},
-        {id: 'm3', name: 'Acaine', gelernt: false, emoji: {art: 'unicode', zeichen: '🌿'}, aktuellerWert: '🌿'},
-        {id: 'm4', name: 'Verwaist', gelernt: true, emoji: {art: 'unbekannt', id: '999'}, aktuellerWert: '999'},
-    ],
-    emojiAuswahl: [
-        {wert: '☀️', label: '☀️'},
-        {wert: '🌿', label: '🌿'},
-        {wert: '🦊', label: '🦊'},
-        {wert: '123', label: ':blahaj:'},
-    ],
+    anzahlEmojiEintraege: 4,
     csrfToken: 'vorschau-token',
     meldung: {bereich: 'sport', text: 'Kilometerstand gesetzt.', art: 'ok'},
 });
@@ -57,3 +45,26 @@ const html = renderConfigSeite({
 const ziel = path.join(process.cwd(), 'config-vorschau.html');
 writeFileSync(ziel, html, 'utf-8');
 console.log(`Vorschau geschrieben: ${ziel}`);
+
+// Die ausgelagerte Emoji-Seite als zweite Datei - alle vier Fälle der Übersicht, damit die Vorschau
+// zeigt, wie Unicode, Custom-Emoji, abgeleiteter Fallback und ein gelöschtes Emoji aussehen.
+const emojiSeite = renderPage(renderMorgengrussEmojiSeite(
+    [
+        {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}, aktuellerWert: '🦊'},
+        {id: 'm2', name: 'Zerix', gelernt: true, emoji: {art: 'custom', url: 'https://cdn.discordapp.com/emojis/123.png', name: 'blahaj'}, aktuellerWert: '123'},
+        {id: 'm3', name: 'Acaine', gelernt: false, emoji: {art: 'unicode', zeichen: '🌿'}, aktuellerWert: '🌿'},
+        {id: 'm4', name: 'Verwaist', gelernt: true, emoji: {art: 'unbekannt', id: '999'}, aktuellerWert: '999'},
+    ],
+    [
+        {wert: '☀️', label: '☀️'},
+        {wert: '🌿', label: '🌿'},
+        {wert: '🦊', label: '🦊'},
+        {wert: '123', label: ':blahaj:'},
+    ],
+    'vorschau-token',
+    true
+));
+
+const emojiZiel = path.join(process.cwd(), 'config-vorschau-emojis.html');
+writeFileSync(emojiZiel, emojiSeite, 'utf-8');
+console.log(`Vorschau geschrieben: ${emojiZiel}`);

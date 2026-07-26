@@ -84,7 +84,10 @@ function authConfigured(): boolean {
     return oauthConfigured() && sessionConfigured();
 }
 
-function renderPage(bodyHtml: string): string {
+// Die Seiten-Hülle (HTML-Gerüst + das gesamte CSS) für alle Ansichten. Exportiert, damit das
+// Vorschau-Skript die Unterseiten mit dem ECHTEN Styling rendern kann - sonst zeigte die Vorschau
+// nackte Bodys und wäre als Layout-Werkzeug wertlos.
+export function renderPage(bodyHtml: string): string {
     return `<!doctype html>
 <html lang="de">
 <head>
@@ -385,6 +388,30 @@ export function renderMorgengrussEmojis(
     </table>`;
 }
 
+// Die Emoji-Übersicht liegt seit 2026-07-26 auf einer EIGENEN Seite (/config/morgengruss-emojis),
+// nicht mehr im Morgengruß-Bereich: die Tabelle wächst mit der Mitgliederzahl und hat /config sonst
+// dominiert. Muster wie /config/logs. Hier steht nur noch der Link dorthin.
+export function renderMorgengrussEmojiLink(anzahl: number): string {
+    return `<p class="feld-hinweis"><a href="/config/morgengruss-emojis">Persönliche Emojis ansehen und ändern</a>
+    (${anzahl} ${anzahl === 1 ? 'Person' : 'Personen'})</p>`;
+}
+
+// Die ausgelagerte Seite: Überschrift, Tabelle, Rückweg. Reine Präsentation wie renderConfigSeite,
+// damit sie sich genauso ohne Deploy in der Vorschau bauen lässt.
+export function renderMorgengrussEmojiSeite(
+    eintraege: MorgengrussEintrag[],
+    auswahl: EmojiOption[],
+    csrfToken: string,
+    gespeichert = false
+): string {
+    return `<h1>Persönliche Morgengruß-Emojis</h1>
+    <p>Womit der Bot die erste Nachricht des Tages quittiert. „Gelernt" stammt aus der Chat-Historie,
+    „abgeleitet" ist der feste Fallback aus der User-ID.</p>
+    ${gespeichert ? '<p class="meldung status-ok">Persönliches Emoji gespeichert.</p>' : ''}
+    ${renderMorgengrussEmojis(eintraege, auswahl, csrfToken)}
+    <p><a href="/config">Zurück zu den Einstellungen</a></p>`;
+}
+
 // Morgengruß: Button, der den Historien-Scan für die persönlichen Emojis anstößt (früher
 // /morgengruss lernen). Der Kanal wird oben im selben Bereich gesetzt; ist keiner da, meldet das der
 // Handler nach dem Klick. Der Scan kostet ein paar API-Calls, die POST-Antwort blockt so lange.
@@ -469,8 +496,9 @@ export interface ConfigSeiteDaten {
     mitglieder: MitgliedOption[];
     legacyKilometer: number;
     meilensteine: SportMilestone[];
-    morgengrussEmojis: MorgengrussEintrag[];
-    emojiAuswahl: EmojiOption[];
+    // Nur die Anzahl für den Link - die Tabelle selbst liegt auf /config/morgengruss-emojis.
+    // Dadurch braucht die Hauptseite die Emoji-Daten gar nicht mehr zu laden.
+    anzahlEmojiEintraege: number;
     csrfToken: string;
     meldung?: Meldung;
 }
@@ -512,7 +540,7 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
             kanal('protokoll'),
             meldungFuer('protokoll')) +
         renderBereich('morgengruss', 'Morgengruß',
-            kanal('morgengruss-kanal') + renderMorgengrussLernen(csrf) + renderMorgengrussEmojis(daten.morgengrussEmojis, daten.emojiAuswahl, csrf),
+            kanal('morgengruss-kanal') + renderMorgengrussLernen(csrf) + renderMorgengrussEmojiLink(daten.anzahlEmojiEintraege),
             meldungFuer('morgengruss')) +
         renderBereich('event', 'Event',
             renderEventFormular(daten.eventFelder, csrf),
@@ -600,7 +628,6 @@ const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
     'twitch-kanal': {bereich: 'twitch', text: 'Twitch-Benachrichtigungskanal gespeichert.'},
     'sport-kanal': {bereich: 'sport', text: 'Sport-Ankündigungskanal gespeichert.'},
     'morgengruss-kanal': {bereich: 'morgengruss', text: 'Morgengruß-Kanal gespeichert.'},
-    'morgengruss-emoji': {bereich: 'morgengruss', text: 'Persönliches Emoji gespeichert.'},
     'twitch-rolle': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle gespeichert.'},
     'twitch-rolle-entfernt': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle entfernt.'},
     'event': {bereich: 'event', text: 'Event gespeichert.'},
@@ -649,15 +676,13 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
         const userId = res.locals.configUserId as string;
         // Parallel: die Abfragen hängen nicht voneinander ab, und jede ist mindestens ein
         // Redis-Roundtrip (ladeKanalFelder zusätzlich vier channels.fetch).
-        const [kanalFelder, twitchRolle, eventFelder, mitglieder, legacyKilometer, meilensteine, morgengrussEmojis, emojiAuswahl] = await Promise.all([
+        const [kanalFelder, twitchRolle, eventFelder, mitglieder, legacyKilometer, meilensteine] = await Promise.all([
             ladeKanalFelder(),
             holeTwitchRolle(),
             holeEventFelder(),
             holeMitglieder(),
             holeLegacyKilometer(),
             holeMeilensteine(),
-            holeMorgengrussEmojis(),
-            holeEmojiAuswahl(),
         ]);
         const html = renderConfigSeite({
             kanalFelder,
@@ -668,8 +693,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
             mitglieder,
             legacyKilometer,
             meilensteine,
-            morgengrussEmojis,
-            emojiAuswahl,
+            anzahlEmojiEintraege: mitglieder.length,
             csrfToken: createCsrfToken(userId),
             meldung: leseMeldung(req),
         });
@@ -814,6 +838,27 @@ export async function handleSportSpeichern(req: Request, res: Response): Promise
     zurueckZumBereich(res, aktion);
 }
 
+// Eigene Seite für die Emoji-Übersicht (ausgelagert, damit /config nicht von einer mit der
+// Mitgliederzahl wachsenden Tabelle dominiert wird - Muster wie /config/logs).
+export async function handleMorgengrussEmojiSeite(req: Request, res: Response): Promise<void> {
+    try {
+        const userId = res.locals.configUserId as string;
+        const [eintraege, auswahl] = await Promise.all([
+            holeMorgengrussEmojis(),
+            holeEmojiAuswahl(),
+        ]);
+        res.type('html').send(renderPage(renderMorgengrussEmojiSeite(
+            eintraege, auswahl, createCsrfToken(userId), req.query.gespeichert === '1'
+        )));
+    } catch (error) {
+        console.error('Fehler beim Laden der Morgengruß-Emojis:', error);
+        res.type('html').send(renderPage(
+            '<h1>Persönliche Morgengruß-Emojis</h1><p>Die Liste konnte gerade nicht geladen werden.</p>' +
+            '<p><a href="/config">Zurück zu den Einstellungen</a></p>'
+        ));
+    }
+}
+
 // Setzt das persönliche Morgengruß-Emoji einer Person von Hand (korrigiert also, was der Lern-Scan
 // abgeleitet hat). Reihenfolge wie überall: CSRF → Mitglied gegen die Whitelist → Emoji gegen die
 // Auswahlliste → speichern → Redirect. Die Emoji-Prüfung ist async, weil die Whitelist die aktuell
@@ -842,7 +887,9 @@ export async function handleMorgengrussEmojiSpeichern(req: Request, res: Respons
     }
 
     await speichereMorgengrussEmoji(mitglied, emoji);
-    zurueckZumBereich(res, 'morgengruss-emoji');
+    // Zurück auf die ausgelagerte Seite (nicht auf /config), damit man dort bleibt, wo man
+    // gearbeitet hat - Post/Redirect/Get wie überall.
+    res.redirect('/config/morgengruss-emojis?gespeichert=1');
 }
 
 // Morgengruß: stößt den Historien-Scan an (früher /morgengruss lernen). CSRF zuerst, dann scannen -
@@ -996,6 +1043,8 @@ configRouter.get('/config/callback',
     fangeFehler(handleCallback, 'Fehler im Config-OAuth-Callback', 'Interner Fehler bei der Anmeldung.'));
 // Reines Lesen (GET) - kein Body-Parser, kein CSRF noetig.
 configRouter.get('/config/logs', geschuetzt, handleLogs);
+configRouter.get('/config/morgengruss-emojis', geschuetzt,
+    fangeFehler(handleMorgengrussEmojiSeite, 'Fehler beim Rendern der Morgengruß-Emoji-Seite', 'Interner Fehler.'));
 configRouter.get('/config/logout', handleLogout);
 
 export default configRouter;

@@ -8,3 +8,4 @@ config.json
 *.d.ts
 *.log
 config-vorschau.html
+config-vorschau-emojis.html

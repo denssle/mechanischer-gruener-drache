@@ -78,6 +78,7 @@ import {
     handleLogin,
     handleLogout,
     handleLogs,
+    handleMorgengrussEmojiSeite,
     handleMorgengrussEmojiSpeichern,
     handleMorgengrussLernen,
     handleRolleSpeichern,
@@ -89,6 +90,7 @@ import {
     renderKanalFormular,
     renderLogs,
     renderMeilensteinListe,
+    renderMorgengrussEmojiLink,
     renderMorgengrussEmojis,
     renderMorgengrussLernen,
     renderRollenFormular,
@@ -815,6 +817,65 @@ describe('config.router', () => {
         });
     });
 
+    // Die Tabelle wächst mit der Mitgliederzahl und hätte /config sonst dominiert - sie liegt
+    // deshalb auf einer eigenen Seite (Muster wie /config/logs).
+    describe('ausgelagerte Emoji-Seite', () => {
+        it('verlinkt sie aus dem Morgengruß-Bereich statt die Tabelle einzubetten', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleConfigPage(mockRequest(), res);
+
+            const html = res.send.mock.calls[0][0] as string;
+            expect(html).toContain('href="/config/morgengruss-emojis"');
+            expect(html).not.toContain('action="/config/morgengruss-emoji"');
+            // Die Hauptseite lädt die Emoji-Daten gar nicht mehr.
+            expect(settings.holeMorgengrussEmojis).not.toHaveBeenCalled();
+            expect(settings.holeEmojiAuswahl).not.toHaveBeenCalled();
+        });
+
+        it('renderMorgengrussEmojiLink nennt die Anzahl im richtigen Numerus', () => {
+            expect(renderMorgengrussEmojiLink(1)).toContain('1 Person');
+            expect(renderMorgengrussEmojiLink(4)).toContain('4 Personen');
+        });
+
+        it('handleMorgengrussEmojiSeite rendert Tabelle und Rückweg', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussEmojiSeite(mockRequest(), res);
+
+            const html = res.send.mock.calls[0][0] as string;
+            expect(html).toContain('Persönliche Morgengruß-Emojis');
+            expect(html).toContain('action="/config/morgengruss-emoji"');
+            expect(html).toContain('Tirsis');
+            expect(html).toContain('href="/config"');
+            // Ohne ?gespeichert keine Erfolgsmeldung.
+            expect(html).not.toContain('Persönliches Emoji gespeichert.');
+        });
+
+        it('handleMorgengrussEmojiSeite zeigt die Rückmeldung nach dem Speichern', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussEmojiSeite(mockRequest({query: {gespeichert: '1'}}), res);
+
+            expect(res.send.mock.calls[0][0]).toContain('Persönliches Emoji gespeichert.');
+        });
+
+        it('handleMorgengrussEmojiSeite bleibt bei einem Redis-Fehler bedienbar', async () => {
+            (settings.holeMorgengrussEmojis as any).mockRejectedValueOnce(new Error('Redis weg'));
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussEmojiSeite(mockRequest(), res);
+
+            const html = res.send.mock.calls[0][0] as string;
+            expect(html).toContain('konnte gerade nicht geladen werden');
+            expect(html).toContain('href="/config"');
+        });
+    });
+
     describe('handleMorgengrussEmojiSpeichern', () => {
         const anfrage = (body: Record<string, string>) => mockRequest({body});
 
@@ -822,7 +883,7 @@ describe('config.router', () => {
             (settings.istGueltigesEmoji as any).mockResolvedValue(true);
         });
 
-        it('speichert ein gültiges Emoji und leitet in den Bereich zurück', async () => {
+        it('speichert ein gültiges Emoji und bleibt auf der Emoji-Seite', async () => {
             const res = mockResponse();
             res.locals.configUserId = '12345';
 
@@ -831,7 +892,8 @@ describe('config.router', () => {
             );
 
             expect(settings.speichereMorgengrussEmoji).toHaveBeenCalledWith('m1', '🦊');
-            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=morgengruss-emoji#bereich-morgengruss');
+            // Zurück auf die ausgelagerte Seite, nicht auf /config - dort hat man ja gearbeitet.
+            expect(res.redirect).toHaveBeenCalledWith('/config/morgengruss-emojis?gespeichert=1');
         });
 
         it('lehnt ein fehlendes CSRF-Token ab und speichert nicht', async () => {
@@ -886,8 +948,7 @@ describe('config.router', () => {
         mitglieder: [{id: 'm1', name: 'Tirsis', kilometer: 128.5}],
         legacyKilometer: 1250,
         meilensteine: [{kilometers: 1000, text: 'Tausend!', announced: false}],
-        morgengrussEmojis: [{id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode' as const, zeichen: '🦊'}, aktuellerWert: '🦊'}],
-        emojiAuswahl: [{wert: '🦊', label: '🦊'}],
+        anzahlEmojiEintraege: 3,
         csrfToken: 'tok',
     });
 
