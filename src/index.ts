@@ -1,5 +1,6 @@
 import {Events} from "discord.js";
 import pjson from "../package.json" with {type: "json"};
+import {installLogCapture} from "./services/logBuffer.service.js";
 import client from "./client.js";
 import redisService from "./services/redis.service.js";
 import {deployCommands} from "./deploy-commands.js";
@@ -13,6 +14,10 @@ import twitchHandler from "./handlers/twitch.handler.js";
 import blahajHandler from "./handlers/blahaj.handler.js";
 import sportHandler from "./handlers/sport.handler.js";
 import greetingHandler from "./handlers/greeting.handler.js";
+
+// console.log/warn/error in einen Ringpuffer spiegeln, damit sie auf /config einsehbar sind. Moeglichst
+// frueh, damit die Boot-/Laufzeit-Zeilen (Webhook-Server-Start, Fehler) mitgeschnitten werden.
+installLogCapture();
 
 webhookServer.onNotification((twitchUserId, streamData) => {
     twitchHandler.handleStreamOnline(twitchUserId, streamData).catch((error) => {

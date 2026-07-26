@@ -106,3 +106,10 @@ datensparsam und **komplett ohne serverseitigen Zustand**:
   Hoster (Uberspace/Supervisor) persistiert – dorthin gehören deshalb keine Chat-Inhalte. Ein alter
   Debug-Handler, der jede Nachricht samt Inhalt und Autor loggte, wurde am 2026-07-19 genau deshalb
   ersatzlos entfernt; neue Message-Listener dürfen kein pauschales Content-Logging einführen.
+- **Log-Ansicht auf `/config` (seit 2026-07-26).** Zusätzlich zur persistierten Hoster-Datei spiegelt
+  der Bot die letzten ~500 `console.log/warn/error`-Zeilen in einen **In-Memory-Ringpuffer**
+  (`logBuffer.service.ts`), damit ein Admin sie im Browser (`/config/logs`) einsehen kann.
+  **Nicht in Redis, nicht auf Platte** – nach jedem Neustart leer. Es gelten dieselben Grenzen wie für
+  die Prozess-Logs (keine Nachrichteninhalte); zusätzlich werden bekannte Secrets aus der `config.json`
+  (Tokens/Secrets ≥ 8 Zeichen) beim Puffern durch `***` ersetzt, falls sie doch mal in eine
+  Fehlermeldung geraten. Nur für eingeloggte Admins sichtbar (`requireConfigAuth`).

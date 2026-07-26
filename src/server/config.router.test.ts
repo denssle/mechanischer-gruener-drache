@@ -29,6 +29,11 @@ vi.mock('../handlers/greeting.handler.js', () => ({
     default: {lerneAusHistorie: vi.fn()}
 }));
 
+// Log-Puffer schlank mocken - die Log-Ansicht liest nur getLogEntries.
+vi.mock('../services/logBuffer.service.js', () => ({
+    getLogEntries: vi.fn(() => [])
+}));
+
 vi.mock('./config.settings.js', () => ({
     sammleEinstellungen: vi.fn(() => Promise.resolve([
         {label: 'Protokoll-Kanal', wert: '#log', status: 'ok'}
@@ -61,6 +66,7 @@ import client from '../client.js';
 import * as oauth from '../services/discordOAuth.service.js';
 import * as settings from './config.settings.js';
 import greetingHandler from '../handlers/greeting.handler.js';
+import * as logBuffer from '../services/logBuffer.service.js';
 import {createCsrfToken, signSession, SESSION_COOKIE, STATE_COOKIE} from './config.session.js';
 import {
     escapeHtml,
@@ -70,6 +76,7 @@ import {
     handleKanalSpeichern,
     handleLogin,
     handleLogout,
+    handleLogs,
     handleMorgengrussLernen,
     handleRolleSpeichern,
     handleSportSpeichern,
@@ -78,6 +85,7 @@ import {
     renderEinstellungen,
     renderEventFormular,
     renderKanalFormular,
+    renderLogs,
     renderMeilensteinListe,
     renderMorgengrussLernen,
     renderRollenFormular,
@@ -701,6 +709,42 @@ describe('config.router', () => {
 
             expect(res.status).toHaveBeenCalledWith(403);
         });
+    });
+
+    describe('Log-Ansicht', () => {
+        it('renderLogs escaped den Log-Text (kein XSS) und markiert das Level', () => {
+            const html = renderLogs([
+                {zeit: Date.parse('2026-07-26T08:30:15'), level: 'error', text: 'Fehler bei <script>böse</script>'},
+            ]);
+            expect(html).toContain('&lt;script&gt;böse&lt;/script&gt;');
+            expect(html).not.toContain('<script>böse</script>');
+            expect(html).toContain('class="error"');
+            expect(html).toContain('08:30:15');
+        });
+
+        it('renderLogs meldet einen leeren Puffer', () => {
+            expect(renderLogs([])).toContain('Noch keine Log-Zeilen');
+        });
+
+        it('handleLogs rendert die gepufferten Zeilen', () => {
+            (logBuffer.getLogEntries as any).mockReturnValue([
+                {zeit: Date.now(), level: 'log', text: 'eine Zeile'},
+            ]);
+            const res = mockResponse();
+
+            handleLogs(mockRequest(), res);
+
+            expect(res.send.mock.calls[0][0]).toContain('eine Zeile');
+        });
+    });
+
+    it('handleConfigPage verlinkt die Log-Ansicht', async () => {
+        const res = mockResponse();
+        res.locals.configUserId = '12345';
+
+        await handleConfigPage(mockRequest(), res);
+
+        expect(res.send.mock.calls[0][0]).toContain('href="/config/logs"');
     });
 
     it('handleLogout löscht das Session-Cookie und leitet auf /config', () => {

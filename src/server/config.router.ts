@@ -4,6 +4,7 @@ import {PermissionFlagsBits} from 'discord.js';
 import config from '../../config.json' with {type: 'json'};
 import client from '../client.js';
 import greetingHandler from '../handlers/greeting.handler.js';
+import {getLogEntries, LogEntry} from '../services/logBuffer.service.js';
 import {
     buildAuthorizeUrl,
     exchangeCodeForToken,
@@ -114,9 +115,15 @@ function renderPage(bodyHtml: string): string {
         .status-ok { color: #2e7d32; }
         .status-warnung { color: #b26a00; }
         .status-leer { opacity: 0.6; }
+        pre.logs { background: rgba(128,128,128,0.12); border-radius: 0.4rem; padding: 0.75rem; overflow-x: auto; font-size: 0.85rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+        pre.logs .zeit { opacity: 0.6; }
+        pre.logs .warn { color: #b26a00; }
+        pre.logs .error { color: #c62828; }
         @media (prefers-color-scheme: dark) {
             .status-ok { color: #66bb6a; }
             .status-warnung { color: #ffb74d; }
+            pre.logs .warn { color: #ffb74d; }
+            pre.logs .error { color: #ef9a9a; }
         }
     </style>
 </head>
@@ -301,7 +308,31 @@ function configBody(einstellungenHtml: string, bereicheHtml: string, gespeichert
     ${einstellungenHtml}
     <h2>Bearbeiten</h2>
     ${bereicheHtml}
-    <p><a class="logout" href="/config/logout">Abmelden</a></p>`;
+    <p><a href="/config/logs">Bot-Logs ansehen</a> · <a class="logout" href="/config/logout">Abmelden</a></p>`;
+}
+
+// Lokaler Zeitstempel (Host = Europe/Berlin) als HH:MM:SS - fuer die Log-Ansicht reicht die Uhrzeit,
+// das Datum steht im Zweifel im Text. Bewusst manuell formatiert (kein Locale-Rateraten).
+function formatLogZeit(ms: number): string {
+    const d = new Date(ms);
+    const zwei = (n: number) => String(n).padStart(2, '0');
+    return `${zwei(d.getHours())}:${zwei(d.getMinutes())}:${zwei(d.getSeconds())}`;
+}
+
+// Reine Darstellung der Log-Zeilen (aelteste zuerst) in einem <pre>. Jede Zeile wird escaped - Log-Text
+// kann User-/Discord-Inhalte tragen (Namen, Kanalnamen in Fehlermeldungen) -> sonst XSS auf der Seite.
+export function renderLogs(entries: LogEntry[]): string {
+    const zeilen = entries.map(e => {
+        const klasse = e.level === 'log' ? '' : ` class="${e.level}"`;
+        return `<span class="zeit">${formatLogZeit(e.zeit)}</span> <span${klasse}>${escapeHtml(e.text)}</span>`;
+    }).join('\n');
+    const inhalt = entries.length
+        ? `<pre class="logs">${zeilen}</pre>`
+        : '<p class="status-leer">Noch keine Log-Zeilen im Puffer (der Bot wurde gerade erst gestartet?).</p>';
+    return `<h1>Bot-Logs</h1>
+    <p>Die letzten ${entries.length} Zeilen aus dem laufenden Prozess (nach Neustart leer, keine Nachrichteninhalte).</p>
+    ${inhalt}
+    <p><a href="/config/logs">Aktualisieren</a> · <a href="/config">Zurück</a></p>`;
 }
 
 export interface ConfigSeiteDaten {
@@ -655,6 +686,11 @@ export function handleLogout(_req: Request, res: Response): void {
     res.redirect('/config');
 }
 
+// Zeigt die gepufferten Log-Zeilen des laufenden Prozesses. Reines Lesen aus dem RAM-Ringpuffer.
+export function handleLogs(_req: Request, res: Response): void {
+    res.type('html').send(renderPage(renderLogs(getLogEntries())));
+}
+
 const configRouter = Router();
 // requireConfigAuth ist async (frische Admin-Pruefung) - eigenes .catch als Sicherheitsnetz,
 // obwohl pruefeAdmin selbst schon alle Fehler abfaengt (kein unhandled reject).
@@ -782,6 +818,17 @@ configRouter.get('/config/callback', (req, res) => {
         }
     });
 });
+configRouter.get('/config/logs',
+    (req, res, next) => {
+        requireConfigAuth(req, res, next).catch((error) => {
+            console.error('Fehler in requireConfigAuth:', error);
+            if (!res.headersSent) {
+                res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
+            }
+        });
+    },
+    handleLogs
+);
 configRouter.get('/config/logout', handleLogout);
 
 export default configRouter;
