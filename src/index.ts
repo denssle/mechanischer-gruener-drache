@@ -65,8 +65,20 @@ client.on(Events.MessageCreate, (message) => {
         console.error('Fehler im Morgengruß-Handler:', error);
     });
 });
-client.on(Events.MessageDelete, (message) => loggingHandler.handleMessageDelete(message));
-client.on(Events.MessageUpdate, (oldMessage, newMessage) => loggingHandler.handleMessageUpdate(oldMessage, newMessage));
+// Alle Logging-Registrierungen mit .catch(): die Handler fangen ihre Fehler zwar selbst (bei jedem
+// ist `try {` die erste Anweisung), aber das ist Disziplin IM Handler - eine Zeile vor dem try oder
+// ein neuer Handler ohne try würde als unhandled rejection den kompletten Prozess killen (siehe
+// CLAUDE.md, am 2026-07-03 live passiert). Die Registrierung selbst darf sich darauf nicht verlassen.
+client.on(Events.MessageDelete, (message) => {
+    loggingHandler.handleMessageDelete(message).catch((error) => {
+        console.error('Fehler im Logging-Handler (MessageDelete):', error);
+    });
+});
+client.on(Events.MessageUpdate, (oldMessage, newMessage) => {
+    loggingHandler.handleMessageUpdate(oldMessage, newMessage).catch((error) => {
+        console.error('Fehler im Logging-Handler (MessageUpdate):', error);
+    });
+});
 // Sport-Auto-Erfassung auch für nachträglich bearbeitete Nachrichten (typischer Fall: das "+" wurde
 // vergessen und wird nachgetragen). Der Handler schützt sich per eigener Reaktion gegen Doppel-Einträge.
 client.on(Events.MessageUpdate, (_oldMessage, newMessage) => {
@@ -74,12 +86,36 @@ client.on(Events.MessageUpdate, (_oldMessage, newMessage) => {
         console.error('Fehler im Sport-Handler (MessageUpdate):', error);
     });
 });
-client.on(Events.GuildMemberAdd, (member) => loggingHandler.handleGuildMemberAdd(member));
-client.on(Events.GuildMemberRemove, (member) => loggingHandler.handleGuildMemberRemove(member));
-client.on(Events.GuildMemberUpdate, (oldMember, newMember) => loggingHandler.handleGuildMemberUpdate(oldMember, newMember));
-client.on(Events.GuildBanAdd, (ban) => loggingHandler.handleGuildBanAdd(ban));
-client.on(Events.GuildBanRemove, (ban) => loggingHandler.handleGuildBanRemove(ban));
-client.on(Events.MessageBulkDelete, (messages, channel) => loggingHandler.handleMessageBulkDelete(messages, channel));
+client.on(Events.GuildMemberAdd, (member) => {
+    loggingHandler.handleGuildMemberAdd(member).catch((error) => {
+        console.error('Fehler im Logging-Handler (GuildMemberAdd):', error);
+    });
+});
+client.on(Events.GuildMemberRemove, (member) => {
+    loggingHandler.handleGuildMemberRemove(member).catch((error) => {
+        console.error('Fehler im Logging-Handler (GuildMemberRemove):', error);
+    });
+});
+client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
+    loggingHandler.handleGuildMemberUpdate(oldMember, newMember).catch((error) => {
+        console.error('Fehler im Logging-Handler (GuildMemberUpdate):', error);
+    });
+});
+client.on(Events.GuildBanAdd, (ban) => {
+    loggingHandler.handleGuildBanAdd(ban).catch((error) => {
+        console.error('Fehler im Logging-Handler (GuildBanAdd):', error);
+    });
+});
+client.on(Events.GuildBanRemove, (ban) => {
+    loggingHandler.handleGuildBanRemove(ban).catch((error) => {
+        console.error('Fehler im Logging-Handler (GuildBanRemove):', error);
+    });
+});
+client.on(Events.MessageBulkDelete, (messages, channel) => {
+    loggingHandler.handleMessageBulkDelete(messages, channel).catch((error) => {
+        console.error('Fehler im Logging-Handler (MessageBulkDelete):', error);
+    });
+});
 
 // Prüfintervall für den täglichen Kilometerstand-Post. Der Handler entscheidet selbst per
 // Tagesmarker, ob wirklich gepostet wird - der Timer stupst nur regelmäßig an (jede Minute reicht

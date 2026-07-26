@@ -14,7 +14,7 @@ export const HELP_TEXT =
     `\`/twitch verknuepfen\` – deinen Kanal hinterlegen; der Server wird benachrichtigt, wenn du live gehst\n\n` +
     `**Sport** (Details: \`/sport hilfe\`)\n` +
     `\`/sport eintragen\` – Kilometer eintragen · \`/sport gesamt\` – gemeinsame Gesamtsumme · \`/sport statistik\` – deine Übersicht\n` +
-    `Im Sport-Kanal reicht auch eine normale Nachricht wie „12 km gelaufen".\n\n` +
+    `Im Sport-Kanal reicht auch eine normale Nachricht wie „+12 km gelaufen" – das „+" ist nötig.\n\n` +
     `**Event** (Details: \`/event hilfe\`)\n` +
     `\`/event countdown\` – wie lange noch bis zum nächsten Community-Event?\n\n` +
     `**Spiel & Spaß**\n` +

@@ -75,6 +75,23 @@ export function erkenneAktivitaet(text: string): SportActivity {
     return DEFAULT_AKTIVITAET;
 }
 
+// Exportiert wie CHARAKTER_HELP/SPIELWELT_HELP, damit ein Test die km-Beispiele darin gegen den
+// echten parseKilometer prüfen kann - die Hilfe soll nicht wieder etwas versprechen, was der Parser
+// nicht einlöst (siehe Regression in sport.handler.test.ts).
+export const SPORT_HILFE =
+    `**Sport-Befehle**\n\n` +
+    `**/sport eintragen** – Neue sportliche Aktivität eintragen\n` +
+    `**/sport loeschen** – Deinen letzten Eintrag löschen\n` +
+    `**/sport bearbeiten** – Kilometer deines letzten Eintrags korrigieren\n` +
+    `**/sport gesamt** – Gesamtkilometer aller Sportler\n` +
+    `**/sport statistik** – Deine persönliche Übersicht pro Aktivität\n` +
+    `**/sport meilenstein setzen** – Einen Meilenstein für die gemeinsame Gesamtdistanz anlegen\n` +
+    `**/sport hilfe** – Zeigt diese Übersicht\n\n` +
+    `Im Sport-Kanal genügt auch eine normale Nachricht: Wer „+12 km gelaufen" schreibt, ` +
+    `bekommt den Eintrag automatisch – erkennbar an der Reaktion ${BESTAETIGUNGS_REAKTION} ` +
+    `an der Nachricht. Das „+" vor den Kilometern ist nötig; vergessen? Nachricht einfach ` +
+    `bearbeiten, das zählt auch. Ohne erkennbare Sportart wird Laufen angenommen.`;
+
 class SportHandler {
     // Auto-Listener: erfasst Kilometer aus normalen Chat-Nachrichten - aber NUR im konfigurierten
     // Sport-Kanal (anders als der serverweite Blåhaj-Listener). Serverweit würde jedes beiläufige
@@ -222,20 +239,7 @@ class SportHandler {
     }
 
     async handleHilfe(interaction: ChatInputCommandInteraction) {
-        return interaction.reply(
-            `**Sport-Befehle**\n\n` +
-            `**/sport eintragen** – Neue sportliche Aktivität eintragen\n` +
-            `**/sport loeschen** – Deinen letzten Eintrag löschen\n` +
-            `**/sport bearbeiten** – Kilometer deines letzten Eintrags korrigieren\n` +
-            `**/sport gesamt** – Gesamtkilometer aller Sportler\n` +
-            `**/sport statistik** – Deine persönliche Übersicht pro Aktivität\n` +
-            `**/sport meilenstein setzen** – Einen Meilenstein für die gemeinsame Gesamtdistanz anlegen\n` +
-            `**/sport hilfe** – Zeigt diese Übersicht\n\n` +
-            `Im Sport-Kanal genügt auch eine normale Nachricht: Wer „+12 km gelaufen" schreibt, ` +
-            `bekommt den Eintrag automatisch – erkennbar an der Reaktion ${BESTAETIGUNGS_REAKTION} ` +
-            `an der Nachricht. Das „+" vor den Kilometern ist nötig; vergessen? Nachricht einfach ` +
-            `bearbeiten, das zählt auch. Ohne erkennbare Sportart wird Laufen angenommen.`
-        );
+        return interaction.reply(SPORT_HILFE);
     }
 
     async handleGesamt(interaction: ChatInputCommandInteraction) {

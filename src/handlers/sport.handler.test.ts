@@ -35,7 +35,8 @@ vi.mock('../client.js', () => ({
 
 import sportService from '../services/sport.service.js';
 import client from '../client.js';
-import sportHandler, { parseKilometer, erkenneAktivitaet, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, formatTag, rundeKilometer } from './sport.handler.js';
+import sportHandler, { parseKilometer, erkenneAktivitaet, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, formatTag, rundeKilometer, SPORT_HILFE } from './sport.handler.js';
+import { HELP_TEXT } from './hilfe.handler.js';
 
 const mockEntry = (overrides = {}) => ({
     id: 'entry-1',
@@ -132,6 +133,23 @@ describe('SportHandler', () => {
             ['die Strecke sind 12,5 Kilometer'],
         ])('gibt null zurück ohne "+" vor der Zahl: "%s"', (text) => {
             expect(parseKilometer(text)).toBeNull();
+        });
+
+        // Regression 2026-07-14 bis 2026-07-26: HELP_TEXT warb mit „12 km gelaufen", während das
+        // "+" längst Pflicht war - wer der Hilfe folgte, bekam gar keine Reaktion und musste den
+        // Bot für kaputt halten. Beide Hilfe-Texte werden deshalb gegen den echten Parser geprüft,
+        // statt sich darauf zu verlassen, dass jemand beim Ändern an beide Stellen denkt.
+        it.each([
+            ['HELP_TEXT (/hilfe)', HELP_TEXT],
+            ['SPORT_HILFE (/sport hilfe)', SPORT_HILFE],
+        ])('jedes km-Beispiel in %s wird vom Parser auch wirklich erkannt', (_name, text) => {
+            // Alle in „…" zitierten Beispiele, die eine Kilometer-Angabe enthalten.
+            const beispiele = [...text.matchAll(/„([^"„]*\d[^"„]*(?:km|kilometer)[^"„]*)"/gi)].map(m => m[1]);
+
+            expect(beispiele.length).toBeGreaterThan(0);
+            for (const beispiel of beispiele) {
+                expect(parseKilometer(beispiel), `Beispiel "${beispiel}" wird nicht erkannt`).not.toBeNull();
+            }
         });
 
         // Bewusst nur die erste Angabe (nicht wie beim Blåhaj-Rechner alle summiert):

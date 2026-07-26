@@ -18,7 +18,8 @@ export const CHARAKTER_HELP =
     `**Charakter-Befehle**\n\n` +
     `\`/charakter verknuepfen name:<Name>\` – deinen LotGD-Charakter hinterlegen (nur der öffentliche Name).\n` +
     `\`/charakter anzeigen [name:<Name>]\` – Charakter-Karte anzeigen; ohne Name deinen verknüpften.\n` +
-    `\`/charakter entfernen\` – deine Verknüpfung löschen.\n\n` +
+    `\`/charakter entfernen\` – deine Verknüpfung löschen.\n` +
+    `\`/charakter hilfe\` – zeigt diese Übersicht.\n\n` +
     `Alle Daten stammen aus der öffentlichen Kriegerliste von lotgd.de – kein Login, keine Passwörter.`;
 
 function buildCard(entry: CharacterEntry): EmbedBuilder {
