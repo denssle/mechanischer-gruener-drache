@@ -27,13 +27,13 @@ describe('GreetingService', () => {
         expect(redis.get).toHaveBeenCalledWith('GREETING:CHANNEL');
     });
 
-    it('speichert und liest den Tagesmarker pro User im Hash GREETING:LAST_DAY', async () => {
+    it('speichert und liest den Tagesmarker pro User im Hash GREETING:LAST_DAY_BY_USER', async () => {
         await greetingService.setLastGreetingDay('u1', '2026-07-21');
-        expect(redis.setHashField).toHaveBeenCalledWith('GREETING:LAST_DAY', 'u1', '2026-07-21');
+        expect(redis.setHashField).toHaveBeenCalledWith('GREETING:LAST_DAY_BY_USER', 'u1', '2026-07-21');
 
         redis.getHashAll.mockResolvedValue({ u1: '2026-07-21' });
         expect(await greetingService.getLastGreetingDay('u1')).toBe('2026-07-21');
-        expect(redis.getHashAll).toHaveBeenCalledWith('GREETING:LAST_DAY');
+        expect(redis.getHashAll).toHaveBeenCalledWith('GREETING:LAST_DAY_BY_USER');
     });
 
     it('liefert null, wenn die Person am Tag noch nicht begrüßt wurde', async () => {

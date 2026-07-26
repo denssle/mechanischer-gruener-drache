@@ -4,7 +4,11 @@ const KEYS = {
     channel: 'GREETING:CHANNEL',
     // Hash userId → Datum (YYYY-MM-DD) der zuletzt begrüßten ersten Nachricht dieser Person am Tag -
     // Doppelgruß-Schutz PRO Person, damit jede:r am Tag der eigenen ersten Nachricht begrüßt wird.
-    lastDay: 'GREETING:LAST_DAY',
+    // BEWUSST ein anderer Key-Name als früher: bis 1.51.x war 'GREETING:LAST_DAY' ein einfacher STRING
+    // (globaler Tagesmarker). Seit dem Wechsel auf einen Hash pro Person würde HGETALL gegen diesen
+    // alten String-Key mit WRONGTYPE crashen (→ gar kein Gruß mehr). Neuer Name = keine Kollision;
+    // der verwaiste alte String-Key liegt harmlos brach und kann bei Gelegenheit gelöscht werden.
+    lastDay: 'GREETING:LAST_DAY_BY_USER',
     // Hash userId → persönliches Emoji, aus der Chat-Historie gelernt (Feld pro Person).
     emoji: 'GREETING:EMOJI',
 };

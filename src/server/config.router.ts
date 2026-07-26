@@ -3,6 +3,7 @@ import {randomUUID} from 'crypto';
 import {PermissionFlagsBits} from 'discord.js';
 import config from '../../config.json' with {type: 'json'};
 import client from '../client.js';
+import greetingHandler from '../handlers/greeting.handler.js';
 import {
     buildAuthorizeUrl,
     exchangeCodeForToken,
@@ -278,10 +279,25 @@ export function renderMeilensteinListe(meilensteine: SportMilestone[], csrfToken
     <ul class="meilensteine">${zeilen}</ul>`;
 }
 
-function configBody(einstellungenHtml: string, bereicheHtml: string, gespeichert: boolean): string {
+// Morgengruß: Button, der den Historien-Scan für die persönlichen Emojis anstößt (früher
+// /morgengruss lernen). Der Kanal wird oben im selben Bereich gesetzt; ist keiner da, meldet das der
+// Handler nach dem Klick. Der Scan kostet ein paar API-Calls, die POST-Antwort blockt so lange.
+export function renderMorgengrussLernen(csrfToken: string): string {
+    return `<form class="setting" method="post" action="/config/morgengruss">
+        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+        <label>Persönliche Emojis aus der Chat-Historie lernen</label>
+        <button type="submit">Jetzt lernen</button>
+    </form>`;
+}
+
+// hinweis ist ein vollständig von uns kontrollierter Text (kein User-Input, keine Escaping-Pflicht) -
+// die Zahl beim Lernen wird in handleConfigPage bewusst zu Number gecastet, damit da nichts Rohes
+// aus der Query landet.
+function configBody(einstellungenHtml: string, bereicheHtml: string, gespeichert: boolean, hinweis?: string): string {
     return `<h1>Mechanischer Grüner Drache</h1>
     <p>Aktuelle Bot-Einstellungen im Überblick, darunter nach Bereich gruppiert zum Bearbeiten.</p>
     ${gespeichert ? '<p class="status-ok">Gespeichert.</p>' : ''}
+    ${hinweis ? `<p class="status-ok">${hinweis}</p>` : ''}
     ${einstellungenHtml}
     <h2>Bearbeiten</h2>
     ${bereicheHtml}
@@ -300,6 +316,7 @@ export interface ConfigSeiteDaten {
     meilensteine: SportMilestone[];
     csrfToken: string;
     gespeichert: boolean;
+    hinweis?: string;
 }
 
 // Ein fachlich abgegrenzter Bereich als <fieldset> (semantisch die Formular-Gruppierung),
@@ -325,9 +342,9 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
         renderBereich('Twitch', kanal('twitch-kanal') + renderRollenFormular(daten.rollen, daten.twitchRolleId, csrf)) +
         renderBereich('Sport', kanal('sport-kanal') + renderSportAdmin(daten.mitglieder, daten.legacyKilometer, csrf) + renderMeilensteinListe(daten.meilensteine, csrf)) +
         renderBereich('Nachrichten-Protokoll', kanal('protokoll')) +
-        renderBereich('Morgengruß', kanal('morgengruss-kanal')) +
+        renderBereich('Morgengruß', kanal('morgengruss-kanal') + renderMorgengrussLernen(csrf)) +
         renderBereich('Event', renderEventFormular(daten.eventFelder, csrf));
-    return renderPage(configBody(renderEinstellungen(daten.einstellungen), bereiche, daten.gespeichert));
+    return renderPage(configBody(renderEinstellungen(daten.einstellungen), bereiche, daten.gespeichert, daten.hinweis));
 }
 
 const LOGIN_BODY = `<h1>Mechanischer Grüner Drache</h1>
@@ -389,6 +406,19 @@ export async function requireConfigAuth(req: Request, res: Response, next: () =>
     next();
 }
 
+// Rückmeldung des Morgengruß-Lernen-Buttons (Post/Redirect/Get). Die Zahl bewusst zu Number casten,
+// nicht die rohe Query interpolieren (sonst XSS über ?gelernt=). null-Kanal-Fall verweist nach oben.
+function morgengrussHinweis(req: Request): string | undefined {
+    const gelernt = Number(req.query.gelernt);
+    if (typeof req.query.gelernt === 'string' && Number.isFinite(gelernt)) {
+        return `Aus der Historie habe ich ${gelernt} persönliche Emojis gelernt.`;
+    }
+    if (req.query.morgengruss === 'kein-kanal') {
+        return 'Es ist kein (abrufbarer) Morgengruß-Kanal gesetzt. Setze ihn zuerst oben im Bereich „Morgengruß".';
+    }
+    return undefined;
+}
+
 export async function handleConfigPage(req: Request, res: Response): Promise<void> {
     try {
         const userId = res.locals.configUserId as string;
@@ -404,6 +434,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
             meilensteine: await holeMeilensteine(),
             csrfToken: createCsrfToken(userId),
             gespeichert: req.query.gespeichert === '1',
+            hinweis: morgengrussHinweis(req),
         });
         res.type('html').send(html);
     } catch (error) {
@@ -544,6 +575,27 @@ export async function handleSportSpeichern(req: Request, res: Response): Promise
     }
 
     res.redirect('/config?gespeichert=1');
+}
+
+// Morgengruß: stößt den Historien-Scan an (früher /morgengruss lernen). CSRF zuerst, dann scannen -
+// der Scan (greetingHandler.lerneAusHistorie) löst den Kanal selbst auf und liefert null, wenn keiner
+// gesetzt/abrufbar ist. Ergebnis per Redirect (PRG), damit ein Reload nicht erneut scannt.
+export async function handleMorgengrussLernen(req: Request, res: Response): Promise<void> {
+    const userId = res.locals.configUserId as string;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const token = typeof body._csrf === 'string' ? body._csrf : undefined;
+
+    if (!verifyCsrfToken(userId, token)) {
+        res.status(403).type('html').send(renderPage(forbiddenBody('Ungültiges oder fehlendes CSRF-Token.')));
+        return;
+    }
+
+    const anzahl = await greetingHandler.lerneAusHistorie();
+    if (anzahl === null) {
+        res.redirect('/config?morgengruss=kein-kanal');
+        return;
+    }
+    res.redirect('/config?gelernt=' + anzahl);
 }
 
 // Startet den OAuth-Flow: zufaelligen state als kurzlebiges Cookie setzen (CSRF, Double-Submit)
@@ -697,6 +749,25 @@ configRouter.post('/config/sport',
             console.error('Fehler beim Speichern der Sport-Einstellung:', error);
             if (!res.headersSent) {
                 res.status(500).type('html').send(renderPage(forbiddenBody('Speichern fehlgeschlagen.')));
+            }
+        });
+    }
+);
+configRouter.post('/config/morgengruss',
+    (req, res, next) => {
+        requireConfigAuth(req, res, next).catch((error) => {
+            console.error('Fehler in requireConfigAuth:', error);
+            if (!res.headersSent) {
+                res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
+            }
+        });
+    },
+    urlencoded({extended: false}),
+    (req, res) => {
+        handleMorgengrussLernen(req, res).catch((error) => {
+            console.error('Fehler beim Morgengruß-Lernen:', error);
+            if (!res.headersSent) {
+                res.status(500).type('html').send(renderPage(forbiddenBody('Lernen fehlgeschlagen.')));
             }
         });
     }

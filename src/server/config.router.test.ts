@@ -23,6 +23,12 @@ vi.mock('../services/discordOAuth.service.js', () => ({
     fetchDiscordUserId: vi.fn()
 }));
 
+// config.router importiert den greeting.handler (fuer den Morgengruss-Lernen-Button) - schlank mocken,
+// damit nicht der echte Handler (mit client/redis) geladen wird.
+vi.mock('../handlers/greeting.handler.js', () => ({
+    default: {lerneAusHistorie: vi.fn()}
+}));
+
 vi.mock('./config.settings.js', () => ({
     sammleEinstellungen: vi.fn(() => Promise.resolve([
         {label: 'Protokoll-Kanal', wert: '#log', status: 'ok'}
@@ -54,6 +60,7 @@ vi.mock('./config.settings.js', () => ({
 import client from '../client.js';
 import * as oauth from '../services/discordOAuth.service.js';
 import * as settings from './config.settings.js';
+import greetingHandler from '../handlers/greeting.handler.js';
 import {createCsrfToken, signSession, SESSION_COOKIE, STATE_COOKIE} from './config.session.js';
 import {
     escapeHtml,
@@ -63,6 +70,7 @@ import {
     handleKanalSpeichern,
     handleLogin,
     handleLogout,
+    handleMorgengrussLernen,
     handleRolleSpeichern,
     handleSportSpeichern,
     parseIsoDateTime,
@@ -71,6 +79,7 @@ import {
     renderEventFormular,
     renderKanalFormular,
     renderMeilensteinListe,
+    renderMorgengrussLernen,
     renderRollenFormular,
     renderSportAdmin,
     requireConfigAuth
@@ -544,6 +553,56 @@ describe('config.router', () => {
 
     it('renderMeilensteinListe meldet, wenn keine Meilensteine da sind', () => {
         expect(renderMeilensteinListe([], 'token-m')).toContain('Noch keine Meilensteine');
+    });
+
+    describe('handleMorgengrussLernen', () => {
+        const anfrage = (body: Record<string, string>) => mockRequest({body});
+
+        it('stößt den Historien-Scan an und meldet die Anzahl zurück', async () => {
+            (greetingHandler.lerneAusHistorie as any).mockResolvedValue(3);
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussLernen(anfrage({_csrf: createCsrfToken('12345')}), res);
+
+            expect(greetingHandler.lerneAusHistorie).toHaveBeenCalledTimes(1);
+            expect(res.redirect).toHaveBeenCalledWith('/config?gelernt=3');
+        });
+
+        it('leitet auf den kein-Kanal-Hinweis, wenn kein Kanal gesetzt ist', async () => {
+            (greetingHandler.lerneAusHistorie as any).mockResolvedValue(null);
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussLernen(anfrage({_csrf: createCsrfToken('12345')}), res);
+
+            expect(res.redirect).toHaveBeenCalledWith('/config?morgengruss=kein-kanal');
+        });
+
+        it('lehnt ein fehlendes CSRF-Token ab und scannt nicht', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussLernen(anfrage({}), res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(greetingHandler.lerneAusHistorie).not.toHaveBeenCalled();
+        });
+    });
+
+    it('handleConfigPage zeigt die Lern-Rückmeldung (Zahl aus der Query, kein XSS)', async () => {
+        const res = mockResponse();
+        res.locals.configUserId = '12345';
+
+        await handleConfigPage(mockRequest({query: {gelernt: '5'}}), res);
+
+        expect(res.send.mock.calls[0][0]).toContain('5 persönliche Emojis gelernt');
+    });
+
+    it('renderMorgengrussLernen baut den Lern-Button mit CSRF-Token', () => {
+        const html = renderMorgengrussLernen('token-mg');
+        expect(html).toContain('action="/config/morgengruss"');
+        expect(html).toContain('value="token-mg"');
     });
 
     it('renderConfigSeite baut die vollständige Seite (Einstellungen + beide Formular-Arten)', () => {

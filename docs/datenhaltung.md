@@ -40,7 +40,7 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `BLAHAJ:TOTAL_EUR` | eine einzige Zahl (Summe aller je erwähnten Euro-Beträge) | dauerhaft | `/blahaj` |
 | `EVENT:NEXT` | Timestamp + optionaler Titel des nächsten Community-Events | bis `/event entfernen` | `/event countdown` |
 | `GREETING:CHANNEL` | Channel-ID des Morgengruß-Kanals | bis zum Überschreiben | Morgengruß-Tradition (`/morgengruss`) |
-| `GREETING:LAST_DAY` (Hash userId→Tag) | Tag (YYYY-MM-DD) der zuletzt begrüßten ersten Nachricht **je Person** | bis zum Überschreiben | Doppelgruß-Schutz (jede Person einmal pro Tag) |
+| `GREETING:LAST_DAY_BY_USER` (Hash userId→Tag) | Tag (YYYY-MM-DD) der zuletzt begrüßten ersten Nachricht **je Person** | bis zum Überschreiben | Doppelgruß-Schutz (jede Person einmal pro Tag). *(Vorgänger `GREETING:LAST_DAY` war ein String-Marker; umbenannt, um die WRONGTYPE-Kollision beim Wechsel auf einen Hash zu vermeiden.)* |
 | `GREETING:EMOJI` (Hash userId→Emoji) | persönliches Morgengruß-Emoji, aus der Chat-Historie gelernt (nur die Emoji-Kennung, keine Nachrichten) | bis zum Überschreiben (`/morgengruss lernen`) | persönlicher Morgengruß |
 
 ## Nachrichteninhalte (seit 2026-07-11)

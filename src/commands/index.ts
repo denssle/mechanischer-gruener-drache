@@ -11,7 +11,6 @@ import spielwelt from "./spielwelt.command.js";
 import charakter from "./character.command.js";
 import hilfe from "./hilfe.command.js";
 import blahaj from "./blahaj.command.js";
-import morgengruss from "./morgengruss.command.js";
 import diagnose from "./diagnose.command.js";
 
 export default [
@@ -28,6 +27,5 @@ export default [
     charakter,
     hilfe,
     blahaj,
-    morgengruss,
     diagnose
 ];

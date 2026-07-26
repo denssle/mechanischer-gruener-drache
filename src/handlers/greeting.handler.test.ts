@@ -78,23 +78,41 @@ describe('werteReaktionenAus', () => {
     });
 });
 
-describe('GreetingHandler.handleLernen', () => {
+describe('GreetingHandler.lerneAusHistorie', () => {
     beforeEach(() => {
         Object.values(svc).forEach(fn => fn.mockReset());
         channelsFetch.mockReset();
     });
 
-    it('meldet, wenn kein Kanal gesetzt ist', async () => {
+    it('gibt null zurück, wenn kein Kanal gesetzt ist', async () => {
         svc.getChannel.mockResolvedValue(null);
-        const interaction = {
-            memberPermissions: { has: () => true },
-            deferReply: vi.fn(),
-            editReply: vi.fn(),
-        } as any;
 
-        await greetingHandler.handleLernen(interaction);
+        expect(await greetingHandler.lerneAusHistorie()).toBeNull();
+        expect(svc.setLearnedEmoji).not.toHaveBeenCalled();
+    });
 
-        expect(interaction.editReply.mock.calls[0][0]).toContain('kein');
+    it('scannt die Historie, speichert die abgeleiteten Emojis und gibt die Anzahl zurück', async () => {
+        svc.getChannel.mockResolvedValue('greet-channel');
+        // Eine Begrüßung von "tirsis": Welle + persönliches ☀️ - genau das Signal, das gelernt wird.
+        const nachricht = {
+            id: 'm1',
+            author: { id: 'tirsis' },
+            reactions: { cache: { values: () => [
+                { emoji: { id: null, name: WELLE } },
+                { emoji: { id: null, name: '☀️' } },
+            ] } },
+        };
+        const batch = { size: 1, values: () => [nachricht].values(), last: () => nachricht };
+        const channel = {
+            isTextBased: () => true,
+            messages: { fetch: vi.fn().mockResolvedValue(batch) },
+        };
+        channelsFetch.mockResolvedValue(channel);
+
+        const anzahl = await greetingHandler.lerneAusHistorie();
+
+        expect(anzahl).toBe(1);
+        expect(svc.setLearnedEmoji).toHaveBeenCalledWith('tirsis', '☀️');
     });
 });
 

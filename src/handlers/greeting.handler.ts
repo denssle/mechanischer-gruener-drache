@@ -1,9 +1,6 @@
 import {
-    ChatInputCommandInteraction,
     Message,
-    MessageFlags,
     OmitPartialGroupDMChannel,
-    PermissionFlagsBits,
     TextBasedChannel,
 } from 'discord.js';
 import client from '../client.js';
@@ -74,25 +71,16 @@ function formatTag(date: Date): string {
 }
 
 class GreetingHandler {
-    // /morgengruss lernen: die gelernten Emojis aus der aktuellen Historie auffrischen.
-    async handleLernen(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({
-                content: 'Du benötigst Administrator-Rechte für diesen Befehl.',
-                flags: MessageFlags.Ephemeral,
-            });
-        }
-
-        await interaction.deferReply();
+    // Frischt die gelernten persönlichen Emojis aus der aktuellen Kanal-Historie auf. Gibt die Anzahl
+    // gelernter Zuordnungen zurück, oder null, wenn kein (abrufbarer) Morgengruß-Kanal gesetzt ist.
+    // Wird vom /config-Button ausgelöst (der Kanal wird dort gesetzt, der Scan läuft hier) - seit der
+    // Migration gibt es keinen /morgengruss lernen-Slash-Command mehr.
+    async lerneAusHistorie(): Promise<number | null> {
         const kanal = await this.holeTextkanal();
         if (!kanal) {
-            return interaction.editReply(
-                'Es ist kein (abrufbarer) Morgengruß-Kanal gesetzt. Setze ihn zuerst auf der Konfigurationsseite (/config).'
-            );
+            return null;
         }
-
-        const gelernt = await this.lerneUndSpeichere(kanal);
-        return interaction.editReply(`Aus der Historie habe ich ${gelernt} persönliche Emojis gelernt.`);
+        return this.lerneUndSpeichere(kanal);
     }
 
     // Auto-Listener: begrüßt die erste Nachricht JEDER Person am Tag im Morgengruß-Kanal. Bewusst
