@@ -28,7 +28,8 @@ vi.mock('../services/logging.service.js', () => ({
 vi.mock('../services/greeting.service.js', () => ({
     default: {
         getChannel: vi.fn(), setChannel: vi.fn(),
-        getLearnedEmojis: vi.fn(async () => ({})), setLearnedEmoji: vi.fn()
+        getLearnedEmojis: vi.fn(async () => ({})), setLearnedEmoji: vi.fn(),
+        getManualEmojis: vi.fn(async () => ({})), setManualEmoji: vi.fn()
     }
 }));
 vi.mock('../services/event.service.js', () => ({
@@ -352,6 +353,9 @@ describe('config.settings – Sport-Admin', () => {
 describe('config.settings – Morgengruß-Emojis', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // clearAllMocks löscht nur die Aufrufe, nicht die Rückgaben - ohne diesen Default würde die
+        // Handeingabe eines Tests in alle folgenden lecken.
+        (greetingService.getManualEmojis as any).mockResolvedValue({});
     });
 
     // Mitglieder + Server-Emojis; das Custom-Emoji "blahaj" liegt unter der ID 555.
@@ -378,23 +382,46 @@ describe('config.settings – Morgengruß-Emojis', () => {
         (greetingService.getLearnedEmojis as any).mockResolvedValue({m1: '🦊'});
 
         const tirsis = (await holeMorgengrussEmojis()).find(e => e.id === 'm1')!;
-        expect(tirsis.gelernt).toBe(true);
+        expect(tirsis.herkunft).toBe('gelernt');
         expect(tirsis.emoji).toEqual({art: 'unicode', zeichen: '🦊'});
     });
 
     // Ohne Gelerntes greift beim Gruß ableiteEmoji - diese Leute gehören mit in die Übersicht,
     // sonst fehlte die halbe Belegschaft. Aber erkennbar als Fallback.
-    it('fällt auf das abgeleitete Emoji zurück und markiert es als nicht gelernt', async () => {
+    it('fällt auf das abgeleitete Emoji zurück und markiert es als abgeleitet', async () => {
         mitServer();
         (greetingService.getLearnedEmojis as any).mockResolvedValue({});
 
         const eintraege = await holeMorgengrussEmojis();
         expect(eintraege).toHaveLength(3);
-        expect(eintraege.every(e => e.gelernt === false)).toBe(true);
+        expect(eintraege.every(e => e.herkunft === 'abgeleitet')).toBe(true);
         // Deterministisch aus der User-ID, also identisch zu dem, was der Gruß verwenden würde.
         expect(eintraege.find(e => e.id === 'm1')!.emoji).toEqual({
             art: 'unicode', zeichen: ableiteEmoji('m1')
         });
+    });
+
+    // Der dritte Zustand: von Hand gesetzt. Er schlägt das Gelernte - dieselbe Rangfolge wie beim
+    // Gruß selbst, sonst zeigte die Seite etwas anderes an, als der Bot am Morgen reagiert.
+    it('bevorzugt das manuell gesetzte Emoji vor dem gelernten', async () => {
+        mitServer();
+        (greetingService.getLearnedEmojis as any).mockResolvedValue({m1: '🦊'});
+        (greetingService.getManualEmojis as any).mockResolvedValue({m1: '🍪'});
+
+        const tirsis = (await holeMorgengrussEmojis()).find(e => e.id === 'm1')!;
+        expect(tirsis.herkunft).toBe('manuell');
+        expect(tirsis.emoji).toEqual({art: 'unicode', zeichen: '🍪'});
+        expect(tirsis.eingabeWert).toBe('🍪');
+    });
+
+    it('markiert manuell gesetzte Emojis auch ohne Gelerntes als manuell', async () => {
+        mitServer();
+        (greetingService.getLearnedEmojis as any).mockResolvedValue({});
+        (greetingService.getManualEmojis as any).mockResolvedValue({m2: '🍪'});
+
+        const eintraege = await holeMorgengrussEmojis();
+        expect(eintraege.find(e => e.id === 'm2')!.herkunft).toBe('manuell');
+        expect(eintraege.find(e => e.id === 'm1')!.herkunft).toBe('abgeleitet');
     });
 
     // Custom-Emojis liegen als blanke Snowflake-ID im Hash - ohne Auflösung stünde in der Tabelle
@@ -429,7 +456,7 @@ describe('config.settings – Morgengruß-Emojis', () => {
 
         const eintraege = await holeMorgengrussEmojis();
         expect(eintraege).toHaveLength(3);
-        expect(eintraege.every(e => e.gelernt === false)).toBe(true);
+        expect(eintraege.every(e => e.herkunft === 'abgeleitet')).toBe(true);
     });
 
     // Tippbare Form fürs Textfeld: Server-Emojis als :name:, damit man keine ID abschreiben muss.
@@ -469,6 +496,14 @@ describe('config.settings – Morgengruß-Emojis', () => {
             (greetingService.getLearnedEmojis as any).mockResolvedValue({m1: '🦊'});
 
             expect(await holeEmojiVorschlaege()).toContain('🦊');
+        });
+
+        it('nimmt auch manuell gesetzte Emojis als Vorschlag mit auf', async () => {
+            mitServer();
+            (greetingService.getLearnedEmojis as any).mockResolvedValue({});
+            (greetingService.getManualEmojis as any).mockResolvedValue({m1: '🍪'});
+
+            expect(await holeEmojiVorschlaege()).toContain('🍪');
         });
 
         // Rohe IDs sind nichts, was man tippen würde - die Server-Emojis stehen als :name: drin.
@@ -536,9 +571,12 @@ describe('config.settings – Morgengruß-Emojis', () => {
         });
     });
 
-    it('speichereMorgengrussEmoji schreibt in den gelernten Hash', async () => {
+    // In den MANUELLEN Hash, nicht in den gelernten: sonst würde der nächste Historien-Scan die
+    // Handeingabe überschreiben - genau das soll sie überleben.
+    it('speichereMorgengrussEmoji schreibt in den manuellen Hash', async () => {
         await speichereMorgengrussEmoji('m1', '🦊');
-        expect(greetingService.setLearnedEmoji).toHaveBeenCalledWith('m1', '🦊');
+        expect(greetingService.setManualEmoji).toHaveBeenCalledWith('m1', '🦊');
+        expect(greetingService.setLearnedEmoji).not.toHaveBeenCalled();
     });
 
     it('reicht Meilenstein-Aktionen an den Service durch', async () => {

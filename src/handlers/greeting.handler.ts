@@ -103,10 +103,17 @@ class GreetingHandler {
         // möglich, aber harmlos: nur eine zusätzliche Reaktion). Bewusst kein atomares SET NX.
         await greetingService.setLastGreetingDay(message.author.id, heute);
 
-        // Gelerntes Emoji bevorzugen; ohne Treffer der stabile Hash-Fallback. Fehlertolerant: ein
-        // Redis-Problem darf den Gruß nicht ganz kosten.
-        const gelernt = await greetingService.getLearnedEmojis().catch(() => ({} as Record<string, string>));
-        const persoenlich = gelernt[message.author.id] ?? ableiteEmoji(message.author.id);
+        // Drei Stufen, in dieser Reihenfolge: von Hand auf /config gesetzt > aus der Historie gelernt >
+        // stabiler Hash-Fallback. Die Handeingabe steht ganz oben, damit der Historien-Scan sie nicht
+        // aushebelt (er schreibt nur in den gelernten Hash). Fehlertolerant: ein Redis-Problem darf den
+        // Gruß nicht ganz kosten.
+        const [manuell, gelernt] = await Promise.all([
+            greetingService.getManualEmojis().catch(() => ({} as Record<string, string>)),
+            greetingService.getLearnedEmojis().catch(() => ({} as Record<string, string>)),
+        ]);
+        const persoenlich = manuell[message.author.id]
+            ?? gelernt[message.author.id]
+            ?? ableiteEmoji(message.author.id);
 
         // Reaktionen best-effort: ein Fehler bei einem Emoji darf das andere nicht verhindern.
         await message.react(WELLE).catch((error) => {
@@ -119,6 +126,9 @@ class GreetingHandler {
 
     // Scannt die Kanal-Historie und schreibt die abgeleiteten Emojis in Redis. Gibt die Anzahl der
     // gelernten Zuordnungen zurück. Bestehende Einträge bleiben erhalten (niemand verliert sein Emoji).
+    // Geschrieben wird NUR in den gelernten Hash - von Hand gesetzte Emojis liegen in einem eigenen
+    // Key und gehen dem Scan damit nicht verloren (er zählt sie aber weiterhin mit, falls die Historie
+    // etwas für dieselbe Person hergibt; beim Gruß gewinnt trotzdem die Handeingabe).
     private async lerneUndSpeichere(channel: TextBasedChannel): Promise<number> {
         const nachrichten = await this.sammleGruossReaktionen(channel, SCAN_LIMIT);
         const map = werteReaktionenAus(nachrichten);

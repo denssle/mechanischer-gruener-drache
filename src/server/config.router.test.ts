@@ -50,7 +50,7 @@ vi.mock('./config.settings.js', () => ({
     speichereEventDaten: vi.fn(() => Promise.resolve()),
     entferneEvent: vi.fn(() => Promise.resolve()),
     holeMitglieder: vi.fn(async () => [{id: 'm1', name: 'Tirsis', kilometer: 128.5}]),
-    holeMorgengrussEmojis: vi.fn(async () => [{id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}, eingabeWert: '🦊'}]),
+    holeMorgengrussEmojis: vi.fn(async () => [{id: 'm1', name: 'Tirsis', herkunft: 'gelernt', emoji: {art: 'unicode', zeichen: '🦊'}, eingabeWert: '🦊'}]),
     holeEmojiVorschlaege: vi.fn(async () => ['🦊', ':blahaj:']),
     deuteEmojiEingabe: vi.fn((e: string) => (e === 'ungueltig' || e === '' ? null : e)),
     speichereMorgengrussEmoji: vi.fn(async () => undefined),
@@ -753,8 +753,8 @@ describe('config.router', () => {
     describe('renderMorgengrussEmojis', () => {
         it('zeigt Name, Emoji und Herkunft je Mitglied', () => {
             const html = renderMorgengrussEmojis([
-                {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}, eingabeWert: '🦊'},
-                {id: 'm2', name: 'Acaine', gelernt: false, emoji: {art: 'unicode', zeichen: '🌿'}, eingabeWert: '🌿'},
+                {id: 'm1', name: 'Tirsis', herkunft: 'gelernt', emoji: {art: 'unicode', zeichen: '🦊'}, eingabeWert: '🦊'},
+                {id: 'm2', name: 'Acaine', herkunft: 'abgeleitet', emoji: {art: 'unicode', zeichen: '🌿'}, eingabeWert: '🌿'},
             ], VORSCHLAEGE, 'tok');
             expect(html).toContain('Tirsis');
             expect(html).toContain('🦊');
@@ -762,10 +762,21 @@ describe('config.router', () => {
             expect(html).toContain('abgeleitet');
         });
 
+        // Der dritte Zustand muss sich von „gelernt" unterscheiden lassen: nur an ihm sieht man,
+        // welche Zeilen der Lern-Button in Ruhe lässt.
+        it('weist von Hand gesetzte Emojis als manuell aus', () => {
+            const html = renderMorgengrussEmojis([
+                {id: 'm1', name: 'Tirsis', herkunft: 'manuell', emoji: {art: 'unicode', zeichen: '🍪'}, eingabeWert: '🍪'},
+            ], VORSCHLAEGE, 'tok');
+            expect(html).toContain('>manuell</td>');
+            expect(html).not.toContain('>gelernt</td>');
+            expect(html).not.toContain('>abgeleitet</td>');
+        });
+
         // Discord-Markup (<:name:id>) rendert nur in Discord - im Browser braucht es ein <img>.
         it('rendert Custom-Emojis als Bild', () => {
             const html = renderMorgengrussEmojis([
-                {id: 'm1', name: 'Zerix', gelernt: true, emoji: {art: 'custom', url: 'https://cdn/1.png', name: 'blahaj'}, eingabeWert: ':blahaj:'},
+                {id: 'm1', name: 'Zerix', herkunft: 'gelernt', emoji: {art: 'custom', url: 'https://cdn/1.png', name: 'blahaj'}, eingabeWert: ':blahaj:'},
             ], VORSCHLAEGE, 'tok');
             expect(html).toContain('<img class="emoji" src="https://cdn/1.png"');
             expect(html).toContain('alt="blahaj"');
@@ -775,7 +786,7 @@ describe('config.router', () => {
         // sichtbar gemacht statt als leere Zelle verschluckt.
         it('macht ein gelöschtes Server-Emoji sichtbar', () => {
             const html = renderMorgengrussEmojis([
-                {id: 'm1', name: 'Wer', gelernt: true, emoji: {art: 'unbekannt', id: '999'}, eingabeWert: ''},
+                {id: 'm1', name: 'Wer', herkunft: 'gelernt', emoji: {art: 'unbekannt', id: '999'}, eingabeWert: ''},
             ], VORSCHLAEGE, 'tok');
             expect(html).toContain('gelöscht');
             expect(html).toContain('status-warnung');
@@ -783,7 +794,7 @@ describe('config.router', () => {
 
         it('escaped Namen und Emoji-Werte (kein XSS)', () => {
             const html = renderMorgengrussEmojis([
-                {id: 'm1', name: '<b>böse</b>', gelernt: true, emoji: {art: 'custom', url: '"><script>', name: '<i>x</i>'}, eingabeWert: ':blahaj:'},
+                {id: 'm1', name: '<b>böse</b>', herkunft: 'gelernt', emoji: {art: 'custom', url: '"><script>', name: '<i>x</i>'}, eingabeWert: ':blahaj:'},
             ], VORSCHLAEGE, 'tok');
             expect(html).toContain('&lt;b&gt;böse&lt;/b&gt;');
             expect(html).not.toContain('<b>böse</b>');
@@ -796,7 +807,7 @@ describe('config.router', () => {
 
         it('baut je Zeile ein Textfeld mit dem aktuellen Wert', () => {
             const html = renderMorgengrussEmojis([
-                {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}, eingabeWert: '🦊'},
+                {id: 'm1', name: 'Tirsis', herkunft: 'gelernt', emoji: {art: 'unicode', zeichen: '🦊'}, eingabeWert: '🦊'},
             ], VORSCHLAEGE, 'tok-e');
             expect(html).toContain('action="/config/morgengruss-emoji"');
             expect(html).toContain('name="mitglied" value="m1"');
@@ -809,7 +820,7 @@ describe('config.router', () => {
         // (🍪) nicht setzbar - genau daran ist die geschlossene Auswahl gescheitert.
         it('bietet die Vorschläge als datalist an, ohne die Eingabe einzuschränken', () => {
             const html = renderMorgengrussEmojis([
-                {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}, eingabeWert: '🦊'},
+                {id: 'm1', name: 'Tirsis', herkunft: 'gelernt', emoji: {art: 'unicode', zeichen: '🦊'}, eingabeWert: '🦊'},
             ], VORSCHLAEGE, 'tok');
             expect(html).toContain('<datalist id="emoji-vorschlaege">');
             expect(html).toContain('<option value=":blahaj:"></option>');
@@ -820,8 +831,8 @@ describe('config.router', () => {
 
         it('rendert die datalist nur einmal, nicht je Zeile', () => {
             const html = renderMorgengrussEmojis([
-                {id: 'm1', name: 'A', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}, eingabeWert: '🦊'},
-                {id: 'm2', name: 'B', gelernt: true, emoji: {art: 'unicode', zeichen: '🌿'}, eingabeWert: '🌿'},
+                {id: 'm1', name: 'A', herkunft: 'gelernt', emoji: {art: 'unicode', zeichen: '🦊'}, eingabeWert: '🦊'},
+                {id: 'm2', name: 'B', herkunft: 'gelernt', emoji: {art: 'unicode', zeichen: '🌿'}, eingabeWert: '🌿'},
             ], VORSCHLAEGE, 'tok');
             expect(html.match(/<datalist/g)).toHaveLength(1);
         });
@@ -830,7 +841,7 @@ describe('config.router', () => {
         // eines unbrauchbaren Werts.
         it('lässt das Feld leer, wenn das Server-Emoji weg ist', () => {
             const html = renderMorgengrussEmojis([
-                {id: 'm1', name: 'Wer', gelernt: true, emoji: {art: 'unbekannt', id: '999'}, eingabeWert: ''},
+                {id: 'm1', name: 'Wer', herkunft: 'gelernt', emoji: {art: 'unbekannt', id: '999'}, eingabeWert: ''},
             ], VORSCHLAEGE, 'tok');
             expect(html).toContain('value=""');
             expect(html).toContain('required');

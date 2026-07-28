@@ -373,10 +373,23 @@ export function renderMorgengrussEmojis(
                 return `<span class="status-warnung" title="Emoji ${escapeHtml(emoji.id)} gibt es auf dem Server nicht mehr">gelöscht</span>`;
         }
     };
+    // Herkunft in drei Stufen (= die Rangfolge beim Gruß): „manuell" ist von Hand gesetzt und wird vom
+    // Lern-Button NICHT überschrieben, „gelernt" kann der nächste Scan ändern, „abgeleitet" ist der
+    // blasse Fallback. Ohne die Unterscheidung wüsste man nicht, welche Zeilen ein Scan noch anfasst.
+    const herkunft = (e: MorgengrussEintrag): string => {
+        switch (e.herkunft) {
+            case 'manuell':
+                return '<td title="Von Hand gesetzt - der Lern-Button überschreibt das nicht">manuell</td>';
+            case 'gelernt':
+                return '<td>gelernt</td>';
+            case 'abgeleitet':
+                return '<td class="status-leer">abgeleitet</td>';
+        }
+    };
     const zeilen = eintraege.map(e =>
         `<tr><td>${escapeHtml(e.name)}</td>` +
         `<td class="emoji-zelle">${zelle(e.emoji)}</td>` +
-        `<td class="${e.gelernt ? '' : 'status-leer'}">${e.gelernt ? 'gelernt' : 'abgeleitet'}</td>` +
+        herkunft(e) +
         `<td>${aendern(e)}</td></tr>`
     ).join('\n');
     return `${datalist}<table class="emojis">
@@ -404,8 +417,9 @@ export function renderMorgengrussEmojiSeite(
     gespeichert = false
 ): string {
     return `<h1>Persönliche Morgengruß-Emojis</h1>
-    <p>Womit der Bot die erste Nachricht des Tages quittiert. „Gelernt" stammt aus der Chat-Historie,
-    „abgeleitet" ist der feste Fallback aus der User-ID.</p>
+    <p>Womit der Bot die erste Nachricht des Tages quittiert. „Manuell" ist hier von Hand gesetzt und
+    bleibt beim Lernen unangetastet, „gelernt" stammt aus der Chat-Historie, „abgeleitet" ist der feste
+    Fallback aus der User-ID.</p>
     ${gespeichert ? '<p class="meldung status-ok">Persönliches Emoji gespeichert.</p>' : ''}
     ${renderMorgengrussEmojis(eintraege, vorschlaege, csrfToken)}
     <p><a href="/config">Zurück zu den Einstellungen</a></p>`;

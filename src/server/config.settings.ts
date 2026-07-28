@@ -274,12 +274,16 @@ export type MorgengrussEmoji =
     | {art: 'custom'; url: string; name: string}
     | {art: 'unbekannt'; id: string};
 
+// Woher das angezeigte Emoji stammt - zugleich die Rangfolge beim Gruß (siehe greeting.handler):
+// 'manuell' (hier auf /config gesetzt) schlägt 'gelernt' (Historien-Scan) schlägt 'abgeleitet'
+// (ableiteEmoji-Fallback). Ohne diese Unterscheidung sähe der Fallback wie eine echte Zuordnung aus,
+// und man könnte nicht erkennen, welche Einträge der nächste Lern-Lauf noch ändern kann.
+export type EmojiHerkunft = 'manuell' | 'gelernt' | 'abgeleitet';
+
 export interface MorgengrussEintrag {
     id: string;
     name: string;
-    // true = aus der Chat-Historie gelernt, false = per ableiteEmoji aus der User-ID abgeleitet.
-    // Ohne diese Unterscheidung sähe der Fallback wie eine echte Zuordnung aus.
-    gelernt: boolean;
+    herkunft: EmojiHerkunft;
     emoji: MorgengrussEmoji;
     // Was im Bearbeiten-Textfeld stehen soll: das Emoji selbst bzw. `:name:` beim Server-Emoji.
     // Bei einer kaputten Zuordnung (Server-Emoji gelöscht) LEER - dort gibt es nichts Sinnvolles
@@ -315,8 +319,8 @@ export async function holeEmojiVorschlaege(): Promise<string[]> {
         }
     }
 
-    const vergeben = await greetingService.getLearnedEmojis().catch(() => ({} as Record<string, string>));
-    for (const wert of Object.values(vergeben)) {
+    const vergeben = await holeAlleEmojiZuordnungen();
+    for (const wert of [...Object.values(vergeben.manuell), ...Object.values(vergeben.gelernt)]) {
         // IDs nicht vorschlagen - als `:name:` stehen die Server-Emojis oben schon drin, und eine
         // ID ohne zugehöriges Emoji gibt es nicht mehr.
         if (!/^\d+$/.test(wert)) {
@@ -366,8 +370,24 @@ export function deuteEmojiEingabe(eingabe: string): string | null {
     return NUR_EMOJI_TEILE.test(text) && ECHTES_EMOJI.test(text) ? text : null;
 }
 
+// Eine Handeingabe landet im MANUELLEN Hash, nicht im gelernten: nur so überlebt sie den nächsten
+// Historien-Scan (der schreibt ausschließlich in den gelernten Hash).
 export async function speichereMorgengrussEmoji(userId: string, wert: string): Promise<void> {
-    await greetingService.setLearnedEmoji(userId, wert);
+    await greetingService.setManualEmoji(userId, wert);
+}
+
+// Beide Zuordnungs-Hashes zusammen holen (zwei Redis-Reads, unabhängig voneinander). Fehlertolerant:
+// ein Redis-Problem soll die Seite nicht kosten, dann greift eben überall der abgeleitete Fallback.
+async function holeAlleEmojiZuordnungen(): Promise<{
+    manuell: Record<string, string>;
+    gelernt: Record<string, string>;
+}> {
+    const leer = () => ({} as Record<string, string>);
+    const [manuell, gelernt] = await Promise.all([
+        greetingService.getManualEmojis().catch(leer),
+        greetingService.getLearnedEmojis().catch(leer),
+    ]);
+    return {manuell, gelernt};
 }
 
 // Umkehrung von deuteEmojiEingabe: die tippbare Form eines dargestellten Emojis. Server-Emojis als
@@ -387,15 +407,19 @@ function eingabeFuer(emoji: MorgengrussEmoji): string {
 // gelernten: wer nichts Gelerntes hat, wird beim Gruß per ableiteEmoji bedient, und ohne diese Zeilen
 // fehlte die halbe Belegschaft in der Übersicht. Ein Redis-Read für alle zusammen.
 export async function holeMorgengrussEmojis(): Promise<MorgengrussEintrag[]> {
-    const gelernt = await greetingService.getLearnedEmojis().catch(() => ({} as Record<string, string>));
+    const {manuell, gelernt} = await holeAlleEmojiZuordnungen();
     return guildMitglieder().map(mitglied => {
-        const gespeichert = gelernt[mitglied.id];
+        // Dieselbe Rangfolge wie beim Gruß selbst - die Seite soll zeigen, was tatsächlich reagiert.
+        const gespeichert = manuell[mitglied.id] ?? gelernt[mitglied.id];
+        const herkunft: EmojiHerkunft = manuell[mitglied.id] !== undefined
+            ? 'manuell'
+            : gelernt[mitglied.id] !== undefined ? 'gelernt' : 'abgeleitet';
         const emoji: MorgengrussEmoji = gespeichert !== undefined
             ? deuteEmoji(gespeichert)
             : {art: 'unicode', zeichen: ableiteEmoji(mitglied.id)};
         return {
             ...mitglied,
-            gelernt: gespeichert !== undefined,
+            herkunft,
             emoji,
             eingabeWert: eingabeFuer(emoji),
         };

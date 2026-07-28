@@ -50,10 +50,10 @@ console.log(`Vorschau geschrieben: ${ziel}`);
 // zeigt, wie Unicode, Custom-Emoji, abgeleiteter Fallback und ein gelöschtes Emoji aussehen.
 const emojiSeite = renderPage(renderMorgengrussEmojiSeite(
     [
-        {id: 'm1', name: 'Tirsis', gelernt: true, emoji: {art: 'unicode', zeichen: '🦊'}, eingabeWert: '🦊'},
-        {id: 'm2', name: 'Zerix', gelernt: true, emoji: {art: 'custom', url: 'https://cdn.discordapp.com/emojis/123.png', name: 'blahaj'}, eingabeWert: ':blahaj:'},
-        {id: 'm3', name: 'Acaine', gelernt: false, emoji: {art: 'unicode', zeichen: '🌿'}, eingabeWert: '🌿'},
-        {id: 'm4', name: 'Verwaist', gelernt: true, emoji: {art: 'unbekannt', id: '999'}, eingabeWert: ''},
+        {id: 'm1', name: 'Tirsis', herkunft: 'manuell', emoji: {art: 'unicode', zeichen: '🦊'}, eingabeWert: '🦊'},
+        {id: 'm2', name: 'Zerix', herkunft: 'gelernt', emoji: {art: 'custom', url: 'https://cdn.discordapp.com/emojis/123.png', name: 'blahaj'}, eingabeWert: ':blahaj:'},
+        {id: 'm3', name: 'Acaine', herkunft: 'abgeleitet', emoji: {art: 'unicode', zeichen: '🌿'}, eingabeWert: '🌿'},
+        {id: 'm4', name: 'Verwaist', herkunft: 'gelernt', emoji: {art: 'unbekannt', id: '999'}, eingabeWert: ''},
     ],
     ['☀️', '🌿', '🦊', ':blahaj:'],
     'vorschau-token',

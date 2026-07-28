@@ -7,6 +7,8 @@ const svc = vi.hoisted(() => ({
     setLastGreetingDay: vi.fn(),
     setLearnedEmoji: vi.fn(),
     getLearnedEmojis: vi.fn(),
+    setManualEmoji: vi.fn(),
+    getManualEmojis: vi.fn(),
 }));
 vi.mock('../services/greeting.service.js', () => ({ default: svc }));
 
@@ -122,6 +124,7 @@ describe('GreetingHandler.handleMessage', () => {
         svc.getChannel.mockResolvedValue('greet-channel');
         svc.getLastGreetingDay.mockResolvedValue(null);
         svc.getLearnedEmojis.mockResolvedValue({});
+        svc.getManualEmojis.mockResolvedValue({});
     });
 
     it('begrüßt die erste Nachricht des Tages mit Welle + Fallback-Emoji', async () => {
@@ -143,6 +146,30 @@ describe('GreetingHandler.handleMessage', () => {
 
         expect(message.react).toHaveBeenCalledWith('🔥');
         expect(message.react).not.toHaveBeenCalledWith(ableiteEmoji('u1'));
+    });
+
+    // Dritter Zustand: von Hand auf /config gesetzt. Er schlägt das Gelernte - sonst hätte ein
+    // späterer Historien-Scan die bewusste Entscheidung wieder überschrieben.
+    it('bevorzugt das manuell gesetzte Emoji vor dem gelernten', async () => {
+        svc.getManualEmojis.mockResolvedValue({ u1: '🍪' });
+        svc.getLearnedEmojis.mockResolvedValue({ u1: '🔥' });
+        const message = makeMessage();
+
+        await greetingHandler.handleMessage(message);
+
+        expect(message.react).toHaveBeenCalledWith('🍪');
+        expect(message.react).not.toHaveBeenCalledWith('🔥');
+    });
+
+    // Fehlertoleranz je Hash: fällt der manuelle Read aus, soll wenigstens das Gelernte greifen.
+    it('nutzt das gelernte Emoji, wenn der manuelle Hash nicht lesbar ist', async () => {
+        svc.getManualEmojis.mockRejectedValue(new Error('Redis weg'));
+        svc.getLearnedEmojis.mockResolvedValue({ u1: '🔥' });
+        const message = makeMessage();
+
+        await greetingHandler.handleMessage(message);
+
+        expect(message.react).toHaveBeenCalledWith('🔥');
     });
 
     it('ignoriert Bot-Nachrichten', async () => {

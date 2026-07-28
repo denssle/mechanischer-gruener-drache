@@ -11,6 +11,11 @@ const KEYS = {
     lastDay: 'GREETING:LAST_DAY_BY_USER',
     // Hash userId → persönliches Emoji, aus der Chat-Historie gelernt (Feld pro Person).
     emoji: 'GREETING:EMOJI',
+    // Hash userId → persönliches Emoji, auf /config VON HAND gesetzt. BEWUSST ein eigener Key statt
+    // eines Felds im gelernten Hash: der Historien-Scan überschreibt `emoji` bei jedem Lauf, eine
+    // Handeingabe soll das aber überdauern (gleiche Überlegung wie beim Ping-Pong-Rekord neben der
+    // laufenden Serie). Beim Gruß gilt: manuell vor gelernt vor abgeleitet.
+    manuellesEmoji: 'GREETING:EMOJI_MANUELL',
 };
 
 class GreetingService {
@@ -37,6 +42,14 @@ class GreetingService {
 
     async getLearnedEmojis(): Promise<Record<string, string>> {
         return redisService.getHashAll(KEYS.emoji);
+    }
+
+    async setManualEmoji(userId: string, emoji: string): Promise<void> {
+        await redisService.setHashField(KEYS.manuellesEmoji, userId, emoji);
+    }
+
+    async getManualEmojis(): Promise<Record<string, string>> {
+        return redisService.getHashAll(KEYS.manuellesEmoji);
     }
 }
 

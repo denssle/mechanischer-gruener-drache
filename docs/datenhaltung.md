@@ -44,6 +44,7 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `GREETING:CHANNEL` | Channel-ID des Morgengruß-Kanals | bis zum Überschreiben | Morgengruß-Tradition (gesetzt über `/config`) |
 | `GREETING:LAST_DAY_BY_USER` (Hash userId→Tag) | Tag (YYYY-MM-DD) der zuletzt begrüßten ersten Nachricht **je Person** | bis zum Überschreiben | Doppelgruß-Schutz (jede Person einmal pro Tag). *(Vorgänger `GREETING:LAST_DAY` war ein String-Marker; umbenannt, um die WRONGTYPE-Kollision beim Wechsel auf einen Hash zu vermeiden.)* |
 | `GREETING:EMOJI` (Hash userId→Emoji) | persönliches Morgengruß-Emoji, aus der Chat-Historie gelernt (nur die Emoji-Kennung, keine Nachrichten) | bis zum Überschreiben (Lern-Button auf `/config`) | persönlicher Morgengruß (Zuordnung dort auch einsehbar) |
+| `GREETING:EMOJI_MANUELL` (Hash userId→Emoji) | persönliches Morgengruß-Emoji, auf `/config` **von Hand** gesetzt (nur die Emoji-Kennung) | bis zum Überschreiben (nur über das Formular auf `/config`) | persönlicher Morgengruß – schlägt das Gelernte, damit der Lern-Button eine Handeingabe nicht überschreibt |
 | `RP:SUCHENDE` (Hash userId→Art) | wer aktuell Roleplay sucht und welche Art (`pbp`/`live`/`beides`) – nur User-ID + Art, kein Zeitstempel, kein Inhalt | bis `/rollenspiel beenden` (kein automatisches Ablaufen) | `/rollenspiel suchende` |
 
 ## Nachrichteninhalte (seit 2026-07-11)
