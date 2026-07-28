@@ -5,7 +5,7 @@ export default tseslint.config(
     eslint.configs.recommended,
     tseslint.configs.recommended,
     {
-        files: ['**/*.test.ts', 'src/services/**/*.test.ts', 'src/handlers/**/*.test.ts', 'src/commands/**/*.test.ts'],
+        files: ['**/*.test.ts'],
         rules: {
             '@typescript-eslint/no-explicit-any': 'off',
         },

@@ -4,6 +4,7 @@ const redis = vi.hoisted(() => ({
     setHashField: vi.fn(),
     getHashAll: vi.fn(),
     deleteHashField: vi.fn(),
+    hashFieldExists: vi.fn(),
 }));
 vi.mock('./redis.service.js', () => ({default: redis}));
 
@@ -30,5 +31,12 @@ describe('RpService', () => {
         redis.getHashAll.mockResolvedValue({u1: 'pbp', u2: 'beides'});
         expect(await rpService.getSuchende()).toEqual({u1: 'pbp', u2: 'beides'});
         expect(redis.getHashAll).toHaveBeenCalledWith('RP:SUCHENDE');
+    });
+
+    it('prüft die Mitgliedschaft per HEXISTS statt den ganzen Hash zu holen', async () => {
+        redis.hashFieldExists.mockResolvedValue(true);
+        expect(await rpService.istSuchend('u1')).toBe(true);
+        expect(redis.hashFieldExists).toHaveBeenCalledWith('RP:SUCHENDE', 'u1');
+        expect(redis.getHashAll).not.toHaveBeenCalled();
     });
 });

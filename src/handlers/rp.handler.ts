@@ -29,8 +29,7 @@ class RpHandler {
     }
 
     async handleBeenden(interaction: ChatInputCommandInteraction) {
-        const suchende = await rpService.getSuchende();
-        if (!suchende[interaction.user.id]) {
+        if (!(await rpService.istSuchend(interaction.user.id))) {
             return interaction.reply({
                 content: 'Du warst gar nicht als RP-suchend eingetragen.',
                 flags: MessageFlags.Ephemeral,

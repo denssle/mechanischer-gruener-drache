@@ -100,6 +100,12 @@ class RedisService {
         await this.#client.hDel(key, field);
     }
 
+    // Existiert das Feld im Hash? Für "bin ich eingetragen?"-Abfragen, ohne den ganzen Hash zu
+    // holen. Wie bei isSetMember: node-redis liefert 0/1 statt eines Boolean, daher der Cast.
+    async hashFieldExists(key: string, field: string): Promise<boolean> {
+        return Boolean(await this.#client.hExists(key, field));
+    }
+
     async addToSet(key: string, value: string): Promise<void> {
         await this.#client.sAdd(key, value);
     }

@@ -23,7 +23,7 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | Key | Inhalt | Lebensdauer | Wofür |
 |---|---|---|---|
 | `<discord-user-id>` (roh, ohne Prefix – Legacy-Format) | `StoredUser`: ID, Username, Tag, Displayname, Rollen-IDs, Beitrittsdatum | bis zum Überschreiben | Mitglieder-Tracking (`member.handler.ts`) |
-| `LOGGING:CHANNEL` | Channel-ID des Audit-Logs | bis zum Überschreiben | `/protokoll` |
+| `LOGGING:CHANNEL` | Channel-ID des Audit-Logs | bis zum Überschreiben | Audit-Log (Kanal via `/config` gesetzt) |
 | `LOGGING:MESSAGE:<messageId>` | **Nachrichtentext + Autor-Tag + Dateinamen der Anhänge** | **7 Tage** (TTL), beim Löschen der Nachricht sofort weg | alter Inhalt im Lösch-/Bearbeitungs-Log (s.u.) |
 | `CHARACTER:LINK:<userId>`, `CHARACTER:ALL_LINKS` | öffentlicher LotGD-Charaktername | bis `/charakter entfernen` | `/charakter`, Hervorhebung in `/online`/`/ereignisse` |
 | `TWITCH:USER:*`, `TWITCH:MAPPING:*`, `TWITCH:SUBSCRIPTION:*`, `TWITCH:ALL_LINKS` | Twitch-Login ↔ Discord-User, EventSub-Subscription-IDs | bis `/twitch entfernen` (oder Revocation) | Live-Benachrichtigungen |
@@ -40,7 +40,7 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `ANSTUPSER:LAST_DAY` | Tag (YYYY-MM-DD) der zuletzt verschickten Anstupser-Runde | bis zum Überschreiben | Doppelversand-Schutz |
 | `MEMBER:JOIN_COUNT:<userId>` | Zahl: wie oft die Person dem Server schon beigetreten ist | dauerhaft | Beitritts-Meldung im Audit-Log |
 | `BLAHAJ:TOTAL_EUR` | eine einzige Zahl (Summe aller je erwähnten Euro-Beträge) | dauerhaft | `/blahaj` |
-| `EVENT:NEXT` | Timestamp + optionaler Titel des nächsten Community-Events | bis `/event entfernen` | `/event countdown` |
+| `EVENT:NEXT` | Timestamp + optionaler Titel des nächsten Community-Events | bis zum Entfernen über `/config` | `/event countdown` |
 | `GREETING:CHANNEL` | Channel-ID des Morgengruß-Kanals | bis zum Überschreiben | Morgengruß-Tradition (gesetzt über `/config`) |
 | `GREETING:LAST_DAY_BY_USER` (Hash userId→Tag) | Tag (YYYY-MM-DD) der zuletzt begrüßten ersten Nachricht **je Person** | bis zum Überschreiben | Doppelgruß-Schutz (jede Person einmal pro Tag). *(Vorgänger `GREETING:LAST_DAY` war ein String-Marker; umbenannt, um die WRONGTYPE-Kollision beim Wechsel auf einen Hash zu vermeiden.)* |
 | `GREETING:EMOJI` (Hash userId→Emoji) | persönliches Morgengruß-Emoji, aus der Chat-Historie gelernt (nur die Emoji-Kennung, keine Nachrichten) | bis zum Überschreiben (Lern-Button auf `/config`) | persönlicher Morgengruß (Zuordnung dort auch einsehbar) |
@@ -55,7 +55,7 @@ leer, und ältere Nachrichten waren grundsätzlich „nicht verfügbar".
 Damit das Log seinen Zweck erfüllt, schreibt der Bot Nachrichten jetzt in einen eigenen Cache. Die
 bewussten Grenzen:
 
-- **Nur wenn ein Log-Channel konfiguriert ist** (`/protokoll`). Ohne Logging speichert der Bot
+- **Nur wenn ein Log-Channel konfiguriert ist** (gesetzt über `/config`). Ohne Logging speichert der Bot
   weiterhin gar nichts – das Feature abschalten heißt, dass nichts mehr anfällt.
 - **7 Tage TTL.** Reicht, um nachzuvollziehen, was gerade gelöscht/geändert wurde. Kein Archiv.
 - **Beim Löschen sofort weg**: Ist die Nachricht geloggt, wird der Cache-Eintrag entfernt.

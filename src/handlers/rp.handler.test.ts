@@ -5,6 +5,7 @@ const rpService = vi.hoisted(() => ({
     setSuchend: vi.fn(),
     entferneSuchend: vi.fn(),
     getSuchende: vi.fn(),
+    istSuchend: vi.fn(),
 }));
 vi.mock('../services/rp.service.js', () => ({default: rpService}));
 
@@ -29,6 +30,7 @@ describe('RpHandler', () => {
         rpService.setSuchend.mockReset();
         rpService.entferneSuchend.mockReset();
         rpService.getSuchende.mockReset();
+        rpService.istSuchend.mockReset();
     });
 
     describe('handleSuche', () => {
@@ -46,7 +48,7 @@ describe('RpHandler', () => {
 
     describe('handleBeenden', () => {
         it('entfernt eine eingetragene Person', async () => {
-            rpService.getSuchende.mockResolvedValue({u1: 'pbp'});
+            rpService.istSuchend.mockResolvedValue(true);
             const interaction = mockInteraction();
 
             await rpHandler.handleBeenden(interaction);
@@ -56,7 +58,7 @@ describe('RpHandler', () => {
         });
 
         it('meldet, wenn die Person gar nicht eingetragen war, und entfernt nichts', async () => {
-            rpService.getSuchende.mockResolvedValue({u2: 'live'});
+            rpService.istSuchend.mockResolvedValue(false);
             const interaction = mockInteraction();
 
             await rpHandler.handleBeenden(interaction);

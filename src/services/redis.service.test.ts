@@ -15,6 +15,7 @@ vi.mock('redis', () => {
         lRem: vi.fn().mockResolvedValue(1),
         lRange: vi.fn().mockResolvedValue([]),
         zIncrBy: vi.fn().mockResolvedValue('1'),
+        hExists: vi.fn().mockResolvedValue(1),
         isOpen: false
     };
     return {
@@ -64,5 +65,14 @@ describe('RedisService', () => {
         const mockClient = vi.mocked(createClient).mock.results[0].value;
         await redisService.incrementSortedSet('key', 'val', 5);
         expect(mockClient.zIncrBy).toHaveBeenCalledWith('key', 5, 'val');
+    });
+
+    it('hashFieldExists castet das 0/1 von HEXISTS auf einen echten Boolean', async () => {
+        const mockClient = vi.mocked(createClient).mock.results[0].value;
+        mockClient.hExists.mockResolvedValue(1);
+        expect(await redisService.hashFieldExists('key', 'feld')).toBe(true);
+        expect(mockClient.hExists).toHaveBeenCalledWith('key', 'feld');
+        mockClient.hExists.mockResolvedValue(0);
+        expect(await redisService.hashFieldExists('key', 'feld')).toBe(false);
     });
 });

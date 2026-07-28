@@ -64,9 +64,10 @@ import {
 // Nur Server-Admins kommen rein: Discord liefert (Scope "identify") die User-ID, die
 // Admin-Pruefung macht unser EIGENER Bot ueber die gecachte Guild (siehe pruefeAdmin).
 //
-// Kein Body-Parser noetig: Discord ruft den Callback als GET mit Query-Params (?code&state).
-// Der Twitch-express.raw-Parser (nur auf /twitch) bleibt unberuehrt. Erst wenn /config
-// spaeter Formulare bekommt, braucht es einen eigenen express.urlencoded NUR auf diesem Pfad.
+// Body-Parser: der OAuth-Callback ist ein GET mit Query-Params (?code&state) und braucht keinen;
+// die Bearbeiten-Formulare (POST) bekommen ihren express.urlencoded ueber postRoute() NUR auf der
+// jeweiligen Route - nie global, sonst wuerde der Twitch-Rohkoerper (express.raw auf /twitch)
+// zerstoert und dessen Signaturpruefung brechen.
 //
 // Session: zustandslos signiertes Cookie (siehe config.session.ts), kein Redis - gleiche
 // Philosophie wie die Button-customIds. client wird nur in Funktionskoerpern benutzt (nicht
@@ -99,6 +100,8 @@ export function renderPage(bodyHtml: string): string {
         h1 { font-size: 1.5rem; }
         a.button { display: inline-block; padding: 0.6rem 1rem; border-radius: 0.5rem; background: #5865F2; color: #fff; text-decoration: none; }
         a.logout { font-size: 0.9rem; }
+        form.logout { display: inline; margin: 0; }
+        form.logout button { background: none; border: none; padding: 0; font: inherit; font-size: 0.9rem; color: LinkText; text-decoration: underline; cursor: pointer; }
         form.setting { display: flex; align-items: center; gap: 0.75rem; margin: 0.4rem 0; flex-wrap: wrap; }
         form.setting label, form.setting span.pseudo-label { flex: 0 0 16rem; }
         form.setting select { flex: 0 0 14rem; padding: 0.3rem; }
@@ -425,7 +428,8 @@ function configBody(bereicheHtml: string): string {
     return `<h1>Mechanischer Grüner Drache</h1>
     <p>Bot-Einstellungen, nach Bereich gruppiert.</p>
     ${bereicheHtml}
-    <p><a href="/config/logs">Bot-Logs ansehen</a> · <a class="logout" href="/config/logout">Abmelden</a></p>`;
+    <p><a href="/config/logs">Bot-Logs ansehen</a></p>
+    <form class="logout" method="post" action="/config/logout"><button type="submit">Abmelden</button></form>`;
 }
 
 // Lokaler Zeitstempel (Host = Europe/Berlin) als HH:MM:SS - fuer die Log-Ansicht reicht die Uhrzeit,
@@ -568,7 +572,9 @@ async function pruefeAdmin(userId: string): Promise<boolean> {
             console.warn('Config-Login: konfigurierte Guild nicht im Cache.');
             return false;
         }
-        const member = await guild.members.fetch(userId);
+        // force: true erzwingt den API-Abruf - ohne das bedient sich fetch aus dem Member-Cache,
+        // und die "frische Pruefung bei jedem Aufruf" waere real nur eine Cache-Pruefung.
+        const member = await guild.members.fetch({user: userId, force: true});
         return member.permissions.has(PermissionFlagsBits.Administrator);
     } catch (error) {
         // members.fetch wirft auch, wenn die Person gar nicht (mehr) auf dem Server ist.
@@ -856,10 +862,8 @@ export async function handleMorgengrussEmojiSeite(req: Request, res: Response): 
 }
 
 // Setzt das persönliche Morgengruß-Emoji einer Person von Hand (korrigiert also, was der Lern-Scan
-// abgeleitet hat). Reihenfolge wie überall: CSRF → Mitglied gegen die Whitelist → Emoji gegen die
-// Auswahlliste → speichern → Redirect. Die Emoji-Prüfung ist async, weil die Whitelist die aktuell
-// vergebenen Werte einschließt (sonst könnte man ein gelerntes Emoji außerhalb des Pools nicht
-// wieder auswählen).
+// abgeleitet hat). Reihenfolge wie überall: CSRF → Mitglied gegen die Whitelist →
+// deuteEmojiEingabe (synchron und rein, prüft den Freitext) → speichern → Redirect.
 export async function handleMorgengrussEmojiSpeichern(req: Request, res: Response): Promise<void> {
     const userId = res.locals.configUserId as string;
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -988,6 +992,10 @@ const configRouter = Router();
 export function setzeAdminHeader(_req: Request, res: Response, next: () => void): void {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    // Kein Einbetten in fremde Seiten (Clickjacking). Durch SameSite=Lax am Session-Cookie ist das
+    // praktisch schon entschaerft (im iframe wird das Cookie nicht mitgeschickt), der Header ist
+    // billige Tiefenverteidigung.
+    res.setHeader('X-Frame-Options', 'DENY');
     next();
 }
 
@@ -1047,6 +1055,10 @@ configRouter.get('/config/callback',
 configRouter.get('/config/logs', geschuetzt, handleLogs);
 configRouter.get('/config/morgengruss-emojis', geschuetzt,
     fangeFehler(handleMorgengrussEmojiSeite, 'Fehler beim Rendern der Morgengruß-Emoji-Seite', 'Interner Fehler.'));
-configRouter.get('/config/logout', handleLogout);
+// POST statt GET (seit 2026-07-28): ein GET-Logout war per <img src=".../config/logout"> von
+// fremden Seiten ausloesbar (nur ein Aergernis, aber alle anderen Aktionen sind sauber POST).
+// Bewusst ohne Auth/CSRF: Abmelden loescht nur das eigene Cookie, ist idempotent und muss auch
+// mit abgelaufener Session noch funktionieren. Kein Body -> kein urlencoded-Parser noetig.
+configRouter.post('/config/logout', handleLogout);
 
 export default configRouter;

@@ -103,6 +103,48 @@ describe('TwitchWebhookServer', () => {
         expect(res.sendStatus).toHaveBeenCalledWith(403);
     });
 
+    it('sollte eine zu alte, aber gültig signierte Nachricht ablehnen (Replay-Schutz)', async () => {
+        const callback = vi.fn();
+        twitchWebhookServer.onNotification(callback);
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const body = { event: { broadcaster_user_id: '12345' } };
+        const bodyString = JSON.stringify(body);
+        const messageId = 'msg-replay';
+        // 11 Minuten alt - Twitch empfiehlt, älter als 10 Minuten abzulehnen.
+        const timestamp = new Date(Date.now() - 11 * 60 * 1000).toISOString();
+        const signature = getSignature(messageId, timestamp, bodyString);
+
+        const req = mockRequest({
+            'twitch-eventsub-message-id': messageId,
+            'twitch-eventsub-message-timestamp': timestamp,
+            'twitch-eventsub-message-signature': signature,
+            'twitch-eventsub-message-type': 'notification'
+        }, body);
+
+        const res = mockResponse();
+
+        twitchWebhookServer.handleEventSub(req, res);
+
+        expect(res.sendStatus).toHaveBeenCalledWith(403);
+        expect(callback).not.toHaveBeenCalled();
+        warnSpy.mockRestore();
+    });
+
+    it('sollte Anfragen ohne Signatur-Header ablehnen statt zu crashen', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const req = mockRequest({
+            'twitch-eventsub-message-type': 'notification'
+        }, { test: 'data' });
+
+        const res = mockResponse();
+
+        twitchWebhookServer.handleEventSub(req, res);
+
+        expect(res.sendStatus).toHaveBeenCalledWith(403);
+        warnSpy.mockRestore();
+    });
+
     it('sollte einen fehlgeschlagenen Port-Bind laut loggen statt still zu scheitern', () => {
         const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
         const error = new Error('listen EADDRINUSE: address already in use :::3000');
