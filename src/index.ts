@@ -15,6 +15,7 @@ import blahajHandler from "./handlers/blahaj.handler.js";
 import sportHandler from "./handlers/sport.handler.js";
 import greetingHandler from "./handlers/greeting.handler.js";
 import anstupserHandler from "./handlers/anstupser.handler.js";
+import geburtstagHandler from "./handlers/geburtstag.handler.js";
 
 // console.log/warn/error in einen Ringpuffer spiegeln, damit sie auf /config einsehbar sind. Moeglichst
 // frueh, damit die Boot-/Laufzeit-Zeilen (Webhook-Server-Start, Fehler) mitgeschnitten werden.
@@ -147,6 +148,11 @@ client.once(Events.ClientReady, async () => {
             // bewusst NICHT nach (ein Anstupser um 15 Uhr wäre sinnlos).
             anstupserHandler.sendeAnstupser().catch((error) => {
                 console.error('Fehler beim täglichen Anstupser:', error);
+            });
+            // Prüft selbst auf die Gratulationszeit und den eigenen Tagesmarker; holt einen
+            // verpassten Tag bewusst NICHT nach (ein "alles Gute" von gestern ist keins mehr).
+            geburtstagHandler.posteGeburtstagsgruesse().catch((error) => {
+                console.error('Fehler beim Posten der Geburtstagsgrüße:', error);
             });
         }, TAEGLICHER_POST_INTERVALL_MS);
     } catch (error) {

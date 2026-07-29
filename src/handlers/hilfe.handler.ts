@@ -22,7 +22,8 @@ export const HELP_TEXT =
     `\`/pingpong ansageduell\` – Duell mit angesagtem Sieg · \`/pingpong taktikduell\` – Duell mit verdeckter Aktion (Details: \`/pingpong hilfe\`)\n` +
     `\`/blahaj\` – Euro-Beträge in Blåhajs umrechnen (reagiert auch automatisch auf €-Beträge im Chat)\n` +
     `\`/rollenspiel suche\` – dich als Roleplay-suchend melden und Mitspieler finden (Details: \`/rollenspiel hilfe\`)\n` +
-    `\`/anstupser an\` – täglich um 13:37 eine DM vom Bot; rein freiwillig (Details: \`/anstupser hilfe\`)\n\n` +
+    `\`/anstupser an\` – täglich um 13:37 eine DM vom Bot; rein freiwillig (Details: \`/anstupser hilfe\`)\n` +
+    `\`/geburtstag setzen\` – deinen Geburtstag hinterlegen, damit der Bot gratuliert (Details: \`/geburtstag hilfe\`)\n\n` +
     `\`/version\` – aktuelle Bot-Version · \`/hilfe\` – diese Übersicht`;
 
 class HilfeHandler {

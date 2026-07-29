@@ -92,6 +92,7 @@ import {
     renderMeilensteinListe,
     renderMorgengrussEmojiLink,
     renderMorgengrussEmojis,
+    renderGeburtstagHinweis,
     renderMorgengrussLernen,
     renderRollenFormular,
     renderSportAdmin,
@@ -979,6 +980,13 @@ describe('config.router', () => {
         });
     });
 
+    // Im Geburtstags-Bereich gibt es bewusst NUR den Kanal - die Daten tragen die Leute selbst ein.
+    it('renderGeburtstagHinweis erklärt, dass nur selbst eingetragen wird', () => {
+        const html = renderGeburtstagHinweis();
+        expect(html).toContain('/geburtstag setzen');
+        expect(html).not.toContain('<form');
+    });
+
     it('renderMorgengrussLernen baut den Lern-Button mit CSRF-Token', () => {
         const html = renderMorgengrussLernen('token-mg');
         expect(html).toContain('action="/config/morgengruss"');
@@ -1007,7 +1015,7 @@ describe('config.router', () => {
         expect(html).toContain('action="/config/sport"');
         expect(html).toContain('action="/config/morgengruss"');
         // Jeder Bereich hat sein Sprungziel.
-        for (const bereich of ['twitch', 'sport', 'protokoll', 'morgengruss', 'event']) {
+        for (const bereich of ['twitch', 'sport', 'protokoll', 'morgengruss', 'geburtstag', 'event']) {
             expect(html).toContain(`id="bereich-${bereich}"`);
         }
         // Ohne Meldung steht keine da.

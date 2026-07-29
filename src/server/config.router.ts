@@ -4,6 +4,7 @@ import {PermissionFlagsBits} from 'discord.js';
 import config from '../../config.json' with {type: 'json'};
 import client from '../client.js';
 import greetingHandler from '../handlers/greeting.handler.js';
+import {GRATULATIONS_STUNDE} from '../handlers/geburtstag.handler.js';
 import {getLogEntries, LogEntry} from '../services/logBuffer.service.js';
 import {
     buildAuthorizeUrl,
@@ -438,6 +439,15 @@ export function renderMorgengrussLernen(csrfToken: string): string {
     </form>`;
 }
 
+// Geburtstage: hier gibt es bewusst NUR den Kanal zu setzen. Die Daten selbst tragen die Leute
+// ausschließlich selbst per /geburtstag setzen ein - ein Admin-Formular, das fremde Geburtsdaten
+// hinterlegt, wäre genau die Datenhaltung, die docs/datenhaltung.md vermeiden will.
+export function renderGeburtstagHinweis(): string {
+    return `<p class="feld-hinweis">Eingetragen wird ausschließlich selbst per
+    <code>/geburtstag setzen</code> (Jahr freiwillig). Gratuliert wird morgens um
+    ${GRATULATIONS_STUNDE} Uhr in diesem Kanal.</p>`;
+}
+
 function configBody(bereicheHtml: string): string {
     return `<h1>Mechanischer Grüner Drache</h1>
     <p>Bot-Einstellungen, nach Bereich gruppiert.</p>
@@ -556,6 +566,9 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
         renderBereich('morgengruss', 'Morgengruß',
             kanal('morgengruss-kanal') + renderMorgengrussLernen(csrf) + renderMorgengrussEmojiLink(daten.anzahlEmojiEintraege),
             meldungFuer('morgengruss')) +
+        renderBereich('geburtstag', 'Geburtstage',
+            kanal('geburtstag-kanal') + renderGeburtstagHinweis(),
+            meldungFuer('geburtstag')) +
         renderBereich('event', 'Event',
             renderEventFormular(daten.eventFelder, csrf),
             meldungFuer('event'));
@@ -644,6 +657,7 @@ const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
     'twitch-kanal': {bereich: 'twitch', text: 'Twitch-Benachrichtigungskanal gespeichert.'},
     'sport-kanal': {bereich: 'sport', text: 'Sport-Ankündigungskanal gespeichert.'},
     'morgengruss-kanal': {bereich: 'morgengruss', text: 'Morgengruß-Kanal gespeichert.'},
+    'geburtstag-kanal': {bereich: 'geburtstag', text: 'Geburtstagskanal gespeichert.'},
     'twitch-rolle': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle gespeichert.'},
     'twitch-rolle-entfernt': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle entfernt.'},
     'event': {bereich: 'event', text: 'Event gespeichert.'},

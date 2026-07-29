@@ -7,6 +7,7 @@ import sportService from '../services/sport.service.js';
 import sportHandler from '../handlers/sport.handler.js';
 import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
+import geburtstagService from '../services/geburtstag.service.js';
 import eventService from '../services/event.service.js';
 import {ableiteEmoji, GRUSS_EMOJIS} from '../handlers/greeting.handler.js';
 
@@ -81,6 +82,11 @@ const KANAL_SERVICES: Record<string, KanalService> = {
         label: 'Morgengruß-Kanal',
         lade: () => greetingService.getChannel(),
         speichere: (id) => greetingService.setChannel(id),
+    },
+    'geburtstag-kanal': {
+        label: 'Geburtstagskanal',
+        lade: () => geburtstagService.getChannel(),
+        speichere: (id) => geburtstagService.setChannel(id),
     },
 };
 

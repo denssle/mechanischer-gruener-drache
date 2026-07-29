@@ -45,7 +45,21 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `GREETING:LAST_DAY_BY_USER` (Hash userId→Tag) | Tag (YYYY-MM-DD) der zuletzt begrüßten ersten Nachricht **je Person** | bis zum Überschreiben | Doppelgruß-Schutz (jede Person einmal pro Tag). *(Vorgänger `GREETING:LAST_DAY` war ein String-Marker; umbenannt, um die WRONGTYPE-Kollision beim Wechsel auf einen Hash zu vermeiden.)* |
 | `GREETING:EMOJI` (Hash userId→Emoji) | persönliches Morgengruß-Emoji, aus der Chat-Historie gelernt (nur die Emoji-Kennung, keine Nachrichten) | bis zum Überschreiben (Lern-Button auf `/config`) | persönlicher Morgengruß (Zuordnung dort auch einsehbar) |
 | `GREETING:EMOJI_MANUELL` (Hash userId→Emoji) | persönliches Morgengruß-Emoji, auf `/config` **von Hand** gesetzt (nur die Emoji-Kennung) | bis zum Überschreiben (nur über das Formular auf `/config`) | persönlicher Morgengruß – schlägt das Gelernte, damit der Lern-Button eine Handeingabe nicht überschreibt |
+| `GEBURTSTAG:DATEN` (Hash userId→Datum) | **Geburtstag**, ausschließlich selbst eingetragen (`/geburtstag setzen`): Tag + Monat, **Jahr nur, wenn die Person es freiwillig angibt** (`TT.MM` bzw. `TT.MM.JJJJ`) | bis `/geburtstag entfernen` | Glückwunsch am Tag, `/geburtstag liste` |
+| `GEBURTSTAG:CHANNEL` | Channel-ID des Geburtstagskanals | bis zum Überschreiben | Glückwunsch-Post (gesetzt über `/config`) |
+| `GEBURTSTAG:LAST_DAY` | Tag (YYYY-MM-DD) der zuletzt geposteten Glückwunsch-Runde | bis zum Überschreiben | Doppelpost-Schutz |
 | `RP:SUCHENDE` (Hash userId→Art) | wer aktuell Roleplay sucht und welche Art (`pbp`/`live`/`beides`) – nur User-ID + Art, kein Zeitstempel, kein Inhalt | bis `/rollenspiel beenden` (kein automatisches Ablaufen) | `/rollenspiel suchende` |
+
+## Geburtstage (seit 2026-07-29)
+
+Ein Geburtsdatum ist die persönlichste Angabe im ganzen Bot – deshalb drei bewusste Grenzen:
+
+- **Nur selbst eingetragen.** Es gibt keinen Admin-Weg, fremde Geburtstage zu hinterlegen; auf
+  `/config` lässt sich ausschließlich der **Kanal** setzen. Wer nichts einträgt, ist nirgends erfasst.
+- **Das Jahr ist freiwillig.** Ohne Jahr weiß der Bot nur „Tag und Monat" und nennt beim Gratulieren
+  auch kein Alter. Das Jahr anzugeben heißt zugleich, dass das Alter im Kanal genannt werden darf –
+  der Befehl sagt das beim Eintragen ausdrücklich.
+- **Jederzeit widerrufbar**: `/geburtstag entfernen` löscht den Eintrag sofort und vollständig.
 
 ## Nachrichteninhalte (seit 2026-07-11)
 

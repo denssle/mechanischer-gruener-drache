@@ -5,6 +5,7 @@ import twitchService from '../services/twitch.service.js';
 import sportService from '../services/sport.service.js';
 import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
+import geburtstagService from '../services/geburtstag.service.js';
 import eventService from '../services/event.service.js';
 import characterService, {CharacterLink, findInRoster} from '../services/character.service.js';
 import {oauthConfigured} from '../services/discordOAuth.service.js';
@@ -42,6 +43,7 @@ class DiagnoseHandler {
         lines.push(`Sport-Ankündigungskanal: ${await this.pruefeKanal(await sportService.getAnnouncementChannel())}`);
         lines.push(`Protokoll-Kanal: ${await this.pruefeKanal(await loggingService.getLogChannel())}`);
         lines.push(`Morgengruß-Kanal: ${await this.pruefeKanal(await greetingService.getChannel())}`);
+        lines.push(`Geburtstagskanal: ${await this.pruefeKanal(await geburtstagService.getChannel())}`);
         lines.push(`Audit-Log-Zugriff: ${this.pruefeAuditLogRecht()}`);
 
         const event = await eventService.getEvent();

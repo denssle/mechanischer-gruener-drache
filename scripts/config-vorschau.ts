@@ -13,6 +13,7 @@ const html = renderConfigSeite({
         {schluessel: 'twitch-kanal', label: 'Twitch-Benachrichtigungskanal', aktuelleId: 'c1', status: 'ok'},
         {schluessel: 'sport-kanal', label: 'Sport-Ankündigungskanal', aktuelleId: null, status: 'leer'},
         {schluessel: 'morgengruss-kanal', label: 'Morgengruß-Kanal', aktuelleId: 'c3', status: 'ok'},
+        {schluessel: 'geburtstag-kanal', label: 'Geburtstagskanal', aktuelleId: null, status: 'leer'},
     ],
     kanaele: [
         {id: 'c1', name: 'stream-alerts'},

@@ -14,6 +14,7 @@ import blahaj from "./blahaj.command.js";
 import diagnose from "./diagnose.command.js";
 import rollenspiel from "./rollenspiel.command.js";
 import anstupser from "./anstupser.command.js";
+import geburtstag from "./geburtstag.command.js";
 
 export default [
     ping,
@@ -31,5 +32,6 @@ export default [
     blahaj,
     diagnose,
     rollenspiel,
-    anstupser
+    anstupser,
+    geburtstag
 ];
