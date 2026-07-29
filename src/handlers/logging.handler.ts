@@ -23,6 +23,30 @@ export function kuerzeFuerDiscord(text: string): string {
     return text.slice(0, DISCORD_MAX_LENGTH - GEKUERZT_SUFFIX.length) + GEKUERZT_SUFFIX;
 }
 
+// Wie lange jemand auf dem Server war. Bewusst grob: Monate sind mit 30 Tagen gerechnet,
+// Jahre mit 365 - für "war zwei Jahre dabei" reicht das, und niemand zählt hier Schaltjahre
+// nach. Gezeigt werden nur die zwei größten Einheiten (wie bei formatRemaining im Event).
+const TAG_MS = 86400000;
+
+export function formatMitgliedsdauer(dauerMs: number): string {
+    const tageGesamt = Math.floor(dauerMs / TAG_MS);
+    if (tageGesamt < 1) return 'weniger als einen Tag';
+
+    const jahre = Math.floor(tageGesamt / 365);
+    const monate = Math.floor((tageGesamt % 365) / 30);
+    const tage = (tageGesamt % 365) % 30;
+
+    const parts: string[] = [];
+    if (jahre > 0) parts.push(`${jahre} ${jahre === 1 ? 'Jahr' : 'Jahre'}`);
+    if (monate > 0) parts.push(`${monate} ${monate === 1 ? 'Monat' : 'Monate'}`);
+    // Tage nur, solange es nicht schon um Jahre geht - sonst unnötig genau.
+    if (tage > 0 && jahre === 0) parts.push(`${tage} ${tage === 1 ? 'Tag' : 'Tage'}`);
+
+    if (parts.length === 0) return 'weniger als einen Tag';
+    if (parts.length === 1) return parts[0];
+    return parts.slice(0, -1).join(', ') + ' und ' + parts[parts.length - 1];
+}
+
 class LoggingHandler {
     // Merkt sich Inhalt + Anhang-Namen einer Nachricht, damit beim Löschen/Bearbeiten der alte
     // Stand noch da ist (discord.js hält nur einen RAM-Cache, der jeden Neustart verliert).
@@ -137,7 +161,12 @@ class LoggingHandler {
             const logChannel = await this.getLogChannel();
             if (!logChannel) return;
 
-            await this.sendeLog(logChannel,`📤 **${member.user.tag}** hat den Server verlassen.`);
+            // joinedTimestamp fehlt, wenn das Mitglied nicht (mehr) gecacht ist - dann bleibt
+            // die Dauer einfach weg, statt eine erfundene Zahl zu nennen.
+            const dauer = member.joinedTimestamp
+                ? ` – war ${formatMitgliedsdauer(Date.now() - member.joinedTimestamp)} dabei`
+                : '';
+            await this.sendeLog(logChannel,`📤 **${member.user.tag}** hat den Server verlassen${dauer}.`);
         } catch (error) {
             console.error('Fehler beim Loggen des Server-Austritts:', error);
         }

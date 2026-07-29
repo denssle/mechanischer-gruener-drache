@@ -28,7 +28,31 @@ vi.mock('../client.js', () => ({
 import memberService from '../services/member.service.js';
 import loggingService from '../services/logging.service.js';
 import client from '../client.js';
-import loggingHandler, { kuerzeFuerDiscord, DISCORD_MAX_LENGTH } from './logging.handler.js';
+import loggingHandler, { kuerzeFuerDiscord, DISCORD_MAX_LENGTH, formatMitgliedsdauer } from './logging.handler.js';
+
+describe('formatMitgliedsdauer', () => {
+    const TAG = 86400000;
+
+    it('nennt angefangene Tage nicht als Dauer', () => {
+        expect(formatMitgliedsdauer(0)).toBe('weniger als einen Tag');
+        expect(formatMitgliedsdauer(TAG - 1)).toBe('weniger als einen Tag');
+    });
+
+    it('formatiert Tage mit korrektem Singular/Plural', () => {
+        expect(formatMitgliedsdauer(TAG)).toBe('1 Tag');
+        expect(formatMitgliedsdauer(5 * TAG)).toBe('5 Tage');
+    });
+
+    it('kombiniert Monate und Tage', () => {
+        expect(formatMitgliedsdauer(30 * TAG)).toBe('1 Monat');
+        expect(formatMitgliedsdauer(65 * TAG)).toBe('2 Monate und 5 Tage');
+    });
+
+    it('lässt bei Jahren die Tage weg', () => {
+        expect(formatMitgliedsdauer(365 * TAG)).toBe('1 Jahr');
+        expect(formatMitgliedsdauer((2 * 365 + 65) * TAG)).toBe('2 Jahre und 2 Monate');
+    });
+});
 
 describe('kuerzeFuerDiscord', () => {
     it('lässt Text bis zum Discord-Limit unverändert', () => {
@@ -326,7 +350,8 @@ describe('LoggingHandler', () => {
     });
 
     describe('handleGuildMemberRemove', () => {
-        const mockMember = () => ({ user: { tag: 'Ex-User#0002' } } as any);
+        const mockMember = (joinedTimestamp: number | null = null) =>
+            ({ user: { tag: 'Ex-User#0002' }, joinedTimestamp } as any);
 
         it('tut nichts wenn kein Log-Channel konfiguriert ist', async () => {
             vi.mocked(loggingService.getLogChannel).mockResolvedValue(null);
@@ -345,6 +370,26 @@ describe('LoggingHandler', () => {
 
             expect(send).toHaveBeenCalledWith(expect.stringContaining('Ex-User#0002'));
             expect(send).toHaveBeenCalledWith(expect.stringContaining('verlassen'));
+        });
+
+        it('nennt die Mitgliedsdauer, wenn der Beitrittszeitpunkt bekannt ist', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await loggingHandler.handleGuildMemberRemove(mockMember(Date.now() - 10 * 86400000));
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('war 10 Tage dabei'));
+        });
+
+        it('lässt die Dauer weg, wenn der Beitrittszeitpunkt fehlt', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await loggingHandler.handleGuildMemberRemove(mockMember(null));
+
+            expect(send).toHaveBeenCalledWith(expect.not.stringContaining('dabei'));
         });
 
         it('fängt Fehler beim Loggen ab', async () => {
