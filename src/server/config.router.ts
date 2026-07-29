@@ -40,14 +40,15 @@ import {
     holeMorgengrussEmojis,
     holeRollen,
     holeTextKanaele,
-    holeTwitchRolle,
     istGueltigerTextKanal,
     istGueltigeRolle,
     istGueltigesMitglied,
     istKanalFeld,
+    istRollenFeld,
     KanalFeld,
     KanalOption,
     ladeKanalFelder,
+    ladeRollenFelder,
     MitgliedOption,
     MorgengrussEintrag,
     MorgengrussEmoji,
@@ -58,7 +59,7 @@ import {
     speichereKanal,
     speichereKilometer,
     speichereMorgengrussEmoji,
-    speichereTwitchRolle
+    speichereRolle
 } from './config.settings.js';
 
 // Verwaltungs-/Einstellungsseite (README-Todo), abgesichert per Discord-OAuth2-Login.
@@ -200,22 +201,34 @@ export function renderKanalFormular(feld: KanalFeld, kanaele: KanalOption[], csr
     </form>`;
 }
 
-// Twitch-Benachrichtigungsrolle: wie ein Kanal-Feld, aber die Rolle ist optional -> eine
-// "— keine —"-Option (leerer Wert) zum Entfernen. Die ist zugleich der Platzhalter für 'leer',
-// deshalb hier kein disabled/required: "keine Rolle" ist ein gültiger Zustand, kein fehlender.
+// Rollen-Einstellung: wie ein Kanal-Feld, aber die Rolle ist optional -> eine "— keine —"-Option
+// (leerer Wert) zum Entfernen. Die ist zugleich der Platzhalter für 'leer', deshalb hier kein
+// disabled/required: "keine Rolle" ist ein gültiger Zustand, kein fehlender.
 export function renderRollenFormular(rollen: RollenOption[], feld: RollenFeld, csrfToken: string): string {
+    const id = `rolle-${feld.schluessel}`;
     const keineOption = `<option value=""${feld.status === 'leer' ? ' selected' : ''}>— keine —</option>`;
     const optionen = rollen.map(rolle =>
         `<option value="${escapeHtml(rolle.id)}"${rolle.id === feld.aktuelleId ? ' selected' : ''}>@${escapeHtml(rolle.name)}</option>`
     ).join('\n');
     return `<form class="setting rolle-abstand" method="post" action="/config/rolle">
         <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
-        <label for="twitch-rolle">Twitch-Benachrichtigungsrolle</label>
-        <select id="twitch-rolle" name="rolle" class="status-${feld.status}">
+        <input type="hidden" name="feld" value="${escapeHtml(feld.schluessel)}">
+        <label for="${escapeHtml(id)}">${escapeHtml(feld.label)}</label>
+        <select id="${escapeHtml(id)}" name="rolle" class="status-${feld.status}">
             ${feld.status === 'warnung' ? platzhalterOption(feld.status, feld.aktuelleId, '') : ''}${keineOption}${optionen}
         </select>
         <button type="submit">Speichern</button>
     </form>`;
+}
+
+// Die Champion-Rolle wird vom Bot automatisch weitergereicht - ohne diesen Hinweis sähe sie aus
+// wie eine Rolle, die man hier von Hand pflegt.
+export function renderPingPongHinweis(): string {
+    return `<p class="feld-hinweis">Die Punkte laufen monatsweise: am Monatswechsel bekommt Platz eins
+        diese Rolle (der bisherige Champion gibt sie ab) und einen Eintrag in der Ruhmeshalle
+        (<code>/pingpong ruhmeshalle</code>), danach starten alle wieder bei 0. Dafür brauche ich
+        das Recht „Rollen verwalten“ und muss in der Rollen-Hierarchie über der Champion-Rolle
+        stehen – <code>/diagnose</code> prüft beides.</p>`;
 }
 
 // Baut aus nativen <input type="date"> (YYYY-MM-DD) + <input type="time"> (HH:MM, optional) einen
@@ -515,7 +528,7 @@ export interface ConfigSeiteDaten {
     kanalFelder: KanalFeld[];
     kanaele: KanalOption[];
     rollen: RollenOption[];
-    twitchRolle: RollenFeld;
+    rollenFelder: RollenFeld[];
     eventFelder: EventFelder;
     mitglieder: MitgliedOption[];
     legacyKilometer: number;
@@ -550,12 +563,16 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
         const feld = daten.kanalFelder.find(f => f.schluessel === schluessel);
         return feld ? renderKanalFormular(feld, daten.kanaele, csrf) : '';
     };
+    const rolle = (schluessel: string): string => {
+        const feld = daten.rollenFelder.find(f => f.schluessel === schluessel);
+        return feld ? renderRollenFormular(daten.rollen, feld, csrf) : '';
+    };
     const meldungFuer = (bereich: string): Meldung | undefined =>
         daten.meldung?.bereich === bereich ? daten.meldung : undefined;
     // Nach Feature gruppiert, damit fachlich Zusammengehöriges zusammensteht.
     const bereiche =
         renderBereich('twitch', 'Twitch',
-            kanal('twitch-kanal') + renderRollenFormular(daten.rollen, daten.twitchRolle, csrf),
+            kanal('twitch-kanal') + rolle('twitch-rolle'),
             meldungFuer('twitch')) +
         renderBereich('sport', 'Sport',
             kanal('sport-kanal') + renderSportAdmin(daten.mitglieder, daten.legacyKilometer, csrf) + renderMeilensteinListe(daten.meilensteine, csrf),
@@ -569,6 +586,9 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
         renderBereich('geburtstag', 'Geburtstage',
             kanal('geburtstag-kanal') + renderGeburtstagHinweis(),
             meldungFuer('geburtstag')) +
+        renderBereich('pingpong', 'Ping-Pong',
+            rolle('pingpong-champion') + renderPingPongHinweis(),
+            meldungFuer('pingpong')) +
         renderBereich('event', 'Event',
             renderEventFormular(daten.eventFelder, csrf),
             meldungFuer('event'));
@@ -660,6 +680,8 @@ const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
     'geburtstag-kanal': {bereich: 'geburtstag', text: 'Geburtstagskanal gespeichert.'},
     'twitch-rolle': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle gespeichert.'},
     'twitch-rolle-entfernt': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle entfernt.'},
+    'pingpong-champion': {bereich: 'pingpong', text: 'Champion-Rolle gespeichert.'},
+    'pingpong-champion-entfernt': {bereich: 'pingpong', text: 'Champion-Rolle entfernt.'},
     'event': {bereich: 'event', text: 'Event gespeichert.'},
     'event-entfernt': {bereich: 'event', text: 'Event entfernt.'},
     'kilometer-setzen': {bereich: 'sport', text: 'Kilometerstand gesetzt.'},
@@ -706,9 +728,9 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
         const userId = res.locals.configUserId as string;
         // Parallel: die Abfragen hängen nicht voneinander ab, und jede ist mindestens ein
         // Redis-Roundtrip (ladeKanalFelder zusätzlich vier channels.fetch).
-        const [kanalFelder, twitchRolle, eventFelder, mitglieder, legacyKilometer, meilensteine] = await Promise.all([
+        const [kanalFelder, rollenFelder, eventFelder, mitglieder, legacyKilometer, meilensteine] = await Promise.all([
             ladeKanalFelder(),
-            holeTwitchRolle(),
+            ladeRollenFelder(),
             holeEventFelder(),
             holeMitglieder(),
             holeLegacyKilometer(),
@@ -718,7 +740,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
             kanalFelder,
             kanaele: holeTextKanaele(),
             rollen: holeRollen(),
-            twitchRolle,
+            rollenFelder,
             eventFelder,
             mitglieder,
             legacyKilometer,
@@ -764,8 +786,9 @@ export async function handleKanalSpeichern(req: Request, res: Response): Promise
     zurueckZumBereich(res, feld);
 }
 
-// Speichert die Twitch-Benachrichtigungsrolle. Leerer Wert = Rolle entfernen (sie ist optional).
-// Sonst gegen die Rollen-Whitelist validieren. CSRF wie ueberall zuerst.
+// Speichert eine Rollen-Einstellung (per "feld" benannt, wie bei den Kanaelen). Leerer Wert =
+// Rolle entfernen (beide Rollen sind optional). Reihenfolge wie ueberall: CSRF → Feld-Whitelist →
+// Rollen-Whitelist → speichern → Redirect.
 export async function handleRolleSpeichern(req: Request, res: Response): Promise<void> {
     const userId = res.locals.configUserId as string;
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -776,10 +799,16 @@ export async function handleRolleSpeichern(req: Request, res: Response): Promise
         return;
     }
 
+    const feld = typeof body.feld === 'string' ? body.feld : '';
+    if (!istRollenFeld(feld)) {
+        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannte Einstellung.')));
+        return;
+    }
+
     const rolleId = typeof body.rolle === 'string' ? body.rolle : '';
     if (rolleId === '') {
-        await speichereTwitchRolle(null);
-        zurueckZumBereich(res, 'twitch-rolle-entfernt');
+        await speichereRolle(feld, null);
+        zurueckZumBereich(res, `${feld}-entfernt`);
         return;
     }
 
@@ -788,8 +817,8 @@ export async function handleRolleSpeichern(req: Request, res: Response): Promise
         return;
     }
 
-    await speichereTwitchRolle(rolleId);
-    zurueckZumBereich(res, 'twitch-rolle');
+    await speichereRolle(feld, rolleId);
+    zurueckZumBereich(res, feld);
 }
 
 // Speichert oder entfernt das nächste Event. Zwei Aktionen über name="aktion" (speichern/entfernen).

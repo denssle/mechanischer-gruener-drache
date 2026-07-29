@@ -6,8 +6,12 @@ import {
     ChatInputCommandInteraction,
     MessageFlags
 } from "discord.js";
+import {PermissionFlagsBits} from "discord.js";
 import redisService, {REDIS_KEYS} from "../services/redis.service.js";
 import userService from "../services/user.service.js";
+import pingPongService from "../services/pingPong.service.js";
+import client from "../client.js";
+import config from "../../config.json" with {type: "json"};
 
 // Key-Strings bewusst identisch zum bisherigen Verhalten gehalten (nur die Struktur
 // folgt jetzt der KEYS-Objekt-Konvention) - eine Änderung des Formats würde alle
@@ -146,6 +150,48 @@ export function formatSerie({siegerId, verliererId, serie, istNeuerRekord, beend
     }
 
     return saetze.length > 0 ? saetze.join(' ') : null;
+}
+
+// --- Seasons ---------------------------------------------------------------------------------
+// Die Punkte laufen monatsweise: am Monatswechsel bekommt Platz eins die Champion-Rolle und einen
+// Ruhmeshallen-Eintrag, danach werden die Scores zurückgesetzt. Zweck ist, dass die Bestenliste
+// nicht dauerhaft von Bestandsspielern zementiert wird. Angestoßen vom EINEN 60-s-setInterval in
+// index.ts (kein zweiter Mechanismus, keine Cron-Dependency) - rechneSeasonAb entscheidet selbst
+// anhand des Monatsmarkers, ob etwas zu tun ist.
+
+const MONATSNAMEN = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+    'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+// Monatsmarker in lokaler Zeit (Host = Europe/Berlin), wie alle anderen Tages-/Monatsmarker.
+export function monatsSchluessel(datum: Date): string {
+    return `${datum.getFullYear()}-${String(datum.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// 'Juli 2026' aus '2026-07'. Unbekannte Formate bleiben unverändert stehen, statt zu scheitern
+// (Muster: das englische Datum in parseGameEvents).
+export function formatMonat(schluessel: string): string {
+    const treffer = /^(\d{4})-(\d{2})$/.exec(schluessel);
+    if (!treffer) {
+        return schluessel;
+    }
+    const monat = MONATSNAMEN[Number(treffer[2]) - 1];
+    return monat ? `${monat} ${treffer[1]}` : schluessel;
+}
+
+// Sieger einer Season aus dem Sorted Set. Bei Gleichstand entscheidet bewusst das Los - kein
+// Tie-Break über Serie o.ä. (das wäre ein zweiter, schwer erklärbarer Maßstab). null = leere
+// Season (niemand hat gespielt): kein Sieger, kein Eintrag, Rolle bleibt wie sie ist.
+export function waehleSieger(eintraege: {value: string; score: number}[]): {userId: string; punkte: number} | null {
+    const mitPunkten = eintraege.filter(eintrag => eintrag.score > 0);
+    if (mitPunkten.length === 0) {
+        return null;
+    }
+
+    const bestePunktzahl = Math.max(...mitPunkten.map(eintrag => eintrag.score));
+    const gleichauf = mitPunkten.filter(eintrag => eintrag.score === bestePunktzahl);
+    const gewaehlt = gleichauf[Math.floor(Math.random() * gleichauf.length)];
+
+    return {userId: gewaehlt.value, punkte: gewaehlt.score};
 }
 
 class PingPongHandler {
@@ -490,9 +536,12 @@ class PingPongHandler {
     async handlePingPongHighscore(interaction: ChatInputCommandInteraction) {
         try {
             const highscore = await redisService.getSortedSet(KEYS.highscore);
+            // Die Liste nennt die laufende Season - sonst wundert sich am Monatsersten jemand
+            // über die plötzlich leere Bestenliste.
+            const ueberschrift = `**Bestenliste ${formatMonat(monatsSchluessel(new Date()))}**`;
 
             if (highscore.length === 0) {
-                return interaction.reply("Es gibt noch keine Highscores!");
+                return interaction.reply(`${ueberschrift}\nNoch keine Punkte in dieser Season – fordert euch heraus!`);
             }
 
             const users = await Promise.all(
@@ -511,10 +560,161 @@ class PingPongHandler {
                 })
                 .join('\n');
 
-            return interaction.reply(message);
+            return interaction.reply(`${ueberschrift}\n${message}\n`
+                + `Am Monatsende gewinnt Platz eins die Champion-Rolle, danach starten alle wieder bei 0 `
+                + `(frühere Sieger: \`/pingpong ruhmeshalle\`).`);
         } catch (error) {
             console.error("Error handling ping pong highscore:", error);
             return interaction.reply({ content: "Es gab einen Fehler beim Abrufen der Highscores.", flags: MessageFlags.Ephemeral });
+        }
+    }
+
+    // Beim Start (nach der Redis-Verbindung): wurde noch nie abgerechnet, wird der Marker OHNE
+    // Abrechnung auf den laufenden Monat gesetzt - sonst würde ein Deploy am 30. sofort mitten im
+    // Monat abrechnen. Muster: sportHandler.initTaeglicherPost.
+    async initSeason(): Promise<void> {
+        try {
+            if (await pingPongService.getLastSeason()) {
+                return;
+            }
+            const monat = monatsSchluessel(new Date());
+            await pingPongService.setLastSeason(monat);
+            console.log(`Ping-Pong-Season initialisiert: laufender Monat ${monat}, keine Abrechnung.`);
+        } catch (error) {
+            console.error('Fehler beim Initialisieren der Ping-Pong-Season:', error);
+        }
+    }
+
+    // Vom Minuten-Timer angestoßen: ist der Monat gewechselt, wird der Vormonat abgerechnet.
+    // Ein verpasster Monatswechsel wird bewusst NACHGEHOLT (Muster Mitternachts-Kilometerstand,
+    // nicht Anstupser) - ein Champion, der wegen eines Neustarts ausfällt, wäre ein echter Verlust.
+    // Der Marker wird erst NACH dem Ruhmeshallen-Eintrag und dem Reset gesetzt: scheitert etwas
+    // dazwischen, läuft die Abrechnung eine Minute später erneut.
+    async rechneSeasonAb(): Promise<void> {
+        const abgerechnet = await pingPongService.getLastSeason();
+        // Kein Marker = noch nie abgerechnet; das regelt initSeason beim Start, hier nichts tun.
+        if (!abgerechnet) {
+            return;
+        }
+
+        const aktuellerMonat = monatsSchluessel(new Date());
+        if (abgerechnet === aktuellerMonat) {
+            return;
+        }
+
+        const stand = await redisService.getSortedSetAll(KEYS.highscore);
+        const sieger = waehleSieger(stand);
+
+        if (sieger) {
+            await pingPongService.addRuhmeshalleEintrag(abgerechnet, sieger.userId, sieger.punkte);
+            console.log(`Ping-Pong-Season ${abgerechnet} abgerechnet: ${sieger.userId} mit ${sieger.punkte} Punkten.`);
+        } else {
+            console.log(`Ping-Pong-Season ${abgerechnet} war leer - kein Champion.`);
+        }
+
+        await this.setzeScoresZurueck(stand.map(eintrag => eintrag.value));
+        await pingPongService.setLastSeason(aktuellerMonat);
+
+        // Erst ganz zum Schluss und bewusst fehlertolerant: ohne gesetzte/vergebbare Rolle darf
+        // die Abrechnung nicht scheitern (dann bliebe die Season ewig offen).
+        if (sieger) {
+            await this.vergebeChampionRolle(sieger.userId);
+        }
+    }
+
+    // Reset betrifft NUR den Score - Serie und Rekord bleiben unangetastet (der Rekord ist eine
+    // persönliche Bestmarke, die laufende Serie hängt am Spielverhalten, nicht an der Season).
+    // Der Score liegt doppelt: als Einzelkey je User UND im Sorted Set. Beides wird gelöscht statt
+    // auf 0 gesetzt, sonst stünde die Bestenliste am Monatsanfang voller 0-Punkte-Karteileichen
+    // (getScore legt den Einzelkey bei Bedarf ohnehin neu an).
+    async setzeScoresZurueck(userIds: string[]): Promise<void> {
+        for (const userId of userIds) {
+            await redisService.delete(KEYS.score(userId));
+        }
+        await redisService.delete(KEYS.highscore);
+    }
+
+    // Die Rolle zeigt immer nur den AMTIERENDEN Champion: erst allen aktuellen Trägern abnehmen
+    // (nicht nur dem gespeicherten Vormonatssieger - robuster, falls sie jemand von Hand bekommen
+    // hat), dann dem neuen Sieger geben. Fehlt die Rolle, das Recht oder die Hierarchie, wird das
+    // nur geloggt - genau deshalb prüft /diagnose diese drei Dinge mit.
+    async vergebeChampionRolle(siegerId: string): Promise<void> {
+        try {
+            const rolleId = await pingPongService.getChampionRole();
+            if (!rolleId) {
+                console.warn('Ping-Pong-Season: keine Champion-Rolle konfiguriert - Auszeichnung entfällt.');
+                return;
+            }
+
+            const guild = client.guilds.cache.get(config.GUILD_ID);
+            const rolle = guild?.roles.cache.get(rolleId);
+            if (!guild || !rolle) {
+                console.warn(`Ping-Pong-Season: Champion-Rolle ${rolleId} existiert nicht (mehr).`);
+                return;
+            }
+
+            const me = guild.members.me;
+            if (!me?.permissions.has(PermissionFlagsBits.ManageRoles)) {
+                console.warn('Ping-Pong-Season: mir fehlt das Recht "Rollen verwalten" - Champion-Rolle nicht vergeben.');
+                return;
+            }
+            if (me.roles.highest.comparePositionTo(rolle) <= 0) {
+                console.warn('Ping-Pong-Season: die Champion-Rolle steht über meiner in der Hierarchie - nicht vergeben.');
+                return;
+            }
+
+            for (const traeger of rolle.members.values()) {
+                if (traeger.id !== siegerId) {
+                    await traeger.roles.remove(rolle).catch((error) => {
+                        console.warn(`Konnte die Champion-Rolle nicht von ${traeger.id} entfernen:`, error);
+                    });
+                }
+            }
+
+            // Ist der Sieger nicht mehr auf dem Server, gibt es keine Rolle - der
+            // Ruhmeshallen-Eintrag steht trotzdem schon.
+            const sieger = await guild.members.fetch(siegerId).catch(() => null);
+            if (!sieger) {
+                console.warn(`Ping-Pong-Champion ${siegerId} ist nicht mehr auf dem Server - Rolle nicht vergeben.`);
+                return;
+            }
+            await sieger.roles.add(rolle);
+        } catch (error) {
+            console.error('Fehler beim Vergeben der Ping-Pong-Champion-Rolle:', error);
+        }
+    }
+
+    // Die Rolle zeigt immer nur den aktuellen Champion - ohne Ruhmeshalle verschwänden die
+    // Vormonate spurlos. Bewusst KEIN Verkündungspost am Monatsende: wer es wissen will, fragt hier.
+    // allowedMentions ist Pflicht, sonst pingt jede Abfrage sämtliche Ex-Champions.
+    async handleRuhmeshalle(interaction: ChatInputCommandInteraction) {
+        try {
+            const eintraege = await pingPongService.getRuhmeshalle();
+
+            if (eintraege.length === 0) {
+                return interaction.reply({
+                    content: 'Die Ruhmeshalle ist noch leer – die erste Season läuft gerade.',
+                    allowedMentions: {parse: []},
+                });
+            }
+
+            const zeilen = ['**Ping-Pong-Ruhmeshalle**'];
+            for (const eintrag of eintraege) {
+                const zeile = `${formatMonat(eintrag.monat)}: <@${eintrag.userId}> mit **${eintrag.punkte}** Punkten`;
+                // Ganze Monate weglassen statt am Zeichenlimit abzuschneiden; in Redis bleiben sie.
+                if ([...zeilen, zeile].join('\n').length > 1900) {
+                    break;
+                }
+                zeilen.push(zeile);
+            }
+
+            return interaction.reply({content: zeilen.join('\n'), allowedMentions: {parse: []}});
+        } catch (error) {
+            console.error('Fehler beim Abrufen der Ping-Pong-Ruhmeshalle:', error);
+            return interaction.reply({
+                content: 'Die Ruhmeshalle konnte nicht abgerufen werden.',
+                flags: MessageFlags.Ephemeral,
+            });
         }
     }
 
@@ -527,8 +727,13 @@ class PingPongHandler {
             + `gewinnst du, gibt es **+${ANSAGE_BONUS}** Punkt extra – verlierst du, kostet die große Klappe **${ANSAGE_MALUS}** Punkt zusätzlich\n` +
             `**/pingpong taktikduell** – Duell mit verdeckter Aktion: Schmetterball schlägt Lupfer, `
             + `Lupfer schlägt Konter, Konter schlägt Schmetterball (bei gleicher Wahl entscheidet der Ballwechsel)\n` +
-            `**/pingpong bestenliste** – Die Top 10 nach Gesamtpunkten, mit laufender Siegesserie\n` +
-            `**/pingpong hilfe** – Zeigt diese Übersicht`
+            `**/pingpong bestenliste** – Die Top 10 der laufenden Season, mit laufender Siegesserie\n` +
+            `**/pingpong ruhmeshalle** – Die Champions der vergangenen Monate\n` +
+            `**/pingpong hilfe** – Zeigt diese Übersicht\n\n` +
+            `**Seasons:** Die Punkte laufen monatsweise. Am Monatsende bekommt Platz eins die `
+            + `Champion-Rolle (der bisherige Champion gibt sie ab) und einen Eintrag in der Ruhmeshalle, `
+            + `danach starten alle wieder bei 0. Bei Punktgleichstand entscheidet das Los. `
+            + `Siegesserie und persönlicher Rekord bleiben vom Reset unberührt.`
         );
     }
 }

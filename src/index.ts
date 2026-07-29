@@ -16,6 +16,7 @@ import sportHandler from "./handlers/sport.handler.js";
 import greetingHandler from "./handlers/greeting.handler.js";
 import anstupserHandler from "./handlers/anstupser.handler.js";
 import geburtstagHandler from "./handlers/geburtstag.handler.js";
+import pingPongHandler from "./handlers/pingPong.handler.js";
 
 // console.log/warn/error in einen Ringpuffer spiegeln, damit sie auf /config einsehbar sind. Moeglichst
 // frueh, damit die Boot-/Laufzeit-Zeilen (Webhook-Server-Start, Fehler) mitgeschnitten werden.
@@ -140,6 +141,9 @@ client.once(Events.ClientReady, async () => {
         await memberHandler.loadAllMembers();
         // Erst nach der Redis-Verbindung: verhindert einen Überraschungs-Post beim ersten Deploy.
         await sportHandler.initTaeglicherPost();
+        // Ebenfalls erst nach der Redis-Verbindung: setzt den Monatsmarker beim allerersten Start,
+        // damit ein Deploy nicht mitten im Monat abrechnet.
+        await pingPongHandler.initSeason();
         setInterval(() => {
             sportHandler.posteTaeglichenKilometerstand().catch((error) => {
                 console.error('Fehler im täglichen Kilometerstand-Post:', error);
@@ -153,6 +157,11 @@ client.once(Events.ClientReady, async () => {
             // verpassten Tag bewusst NICHT nach (ein "alles Gute" von gestern ist keins mehr).
             geburtstagHandler.posteGeburtstagsgruesse().catch((error) => {
                 console.error('Fehler beim Posten der Geburtstagsgrüße:', error);
+            });
+            // Prüft selbst per Monatsmarker, ob die Ping-Pong-Season abzurechnen ist; ein
+            // verpasster Monatswechsel wird bewusst nachgeholt.
+            pingPongHandler.rechneSeasonAb().catch((error) => {
+                console.error('Fehler beim Abrechnen der Ping-Pong-Season:', error);
             });
         }, TAEGLICHER_POST_INTERVALL_MS);
     } catch (error) {

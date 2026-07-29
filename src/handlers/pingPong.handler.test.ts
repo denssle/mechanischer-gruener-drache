@@ -1,4 +1,4 @@
-import {describe, it, expect, vi, beforeEach} from 'vitest';
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
 import {MessageFlags} from 'discord.js';
 
 vi.mock("../services/redis.service.js", () => ({
@@ -8,6 +8,7 @@ vi.mock("../services/redis.service.js", () => ({
         getSortedSet: vi.fn(),
         setSortedSet: vi.fn(),
         getTimeToLive: vi.fn(),
+        getSortedSetAll: vi.fn(),
         setWithExpiry: vi.fn(),
         increment: vi.fn(),
         delete: vi.fn(),
@@ -23,16 +24,34 @@ vi.mock("../services/user.service.js", () => ({
     }
 }));
 
+vi.mock("../services/pingPong.service.js", () => ({
+    default: {
+        getLastSeason: vi.fn(),
+        setLastSeason: vi.fn(),
+        getChampionRole: vi.fn(),
+        addRuhmeshalleEintrag: vi.fn(),
+        getRuhmeshalle: vi.fn(),
+    }
+}));
+
+vi.mock("../../config.json", () => ({default: {GUILD_ID: 'guild-1'}}));
+vi.mock("../client.js", () => ({default: {guilds: {cache: new Map()}}}));
+
 import redisService from "../services/redis.service.js";
 import userService from "../services/user.service.js";
+import pingPongService from "../services/pingPong.service.js";
+import client from "../client.js";
 import pingPongHandler, {
     DUELL_FLAVORS,
     entscheideTaktik,
     formatAnsage,
+    formatMonat,
     formatSerie,
+    monatsSchluessel,
     randomDuellFlavor,
     spieleDuell,
-    TAKTIK_AKTIONEN
+    TAKTIK_AKTIONEN,
+    waehleSieger
 } from "./pingPong.handler.js";
 
 describe('PingPongHandler', () => {
@@ -598,7 +617,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('noch keine Highscores'));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('Noch keine Punkte in dieser Season'));
             expect(userService.getUser).not.toHaveBeenCalled();
         });
 
@@ -614,7 +633,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith('1. Erster - 42\n2. Zweiter - 10');
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. Erster - 42\n2. Zweiter - 10'));
         });
 
         it('fällt auf die rohe User-ID zurück wenn kein gespeicherter User existiert', async () => {
@@ -626,7 +645,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith('1. user-1 - 5');
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. user-1 - 5'));
         });
 
         it('sollte Fehler abfangen', async () => {
@@ -655,7 +674,260 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith('1. Erster - 42 (4 in Folge)\n2. Zweiter - 10');
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. Erster - 42 (4 in Folge)\n2. Zweiter - 10'));
+        });
+    });
+    // --- Seasons ---------------------------------------------------------------------------
+    describe('Season-Helfer', () => {
+        it('monatsSchluessel baut YYYY-MM in lokaler Zeit', () => {
+            expect(monatsSchluessel(new Date(2026, 6, 29, 23, 30))).toBe('2026-07');
+            expect(monatsSchluessel(new Date(2026, 0, 1))).toBe('2026-01');
+        });
+
+        it('formatMonat macht daraus den deutschen Monatsnamen', () => {
+            expect(formatMonat('2026-07')).toBe('Juli 2026');
+            expect(formatMonat('2025-12')).toBe('Dezember 2025');
+        });
+
+        it('formatMonat lässt Unbekanntes stehen, statt zu scheitern', () => {
+            expect(formatMonat('kaputt')).toBe('kaputt');
+            expect(formatMonat('2026-13')).toBe('2026-13');
+        });
+
+        it('waehleSieger nimmt den höchsten Punktestand', () => {
+            expect(waehleSieger([
+                {value: 'a', score: 3},
+                {value: 'b', score: 9},
+                {value: 'c', score: 5},
+            ])).toEqual({userId: 'b', punkte: 9});
+        });
+
+        it('waehleSieger lost bei Gleichstand unter den Punktgleichen', () => {
+            const gleichstand = [
+                {value: 'a', score: 7},
+                {value: 'b', score: 7},
+                // Der Punktärmere darf nie gewinnen, egal wie das Los fällt.
+                {value: 'c', score: 2},
+            ];
+            const zufall = vi.spyOn(Math, 'random');
+
+            zufall.mockReturnValue(0);
+            expect(waehleSieger(gleichstand)!.userId).toBe('a');
+
+            zufall.mockReturnValue(0.99);
+            expect(waehleSieger(gleichstand)!.userId).toBe('b');
+
+            zufall.mockRestore();
+        });
+
+        it('waehleSieger liefert null bei leerer Season (niemand mit Punkten)', () => {
+            expect(waehleSieger([])).toBeNull();
+            expect(waehleSieger([{value: 'a', score: 0}])).toBeNull();
+        });
+    });
+
+    describe('initSeason', () => {
+        it('setzt den Monatsmarker beim allerersten Start, ohne abzurechnen', async () => {
+            vi.useFakeTimers();
+            vi.setSystemTime(new Date(2026, 6, 15));
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue(null);
+
+            await pingPongHandler.initSeason();
+
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+            expect(pingPongService.addRuhmeshalleEintrag).not.toHaveBeenCalled();
+            vi.useRealTimers();
+        });
+
+        it('lässt einen bestehenden Marker in Ruhe', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+
+            await pingPongHandler.initSeason();
+
+            expect(pingPongService.setLastSeason).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('rechneSeasonAb', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+            vi.setSystemTime(new Date(2026, 6, 1, 0, 0));
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([] as any);
+            vi.mocked(pingPongService.getChampionRole).mockResolvedValue(null);
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('tut nichts, solange der Monat nicht gewechselt hat', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-07');
+
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(redisService.getSortedSetAll).not.toHaveBeenCalled();
+            expect(pingPongService.setLastSeason).not.toHaveBeenCalled();
+        });
+
+        it('tut nichts ohne Marker (das regelt initSeason beim Start)', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue(null);
+
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(redisService.getSortedSetAll).not.toHaveBeenCalled();
+            expect(pingPongService.setLastSeason).not.toHaveBeenCalled();
+        });
+
+        it('trägt den Sieger des Vormonats ein, setzt die Scores zurück und schreibt den Marker', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([
+                {value: 'user-1', score: 12},
+                {value: 'user-2', score: 3},
+            ] as any);
+
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(pingPongService.addRuhmeshalleEintrag).toHaveBeenCalledWith('2026-06', 'user-1', 12);
+            // Der Score liegt doppelt: Einzelkey je User UND Sorted Set - beides muss weg.
+            expect(redisService.delete).toHaveBeenCalledWith('user-1PING_PONG');
+            expect(redisService.delete).toHaveBeenCalledWith('user-2PING_PONG');
+            expect(redisService.delete).toHaveBeenCalledWith('PING_PONG');
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+        });
+
+        it('rührt Serie und Rekord beim Reset nicht an', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'user-1', score: 4}] as any);
+
+            await pingPongHandler.rechneSeasonAb();
+
+            const geloescht = vi.mocked(redisService.delete).mock.calls.map(([key]) => key);
+            expect(geloescht).not.toContain('PING_PONG:SERIE:user-1');
+            expect(geloescht).not.toContain('PING_PONG:REKORD:user-1');
+        });
+
+        it('holt einen verpassten Monatswechsel nach (Bot war aus)', async () => {
+            vi.setSystemTime(new Date(2026, 6, 4, 9, 0));
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-05');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'user-1', score: 8}] as any);
+
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(pingPongService.addRuhmeshalleEintrag).toHaveBeenCalledWith('2026-05', 'user-1', 8);
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+        });
+
+        it('legt bei leerer Season keinen Eintrag an, schreibt aber den Marker fort', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([] as any);
+
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(pingPongService.addRuhmeshalleEintrag).not.toHaveBeenCalled();
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+        });
+
+        it('rechnet auch ohne konfigurierte Champion-Rolle ab (nur Log statt Abbruch)', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'user-1', score: 5}] as any);
+            vi.mocked(pingPongService.getChampionRole).mockResolvedValue(null);
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+            expect(warn).toHaveBeenCalled();
+            warn.mockRestore();
+        });
+
+        it('nimmt die Champion-Rolle dem bisherigen Träger ab und gibt sie dem neuen Sieger', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'neu', score: 5}] as any);
+            vi.mocked(pingPongService.getChampionRole).mockResolvedValue('rolle-1');
+
+            const altTraeger = {id: 'alt', roles: {remove: vi.fn().mockResolvedValue(undefined)}};
+            const neuerChamp = {id: 'neu', roles: {add: vi.fn().mockResolvedValue(undefined)}};
+            const rolle = {id: 'rolle-1', members: new Map([['alt', altTraeger]])};
+            client.guilds.cache.set('guild-1', {
+                roles: {cache: new Map([['rolle-1', rolle]])},
+                members: {
+                    me: {
+                        permissions: {has: () => true},
+                        roles: {highest: {comparePositionTo: () => 1}},
+                    },
+                    fetch: vi.fn(async () => neuerChamp),
+                },
+            } as any);
+
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(altTraeger.roles.remove).toHaveBeenCalledWith(rolle);
+            expect(neuerChamp.roles.add).toHaveBeenCalledWith(rolle);
+            client.guilds.cache.clear();
+        });
+
+        it('vergibt die Rolle nicht, wenn sie über der Bot-Rolle steht - rechnet aber ab', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'neu', score: 5}] as any);
+            vi.mocked(pingPongService.getChampionRole).mockResolvedValue('rolle-1');
+
+            const fetch = vi.fn();
+            client.guilds.cache.set('guild-1', {
+                roles: {cache: new Map([['rolle-1', {id: 'rolle-1', members: new Map()}]])},
+                members: {
+                    me: {
+                        permissions: {has: () => true},
+                        roles: {highest: {comparePositionTo: () => -1}},
+                    },
+                    fetch,
+                },
+            } as any);
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(fetch).not.toHaveBeenCalled();
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+            warn.mockRestore();
+            client.guilds.cache.clear();
+        });
+    });
+
+    describe('handleRuhmeshalle', () => {
+        const mockInteraction = () => ({reply: vi.fn()} as any);
+
+        it('listet die Champions und pingt dabei niemanden an', async () => {
+            vi.mocked(pingPongService.getRuhmeshalle).mockResolvedValue([
+                {monat: '2026-06', userId: 'user-1', punkte: 12},
+                {monat: '2026-05', userId: 'user-2', punkte: 9},
+            ]);
+            const interaction = mockInteraction();
+
+            await pingPongHandler.handleRuhmeshalle(interaction);
+
+            const antwort = interaction.reply.mock.calls[0][0];
+            expect(antwort.content).toContain('Juni 2026: <@user-1> mit **12** Punkten');
+            expect(antwort.content).toContain('Mai 2026: <@user-2> mit **9** Punkten');
+            // Pflicht: sonst pingt jede Abfrage sämtliche Ex-Champions.
+            expect(antwort.allowedMentions).toEqual({parse: []});
+        });
+
+        it('meldet eine leere Ruhmeshalle, statt eine leere Liste zu posten', async () => {
+            vi.mocked(pingPongService.getRuhmeshalle).mockResolvedValue([]);
+            const interaction = mockInteraction();
+
+            await pingPongHandler.handleRuhmeshalle(interaction);
+
+            expect(interaction.reply.mock.calls[0][0].content).toContain('noch leer');
+        });
+
+        it('fängt einen Redis-Fehler ab', async () => {
+            vi.mocked(pingPongService.getRuhmeshalle).mockRejectedValue(new Error('Redis kaputt'));
+            const interaction = mockInteraction();
+
+            await pingPongHandler.handleRuhmeshalle(interaction);
+
+            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
         });
     });
 });

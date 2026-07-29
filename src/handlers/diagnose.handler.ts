@@ -8,6 +8,8 @@ import greetingService from '../services/greeting.service.js';
 import geburtstagService from '../services/geburtstag.service.js';
 import eventService from '../services/event.service.js';
 import characterService, {CharacterLink, findInRoster} from '../services/character.service.js';
+import pingPongService from '../services/pingPong.service.js';
+import {formatMonat} from './pingPong.handler.js';
 import {oauthConfigured} from '../services/discordOAuth.service.js';
 import {sessionConfigured} from '../server/config.session.js';
 import config from '../../config.json' with {type: 'json'};
@@ -51,6 +53,9 @@ class DiagnoseHandler {
             ? `Event: ✅ gesetzt für <t:${Math.floor(event.timestamp / 1000)}:F>`
             : 'Event: ℹ️ kein Event gesetzt (optional)');
 
+        lines.push('\n**Ping-Pong-Season**');
+        await this.pruefeChampionRolle(lines);
+
         lines.push('\n**Verknüpfte Charaktere**');
         await this.pruefeCharaktere(lines);
 
@@ -88,6 +93,40 @@ class DiagnoseHandler {
         return guild.members.me?.permissions.has(PermissionFlagsBits.ViewAuditLog)
             ? '✅ vorhanden'
             : '⚠️ Recht "Audit-Log ansehen" fehlt – Protokoll nennt keine Urheber, Kicks sehen aus wie Austritte';
+    }
+
+    // Die Champion-Rolle der Ping-Pong-Season wird am Monatswechsel automatisch weitergereicht -
+    // scheitert das, wird es NUR geloggt und die Season trotzdem abgerechnet (die Abrechnung darf
+    // nicht an einer Rolle hängen). Im Discord sieht man davon nichts, deshalb stehen hier alle
+    // drei Voraussetzungen: Rolle vorhanden, Recht "Rollen verwalten", Bot-Rolle über der Rolle.
+    private async pruefeChampionRolle(lines: string[]): Promise<void> {
+        const abgerechnet = await pingPongService.getLastSeason();
+        lines.push(abgerechnet
+            ? `Zuletzt abgerechnet: ✅ ${formatMonat(abgerechnet)}`
+            : 'Zuletzt abgerechnet: ⚠️ noch nie (Marker wird beim nächsten Start gesetzt)');
+
+        const rolleId = await pingPongService.getChampionRole();
+        if (!rolleId) {
+            lines.push('Champion-Rolle: ❌ nicht gesetzt – der Monatssieger bekommt keine Auszeichnung (nur den Ruhmeshallen-Eintrag). Setzbar auf /config.');
+            return;
+        }
+
+        const guild = client.guilds.cache.get(config.GUILD_ID);
+        const rolle = guild?.roles.cache.get(rolleId);
+        if (!guild || !rolle) {
+            lines.push(`Champion-Rolle: ⚠️ gesetzt (\`${rolleId}\`), aber nicht (mehr) vorhanden`);
+            return;
+        }
+        lines.push(`Champion-Rolle: ✅ <@&${rolleId}>`);
+
+        const me = guild.members.me;
+        if (!me?.permissions.has(PermissionFlagsBits.ManageRoles)) {
+            lines.push('⚠️ Mir fehlt das Recht "Rollen verwalten" – ich kann die Champion-Rolle nicht vergeben.');
+            return;
+        }
+        if (me.roles.highest.comparePositionTo(rolle) <= 0) {
+            lines.push('⚠️ Die Champion-Rolle steht über meiner Rolle in der Hierarchie – ich kann sie nicht vergeben.');
+        }
     }
 
     // Ein gesetzter Kanal wird gegen Discord gegengeprüft - fängt gelöschte Kanäle / fehlenden Zugriff ab.

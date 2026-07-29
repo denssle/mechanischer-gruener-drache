@@ -38,6 +38,11 @@ vi.mock('../services/geburtstag.service.js', () => ({
 vi.mock('../services/event.service.js', () => ({
     default: {getEvent: vi.fn(), setEvent: vi.fn(), clearEvent: vi.fn()}
 }));
+vi.mock('../services/pingPong.service.js', () => ({
+    default: {
+        getChampionRole: vi.fn(async () => null), setChampionRole: vi.fn(), removeChampionRole: vi.fn()
+    }
+}));
 
 import client from '../client.js';
 import twitchUserService from '../services/twitch.user.service.js';
@@ -47,6 +52,7 @@ import {ableiteEmoji, GRUSS_EMOJIS} from '../handlers/greeting.handler.js';
 import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import eventService from '../services/event.service.js';
+import pingPongService from '../services/pingPong.service.js';
 import {ChannelType, Collection} from 'discord.js';
 import {
     addiereLegacyKilometer,
@@ -61,7 +67,8 @@ import {
     holeMorgengrussEmojis,
     holeRollen,
     holeTextKanaele,
-    holeTwitchRolle,
+    istRollenFeld,
+    ladeRollenFelder,
     istGueltigerTextKanal,
     istGueltigeRolle,
     istGueltigesMitglied,
@@ -72,7 +79,7 @@ import {
     speichereKanal,
     speichereKilometer,
     speichereMorgengrussEmoji,
-    speichereTwitchRolle
+    speichereRolle
 } from './config.settings.js';
 
 describe('config.settings – Kanal-Liste', () => {
@@ -233,28 +240,45 @@ describe('config.settings – Twitch-Rolle (bearbeiten)', () => {
         expect(istGueltigeRolle('fremd')).toBe(false);
     });
 
-    it('holeTwitchRolle liefert ID + Zustand (ok / leer / warnung)', async () => {
+    it('ladeRollenFelder liefert beide Rollen mit ID + Zustand (ok / leer / warnung)', async () => {
         mitRollen();
 
         (twitchUserService.getNotificationRole as any).mockResolvedValue('r1');
-        expect(await holeTwitchRolle()).toEqual({aktuelleId: 'r1', status: 'ok'});
-
-        // Nicht gesetzt ist bei der optionalen Rolle kein Mangel.
-        (twitchUserService.getNotificationRole as any).mockResolvedValue(null);
-        expect(await holeTwitchRolle()).toEqual({aktuelleId: null, status: 'leer'});
+        (pingPongService.getChampionRole as any).mockResolvedValue(null);
+        expect(await ladeRollenFelder()).toEqual([
+            {schluessel: 'twitch-rolle', label: 'Twitch-Benachrichtigungsrolle', aktuelleId: 'r1', status: 'ok'},
+            // Nicht gesetzt ist bei den optionalen Rollen kein Mangel.
+            {schluessel: 'pingpong-champion', label: 'Champion-Rolle', aktuelleId: null, status: 'leer'},
+        ]);
 
         // Gesetzt, aber die Rolle gibt es nicht mehr.
-        (twitchUserService.getNotificationRole as any).mockResolvedValue('r-weg');
-        expect(await holeTwitchRolle()).toEqual({aktuelleId: 'r-weg', status: 'warnung'});
+        (pingPongService.getChampionRole as any).mockResolvedValue('r-weg');
+        const felder = await ladeRollenFelder();
+        expect(felder.find(f => f.schluessel === 'pingpong-champion'))
+            .toEqual({schluessel: 'pingpong-champion', label: 'Champion-Rolle', aktuelleId: 'r-weg', status: 'warnung'});
     });
 
-    it('speichereTwitchRolle setzt eine Rolle bzw. entfernt sie bei null', async () => {
-        await speichereTwitchRolle('r1');
+    it('istRollenFeld kennt nur die beiden Rollen-Einstellungen', () => {
+        expect(istRollenFeld('twitch-rolle')).toBe(true);
+        expect(istRollenFeld('pingpong-champion')).toBe(true);
+        expect(istRollenFeld('ausgedacht')).toBe(false);
+        // hasOwnProperty statt direktem Zugriff: sonst landete das in der Prototypenkette.
+        expect(istRollenFeld('constructor')).toBe(false);
+    });
+
+    it('speichereRolle setzt eine Rolle bzw. entfernt sie bei null', async () => {
+        await speichereRolle('twitch-rolle', 'r1');
         expect(twitchUserService.setNotificationRole).toHaveBeenCalledWith('r1');
         expect(twitchUserService.removeNotificationRole).not.toHaveBeenCalled();
 
-        await speichereTwitchRolle(null);
+        await speichereRolle('twitch-rolle', null);
         expect(twitchUserService.removeNotificationRole).toHaveBeenCalledTimes(1);
+
+        await speichereRolle('pingpong-champion', 'r2');
+        expect(pingPongService.setChampionRole).toHaveBeenCalledWith('r2');
+
+        await speichereRolle('pingpong-champion', null);
+        expect(pingPongService.removeChampionRole).toHaveBeenCalledTimes(1);
     });
 });
 

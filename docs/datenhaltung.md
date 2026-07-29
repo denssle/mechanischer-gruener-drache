@@ -31,7 +31,10 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `SPORT:ENTRY:<id>`, `SPORT:USER:<userId>` | Sport-Einträge: Distanz, Aktivität, Datum, optionale Notiz | dauerhaft (bis `/sport loeschen`) | `/sport statistik` |
 | `SPORT:HIGHSCORE`, `SPORT:MILESTONES`, `SPORT:ANNOUNCEMENT_CHANNEL` | Kilometer je User, Meilensteine, Ankündigungskanal | dauerhaft | `/sport gesamt`, Meilenstein-Ankündigungen |
 | `SPORT:LAST_DAILY_POST` | Tag (YYYY-MM-DD) des zuletzt geposteten täglichen Kilometerstands | bis zum Überschreiben | Doppelpost-Schutz der Mitternachts-Meldung |
-| `<userId>PING_PONG`, `PING_PONG` (Sorted Set) | Ping-Pong-Punktestand | dauerhaft | `/pingpong bestenliste` |
+| `<userId>PING_PONG`, `PING_PONG` (Sorted Set) | Ping-Pong-Punktestand der laufenden Season | bis zum Monatsende (Season-Reset) | `/pingpong bestenliste` |
+| `PING_PONG:LAST_SEASON` | Monat (YYYY-MM) der zuletzt abgerechneten Season | bis zum Überschreiben | Doppelabrechnungs-Schutz am Monatswechsel |
+| `PING_PONG:RUHMESHALLE` (Hash) | je Monat: User-ID des Champions + sein Punktestand | dauerhaft | `/pingpong ruhmeshalle` |
+| `PING_PONG:CHAMPION_ROLE` | Admin-Konfiguration: Rolle des amtierenden Champions | bis zum Überschreiben | Auszeichnung am Monatswechsel |
 | `PING_PONG:COOLDOWN:<userId>` | Marker, dass gerade herausgefordert wurde | 30 Sekunden (TTL) | Anti-Spam |
 | `PING_PONG:SERIE:<userId>`, `PING_PONG:REKORD:<userId>` | Laufende Siegesserie (bei Niederlage gelöscht) und längste je erreichte Serie | dauerhaft | Duell-Ergebnis, `/pingpong bestenliste` |
 | `TIPP:COOLDOWN:<userId>` | Marker, dass die Person heute schon einen Tipp gesehen hat | 24 Stunden (TTL) | gelegentliche Tipps/Nettigkeiten |

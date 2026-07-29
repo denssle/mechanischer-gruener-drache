@@ -39,6 +39,9 @@ export default {
             .setName('bestenliste')
             .setDescription('Zeigt die Ping-Pong-Bestenliste'))
         .addSubcommand(sub => sub
+            .setName('ruhmeshalle')
+            .setDescription('Zeigt die Champions der vergangenen Seasons'))
+        .addSubcommand(sub => sub
             .setName('hilfe')
             .setDescription('Zeigt alle verfügbaren Ping-Pong-Befehle')),
 
@@ -54,6 +57,8 @@ export default {
                 return pingPongHandler.handleTaktikduell(interaction);
             case 'bestenliste':
                 return pingPongHandler.handlePingPongHighscore(interaction);
+            case 'ruhmeshalle':
+                return pingPongHandler.handleRuhmeshalle(interaction);
             case 'hilfe':
                 return pingPongHandler.handleHilfe(interaction);
         }

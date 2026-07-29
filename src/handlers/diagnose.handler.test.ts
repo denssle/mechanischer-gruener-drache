@@ -14,6 +14,7 @@ const character = vi.hoisted(() => ({ getAllLinks: vi.fn(), getRoster: vi.fn() }
 const oauth = vi.hoisted(() => ({ oauthConfigured: vi.fn() }));
 const geburtstag = vi.hoisted(() => ({ getChannel: vi.fn(async () => null) }));
 const session = vi.hoisted(() => ({ sessionConfigured: vi.fn() }));
+const pingPong = vi.hoisted(() => ({ getLastSeason: vi.fn(), getChampionRole: vi.fn() }));
 const channelsFetch = vi.hoisted(() => vi.fn());
 const guildsCache = vi.hoisted(() => new Map<string, unknown>());
 
@@ -25,6 +26,7 @@ vi.mock('../services/logging.service.js', () => ({ default: logging }));
 vi.mock('../services/greeting.service.js', () => ({ default: greeting }));
 vi.mock('../services/geburtstag.service.js', () => ({ default: geburtstag }));
 vi.mock('../services/event.service.js', () => ({ default: event }));
+vi.mock('../services/pingPong.service.js', () => ({ default: pingPong }));
 vi.mock('../services/discordOAuth.service.js', () => oauth);
 vi.mock('../server/config.session.js', () => session);
 // findInRoster (rein) real lassen, nur den Service-Default mocken.
@@ -49,7 +51,7 @@ const report = (interaction: any) => interaction.editReply.mock.calls[0][0] as s
 
 describe('DiagnoseHandler', () => {
     beforeEach(() => {
-        [twitchUser, twitch, sport, logging, greeting, event, character].forEach(svc =>
+        [twitchUser, twitch, sport, logging, greeting, event, character, pingPong].forEach(svc =>
             Object.values(svc).forEach(fn => (fn as any).mockReset())
         );
         channelsFetch.mockReset();
@@ -58,6 +60,8 @@ describe('DiagnoseHandler', () => {
         twitchUser.getNotificationRole.mockResolvedValue(null);
         twitchUser.getAllLinks.mockResolvedValue([]);
         twitch.listStreamOnlineSubscriptions.mockResolvedValue([]);
+        pingPong.getLastSeason.mockResolvedValue(null);
+        pingPong.getChampionRole.mockResolvedValue(null);
         sport.getAnnouncementChannel.mockResolvedValue(null);
         logging.getLogChannel.mockResolvedValue(null);
         greeting.getChannel.mockResolvedValue(null);
@@ -71,6 +75,81 @@ describe('DiagnoseHandler', () => {
         // Standard: Bot darf das Audit-Log lesen
         guildsCache.clear();
         guildsCache.set(config.GUILD_ID, { members: { me: { permissions: { has: () => true } } } });
+    });
+
+    // Die Champion-Rolle wird am Monatswechsel automatisch weitergereicht - scheitert das, wird es
+    // nur geloggt. Im Discord sieht man davon nichts, deshalb steht es hier.
+    describe('Ping-Pong-Season', () => {
+        const mitRolle = (opts: {rolleDa?: boolean; manageRoles?: boolean; hoeher?: boolean} = {}) => {
+            const {rolleDa = true, manageRoles = true, hoeher = true} = opts;
+            guildsCache.set(config.GUILD_ID, {
+                roles: {cache: rolleDa ? new Map([['rolle-1', {id: 'rolle-1'}]]) : new Map()},
+                members: {
+                    me: {
+                        permissions: {has: (recht: unknown) => recht === undefined ? true : manageRoles},
+                        roles: {highest: {comparePositionTo: () => hoeher ? 1 : -1}},
+                    }
+                },
+            });
+        };
+
+        it('meldet eine fehlende Champion-Rolle als ❌', async () => {
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Champion-Rolle: ❌ nicht gesetzt');
+        });
+
+        it('nennt den zuletzt abgerechneten Monat', async () => {
+            pingPong.getLastSeason.mockResolvedValue('2026-06');
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Zuletzt abgerechnet: ✅ Juni 2026');
+        });
+
+        it('warnt bei gesetzter, aber gelöschter Rolle', async () => {
+            pingPong.getChampionRole.mockResolvedValue('rolle-1');
+            mitRolle({rolleDa: false});
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Champion-Rolle: ⚠️');
+        });
+
+        it('warnt, wenn dem Bot "Rollen verwalten" fehlt', async () => {
+            pingPong.getChampionRole.mockResolvedValue('rolle-1');
+            mitRolle({manageRoles: false});
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Rollen verwalten');
+        });
+
+        it('warnt, wenn die Champion-Rolle über der Bot-Rolle steht', async () => {
+            pingPong.getChampionRole.mockResolvedValue('rolle-1');
+            mitRolle({hoeher: false});
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Hierarchie');
+        });
+
+        it('meldet eine vollständig eingerichtete Rolle als ✅', async () => {
+            pingPong.getChampionRole.mockResolvedValue('rolle-1');
+            mitRolle();
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Champion-Rolle: ✅ <@&rolle-1>');
+            expect(report(interaction)).not.toContain('Rollen verwalten');
+        });
     });
 
     describe('Audit-Log-Recht', () => {

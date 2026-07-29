@@ -9,6 +9,7 @@ import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import geburtstagService from '../services/geburtstag.service.js';
 import eventService from '../services/event.service.js';
+import pingPongService from '../services/pingPong.service.js';
 import {ableiteEmoji, GRUSS_EMOJIS} from '../handlers/greeting.handler.js';
 
 // Sammelt die auf /config bearbeitbaren Admin-Einstellungen als strukturierte Daten fuers
@@ -147,29 +148,59 @@ export function istGueltigeRolle(rolleId: string): boolean {
     return holeRollen().some(rolle => rolle.id === rolleId);
 }
 
+// Datengetrieben wie KANAL_SERVICES: eine neue Rollen-Einstellung ist eine Zeile, keine neue
+// Route/Handler. Beide Rollen sind optional (leerer Wert = entfernen), deshalb hat `speichere`
+// hier `string | null` statt eines eigenen Entfernen-Pfads.
+interface RollenService {
+    label: string;
+    lade: () => Promise<string | null>;
+    speichere: (rolleId: string | null) => Promise<void>;
+}
+
+const ROLLEN_SERVICES: Record<string, RollenService> = {
+    'twitch-rolle': {
+        label: 'Twitch-Benachrichtigungsrolle',
+        lade: () => twitchUserService.getNotificationRole(),
+        speichere: (id) => id === null
+            ? twitchUserService.removeNotificationRole()
+            : twitchUserService.setNotificationRole(id),
+    },
+    'pingpong-champion': {
+        label: 'Champion-Rolle',
+        lade: () => pingPongService.getChampionRole(),
+        speichere: (id) => id === null
+            ? pingPongService.removeChampionRole()
+            : pingPongService.setChampionRole(id),
+    },
+};
+
 export interface RollenFeld {
+    schluessel: string;
+    label: string;
     aktuelleId: string | null;
     status: FeldStatus;
 }
 
-// Rohe ID (fuer die Vorauswahl im Dropdown) plus Zustand. Die Rolle ist optional, "nicht gesetzt"
-// ist also kein Mangel - 'warnung' meint hier: gesetzt, aber die Rolle gibt es nicht mehr.
-export async function holeTwitchRolle(): Promise<RollenFeld> {
-    const aktuelleId = await twitchUserService.getNotificationRole();
-    if (!aktuelleId) {
-        return {aktuelleId: null, status: 'leer'};
-    }
-    const rolle = client.guilds.cache.get(config.GUILD_ID)?.roles.cache.get(aktuelleId);
-    return {aktuelleId, status: rolle ? 'ok' : 'warnung'};
+export function istRollenFeld(schluessel: string): boolean {
+    return Object.prototype.hasOwnProperty.call(ROLLEN_SERVICES, schluessel);
 }
 
-// null = Rolle entfernen (die Twitch-Benachrichtigungsrolle ist optional). Sonst setzen.
-export async function speichereTwitchRolle(rolleId: string | null): Promise<void> {
-    if (rolleId === null) {
-        await twitchUserService.removeNotificationRole();
-    } else {
-        await twitchUserService.setNotificationRole(rolleId);
-    }
+// Rohe ID (fuer die Vorauswahl im Dropdown) plus Zustand. Die Rollen sind optional, "nicht gesetzt"
+// ist also kein Mangel - 'warnung' meint hier: gesetzt, aber die Rolle gibt es nicht mehr.
+export async function ladeRollenFelder(): Promise<RollenFeld[]> {
+    const guild = client.guilds.cache.get(config.GUILD_ID);
+    return Promise.all(Object.entries(ROLLEN_SERVICES).map(async ([schluessel, service]) => {
+        const aktuelleId = await service.lade();
+        const status: FeldStatus = !aktuelleId
+            ? 'leer'
+            : guild?.roles.cache.get(aktuelleId) ? 'ok' : 'warnung';
+        return {schluessel, label: service.label, aktuelleId, status};
+    }));
+}
+
+// null = Rolle entfernen (beide Rollen sind optional). Sonst setzen.
+export async function speichereRolle(schluessel: string, rolleId: string | null): Promise<void> {
+    await ROLLEN_SERVICES[schluessel].speichere(rolleId);
 }
 
 export interface EventFelder {

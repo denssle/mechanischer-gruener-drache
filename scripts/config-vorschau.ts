@@ -26,7 +26,10 @@ const html = renderConfigSeite({
         {id: 'r2', name: 'Streamer'},
         {id: 'r3', name: 'Zuschauer'},
     ],
-    twitchRolle: {aktuelleId: 'r2', status: 'ok'},
+    rollenFelder: [
+        {schluessel: 'twitch-rolle', label: 'Twitch-Benachrichtigungsrolle', aktuelleId: 'r2', status: 'ok'},
+        {schluessel: 'pingpong-champion', label: 'Champion-Rolle', aktuelleId: null, status: 'leer'},
+    ],
     eventFelder: {datum: '2026-12-24', uhrzeit: '18:00', titel: 'Weihnachtstreffen'},
     mitglieder: [
         {id: 'm1', name: 'Tirsis', kilometer: 128.5},

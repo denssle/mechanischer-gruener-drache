@@ -43,9 +43,12 @@ vi.mock('./config.settings.js', () => ({
     istKanalFeld: vi.fn((feld: string) => feld === 'protokoll'),
     speichereKanal: vi.fn(() => Promise.resolve()),
     holeRollen: vi.fn(() => [{id: 'r1', name: 'Abonnenten'}]),
-    holeTwitchRolle: vi.fn(() => Promise.resolve({aktuelleId: 'r1', status: 'ok'})),
+    ladeRollenFelder: vi.fn(() => Promise.resolve([
+        {schluessel: 'twitch-rolle', label: 'Twitch-Benachrichtigungsrolle', aktuelleId: 'r1', status: 'ok'},
+    ])),
+    istRollenFeld: vi.fn((schluessel: string) => ['twitch-rolle', 'pingpong-champion'].includes(schluessel)),
     istGueltigeRolle: vi.fn((id: string) => id === 'r1'),
-    speichereTwitchRolle: vi.fn(() => Promise.resolve()),
+    speichereRolle: vi.fn(() => Promise.resolve()),
     holeEventFelder: vi.fn(() => Promise.resolve({datum: '2026-12-24', uhrzeit: '18:00', titel: 'Weihnachtstreffen'})),
     speichereEventDaten: vi.fn(() => Promise.resolve()),
     entferneEvent: vi.fn(() => Promise.resolve()),
@@ -253,6 +256,8 @@ describe('config.router', () => {
         expect(html).toContain('value="c1" selected');
         // Rollen-Formular mit "— keine —" und vorausgewählter Rolle
         expect(html).toContain('action="/config/rolle"');
+        // Die Feld-Kennung sagt der Route, WELCHE Rollen-Einstellung gemeint ist.
+        expect(html).toContain('name="feld" value="twitch-rolle"');
         expect(html).toContain('— keine —');
         expect(html).toContain('value="r1" selected');
         // Event-Formular mit vorausgefüllten Datums-/Zeit-Feldern
@@ -415,10 +420,10 @@ describe('config.router', () => {
             res.locals.configUserId = '12345';
 
             await handleRolleSpeichern(
-                gueltigeAnfrage({_csrf: createCsrfToken('12345'), rolle: 'r1'}), res
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), feld: 'twitch-rolle', rolle: 'r1'}), res
             );
 
-            expect(settings.speichereTwitchRolle).toHaveBeenCalledWith('r1');
+            expect(settings.speichereRolle).toHaveBeenCalledWith('twitch-rolle', 'r1');
             expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=twitch-rolle#bereich-twitch');
         });
 
@@ -427,10 +432,10 @@ describe('config.router', () => {
             res.locals.configUserId = '12345';
 
             await handleRolleSpeichern(
-                gueltigeAnfrage({_csrf: createCsrfToken('12345'), rolle: ''}), res
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), feld: 'twitch-rolle', rolle: ''}), res
             );
 
-            expect(settings.speichereTwitchRolle).toHaveBeenCalledWith(null);
+            expect(settings.speichereRolle).toHaveBeenCalledWith('twitch-rolle', null);
             expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=twitch-rolle-entfernt#bereich-twitch');
         });
 
@@ -438,10 +443,34 @@ describe('config.router', () => {
             const res = mockResponse();
             res.locals.configUserId = '12345';
 
-            await handleRolleSpeichern(gueltigeAnfrage({rolle: 'r1'}), res);
+            await handleRolleSpeichern(gueltigeAnfrage({feld: 'twitch-rolle', rolle: 'r1'}), res);
 
             expect(res.status).toHaveBeenCalledWith(403);
-            expect(settings.speichereTwitchRolle).not.toHaveBeenCalled();
+            expect(settings.speichereRolle).not.toHaveBeenCalled();
+        });
+
+        it('speichert auch die Ping-Pong-Champion-Rolle über dasselbe Formularfeld', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleRolleSpeichern(
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), feld: 'pingpong-champion', rolle: 'r1'}), res
+            );
+
+            expect(settings.speichereRolle).toHaveBeenCalledWith('pingpong-champion', 'r1');
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=pingpong-champion#bereich-pingpong');
+        });
+
+        it('lehnt eine unbekannte Feld-Kennung ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleRolleSpeichern(
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), feld: 'ausgedacht', rolle: 'r1'}), res
+            );
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(settings.speichereRolle).not.toHaveBeenCalled();
         });
 
         it('lehnt eine unbekannte Rolle ab', async () => {
@@ -449,28 +478,30 @@ describe('config.router', () => {
             res.locals.configUserId = '12345';
 
             await handleRolleSpeichern(
-                gueltigeAnfrage({_csrf: createCsrfToken('12345'), rolle: 'fremde-rolle'}), res
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), feld: 'twitch-rolle', rolle: 'fremde-rolle'}), res
             );
 
             expect(res.status).toHaveBeenCalledWith(400);
-            expect(settings.speichereTwitchRolle).not.toHaveBeenCalled();
+            expect(settings.speichereRolle).not.toHaveBeenCalled();
         });
     });
 
     it('renderRollenFormular bietet "— keine —" und markiert die aktuelle Rolle', () => {
         const html = renderRollenFormular(
             [{id: 'r1', name: '<b>Abo</b>'}, {id: 'r2', name: 'Zuschauer'}],
-            {aktuelleId: 'r2', status: 'ok'}, 'token-9'
+            {schluessel: 'twitch-rolle', label: 'Twitch-Benachrichtigungsrolle', aktuelleId: 'r2', status: 'ok'}, 'token-9'
         );
         expect(html).toContain('— keine —');
         expect(html).toContain('&lt;b&gt;Abo&lt;/b&gt;');
         expect(html).not.toContain('<b>Abo</b>');
         expect(html).toContain('value="r2" selected');
         expect(html).toContain('action="/config/rolle"');
+        // Die Feld-Kennung sagt der Route, WELCHE Rollen-Einstellung gemeint ist.
+        expect(html).toContain('name="feld" value="twitch-rolle"');
     });
 
     it('renderRollenFormular markiert "— keine —" wenn keine Rolle gesetzt ist', () => {
-        const html = renderRollenFormular([{id: 'r1', name: 'Abo'}], {aktuelleId: null, status: 'leer'}, 'token-9');
+        const html = renderRollenFormular([{id: 'r1', name: 'Abo'}], {schluessel: 'twitch-rolle', label: 'Twitch-Benachrichtigungsrolle', aktuelleId: null, status: 'leer'}, 'token-9');
         expect(html).toContain('value="" selected>— keine —');
         // "keine Rolle" ist ein gültiger Zustand - kein disabled-Platzhalter davor.
         expect(html).not.toContain('disabled');
@@ -479,7 +510,7 @@ describe('config.router', () => {
     // Zeigt die gespeicherte ID im Klartext, wenn die Rolle gelöscht wurde: sie steht nicht in der
     // Optionsliste, der kaputte Zustand wäre sonst unsichtbar (das Feld sähe leer aus).
     it('renderRollenFormular macht eine gelöschte Rolle sichtbar', () => {
-        const html = renderRollenFormular([{id: 'r1', name: 'Abo'}], {aktuelleId: 'r-weg', status: 'warnung'}, 'token-9');
+        const html = renderRollenFormular([{id: 'r1', name: 'Abo'}], {schluessel: 'twitch-rolle', label: 'Twitch-Benachrichtigungsrolle', aktuelleId: 'r-weg', status: 'warnung'}, 'token-9');
         expect(html).toContain('disabled selected');
         expect(html).toContain('r-weg');
         expect(html).toContain('nicht abrufbar');
@@ -997,7 +1028,10 @@ describe('config.router', () => {
         kanalFelder: [{schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: 'c1', status: 'ok' as const}],
         kanaele: [{id: 'c1', name: 'allgemein'}],
         rollen: [{id: 'r1', name: 'Streamer'}],
-        twitchRolle: {aktuelleId: 'r1', status: 'ok' as const},
+        rollenFelder: [
+            {schluessel: 'twitch-rolle', label: 'Twitch-Benachrichtigungsrolle', aktuelleId: 'r1', status: 'ok' as const},
+            {schluessel: 'pingpong-champion', label: 'Champion-Rolle', aktuelleId: null, status: 'leer' as const},
+        ],
         eventFelder: {datum: '2026-12-24', uhrzeit: '18:00', titel: 'Fest'},
         mitglieder: [{id: 'm1', name: 'Tirsis', kilometer: 128.5}],
         legacyKilometer: 1250,
@@ -1011,11 +1045,14 @@ describe('config.router', () => {
         expect(html).toContain('<!doctype html>');
         expect(html).toContain('action="/config/kanal"');
         expect(html).toContain('action="/config/rolle"');
+        // Die Feld-Kennung sagt der Route, WELCHE Rollen-Einstellung gemeint ist.
+        expect(html).toContain('name="feld" value="twitch-rolle"');
+        expect(html).toContain('name="feld" value="pingpong-champion"');
         expect(html).toContain('action="/config/event"');
         expect(html).toContain('action="/config/sport"');
         expect(html).toContain('action="/config/morgengruss"');
         // Jeder Bereich hat sein Sprungziel.
-        for (const bereich of ['twitch', 'sport', 'protokoll', 'morgengruss', 'geburtstag', 'event']) {
+        for (const bereich of ['twitch', 'sport', 'protokoll', 'morgengruss', 'geburtstag', 'pingpong', 'event']) {
             expect(html).toContain(`id="bereich-${bereich}"`);
         }
         // Ohne Meldung steht keine da.
