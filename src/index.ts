@@ -141,9 +141,6 @@ client.once(Events.ClientReady, async () => {
         await memberHandler.loadAllMembers();
         // Erst nach der Redis-Verbindung: verhindert einen Überraschungs-Post beim ersten Deploy.
         await sportHandler.initTaeglicherPost();
-        // Ebenfalls erst nach der Redis-Verbindung: setzt den Monatsmarker beim allerersten Start,
-        // damit ein Deploy nicht mitten im Monat abrechnet.
-        await pingPongHandler.initSeason();
         setInterval(() => {
             sportHandler.posteTaeglichenKilometerstand().catch((error) => {
                 console.error('Fehler im täglichen Kilometerstand-Post:', error);
@@ -159,7 +156,8 @@ client.once(Events.ClientReady, async () => {
                 console.error('Fehler beim Posten der Geburtstagsgrüße:', error);
             });
             // Prüft selbst per Monatsmarker, ob die Ping-Pong-Season abzurechnen ist; ein
-            // verpasster Monatswechsel wird bewusst nachgeholt.
+            // verpasster Monatswechsel wird bewusst nachgeholt. Fehlt der Marker ganz (frischer
+            // Deploy), setzt der Aufruf ihn selbst - deshalb braucht es hier keinen Init-Schritt.
             pingPongHandler.rechneSeasonAb().catch((error) => {
                 console.error('Fehler beim Abrechnen der Ping-Pong-Season:', error);
             });

@@ -4,7 +4,7 @@ import pingPongHandler from "../handlers/pingPong.handler.js";
 export default {
     data: new SlashCommandBuilder()
         .setName('pingpong')
-        .setDescription('Ping Pong: jemanden zum Duell herausfordern, Bestenliste')
+        .setDescription('Ping Pong: Duelle gegen andere, Bestenliste der laufenden Season, Ruhmeshalle')
         .addSubcommand(sub => sub
             .setName('herausfordern')
             .setDescription('Fordert eine andere Person zu einem Ping-Pong-Duell heraus')

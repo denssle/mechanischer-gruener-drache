@@ -5,6 +5,7 @@ vi.mock('./redis.service.js', () => ({
         get: vi.fn(),
         set: vi.fn(),
         delete: vi.fn(),
+        hashFieldExists: vi.fn(async () => false),
         setHashField: vi.fn(),
         getHashAll: vi.fn(),
     }
@@ -27,7 +28,11 @@ describe('pingPongService', () => {
         expect(redisService.set).toHaveBeenCalledWith('PING_PONG:LAST_SEASON', '2026-07');
     });
 
-    it('setzt und entfernt die Champion-Rolle', async () => {
+    it('setzt, liest und entfernt die Champion-Rolle', async () => {
+        vi.mocked(redisService.get).mockResolvedValue('rolle-1');
+        expect(await pingPongService.getChampionRole()).toBe('rolle-1');
+        expect(redisService.get).toHaveBeenCalledWith('PING_PONG:CHAMPION_ROLE');
+
         await pingPongService.setChampionRole('rolle-1');
         expect(redisService.set).toHaveBeenCalledWith('PING_PONG:CHAMPION_ROLE', 'rolle-1');
 
@@ -36,11 +41,21 @@ describe('pingPongService', () => {
     });
 
     it('speichert einen Ruhmeshallen-Eintrag als JSON unter dem Monat', async () => {
-        await pingPongService.addRuhmeshalleEintrag('2026-06', 'user-1', 12);
+        vi.mocked(redisService.hashFieldExists).mockResolvedValue(false);
 
+        await expect(pingPongService.addRuhmeshalleEintrag('2026-06', 'user-1', 12)).resolves.toBe(true);
         expect(redisService.setHashField).toHaveBeenCalledWith(
             'PING_PONG:RUHMESHALLE', '2026-06', JSON.stringify({userId: 'user-1', punkte: 12})
         );
+    });
+
+    // Schutz gegen eine zweite Abrechnung desselben Monats (Abbruch zwischen Eintrag und Reset):
+    // sonst wuerde der echte Champion still durch einen Uebriggebliebenen ersetzt.
+    it('ueberschreibt einen bestehenden Monat nicht', async () => {
+        vi.mocked(redisService.hashFieldExists).mockResolvedValue(true);
+
+        await expect(pingPongService.addRuhmeshalleEintrag('2026-06', 'anderer', 1)).resolves.toBe(false);
+        expect(redisService.setHashField).not.toHaveBeenCalled();
     });
 
     it('gibt die Ruhmeshalle absteigend nach Monat zurück', async () => {

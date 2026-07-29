@@ -29,7 +29,7 @@ vi.mock("../services/pingPong.service.js", () => ({
         getLastSeason: vi.fn(),
         setLastSeason: vi.fn(),
         getChampionRole: vi.fn(),
-        addRuhmeshalleEintrag: vi.fn(),
+        addRuhmeshalleEintrag: vi.fn(async () => true),
         getRuhmeshalle: vi.fn(),
     }
 }));
@@ -608,6 +608,25 @@ describe('PingPongHandler', () => {
         });
     });
 
+    describe('getScore', () => {
+        it('liest den gespeicherten Punktestand', async () => {
+            vi.mocked(redisService.get).mockResolvedValue('7');
+
+            expect(await pingPongHandler.getScore('user-1')).toBe(7);
+            expect(redisService.set).not.toHaveBeenCalled();
+        });
+
+        // Legt den Einzelkey UND den Sorted-Set-Eintrag an - daher stehen frisch Angelegte mit 0 in
+        // der Bestenliste, die sie deshalb ausfiltert.
+        it('legt einen unbekannten User mit 0 an', async () => {
+            vi.mocked(redisService.get).mockResolvedValue(null);
+
+            expect(await pingPongHandler.getScore('neu')).toBe(0);
+            expect(redisService.set).toHaveBeenCalledWith('neuPING_PONG', '0');
+            expect(redisService.setSortedSet).toHaveBeenCalledWith('PING_PONG', 'neu', 0);
+        });
+    });
+
     describe('handlePingPongHighscore', () => {
         const mockInteraction = () => ({ reply: vi.fn() } as any);
 
@@ -646,6 +665,32 @@ describe('PingPongHandler', () => {
             await pingPongHandler.handlePingPongHighscore(interaction);
 
             expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. user-1 - 5'));
+        });
+
+        // getScore legt jeden Duell-Teilnehmer im Sorted Set an - wer nach dem Season-Reset seine
+        // erste Partie verliert, steht dort mit 0. In der Bestenliste hat das nichts zu suchen.
+        it('blendet 0-Punkte-Einträge aus', async () => {
+            vi.mocked(redisService.getSortedSet).mockResolvedValue([
+                { value: 'user-1', score: 3 },
+                { value: 'user-2', score: 0 },
+            ] as any);
+            vi.mocked(userService.getUser).mockResolvedValue({ displayName: 'Erster' } as any);
+            const interaction = mockInteraction();
+
+            await pingPongHandler.handlePingPongHighscore(interaction);
+
+            expect(interaction.reply.mock.calls[0][0]).toContain('1. Erster - 3');
+            expect(interaction.reply.mock.calls[0][0]).not.toContain('user-2');
+        });
+
+        it('meldet eine Season ohne Punkte, auch wenn nur 0-Einträge existieren', async () => {
+            vi.mocked(redisService.getSortedSet).mockResolvedValue([{ value: 'user-2', score: 0 }] as any);
+            const interaction = mockInteraction();
+
+            await pingPongHandler.handlePingPongHighscore(interaction);
+
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('Noch keine Punkte in dieser Season'));
+            expect(userService.getUser).not.toHaveBeenCalled();
         });
 
         it('sollte Fehler abfangen', async () => {
@@ -726,51 +771,62 @@ describe('PingPongHandler', () => {
         });
     });
 
-    describe('initSeason', () => {
-        it('setzt den Monatsmarker beim allerersten Start, ohne abzurechnen', async () => {
-            vi.useFakeTimers();
-            vi.setSystemTime(new Date(2026, 6, 15));
-            vi.mocked(pingPongService.getLastSeason).mockResolvedValue(null);
-
-            await pingPongHandler.initSeason();
-
-            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
-            expect(pingPongService.addRuhmeshalleEintrag).not.toHaveBeenCalled();
-            vi.useRealTimers();
-        });
-
-        it('lässt einen bestehenden Marker in Ruhe', async () => {
-            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
-
-            await pingPongHandler.initSeason();
-
-            expect(pingPongService.setLastSeason).not.toHaveBeenCalled();
-        });
-    });
-
     describe('rechneSeasonAb', () => {
         beforeEach(() => {
             vi.useFakeTimers();
             vi.setSystemTime(new Date(2026, 6, 1, 0, 0));
             vi.mocked(redisService.getSortedSetAll).mockResolvedValue([] as any);
             vi.mocked(pingPongService.getChampionRole).mockResolvedValue(null);
+            // clearAllMocks leert nur die Aufrufe, nicht die Implementierungen.
+            vi.mocked(pingPongService.addRuhmeshalleEintrag).mockResolvedValue(true);
         });
 
         afterEach(() => {
             vi.useRealTimers();
         });
 
-        it('tut nichts, solange der Monat nicht gewechselt hat', async () => {
-            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-07');
+        it('setzt den Monatsmarker beim allerersten Lauf, ohne abzurechnen', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue(null);
 
             await pingPongHandler.rechneSeasonAb();
 
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+            expect(pingPongService.addRuhmeshalleEintrag).not.toHaveBeenCalled();
             expect(redisService.getSortedSetAll).not.toHaveBeenCalled();
-            expect(pingPongService.setLastSeason).not.toHaveBeenCalled();
         });
 
-        it('tut nichts ohne Marker (das regelt initSeason beim Start)', async () => {
-            vi.mocked(pingPongService.getLastSeason).mockResolvedValue(null);
+        // Der Marker wurde früher nur einmal beim Boot gesetzt - schlug das fehl, lief die
+        // Abrechnung nie wieder. Deshalb hängt die Initialisierung jetzt am Minuten-Timer.
+        it('setzt den fehlenden Marker auch dann, wenn er beim Start nicht gesetzt werden konnte', async () => {
+            vi.mocked(pingPongService.getLastSeason)
+                .mockResolvedValueOnce(null)
+                .mockResolvedValue('2026-07');
+
+            await pingPongHandler.rechneSeasonAb();
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(pingPongService.setLastSeason).toHaveBeenCalledTimes(1);
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+        });
+
+        // Bricht die Abrechnung zwischen Eintrag und Reset ab, läuft sie eine Minute später erneut
+        // und sähe nur noch die Reste im Sorted Set - der echte Champion darf nicht ersetzt werden.
+        it('überschreibt einen bereits eingetragenen Champion nicht und vergibt die Rolle nicht erneut', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'rest', score: 1}] as any);
+            vi.mocked(pingPongService.addRuhmeshalleEintrag).mockResolvedValue(false);
+            vi.mocked(pingPongService.getChampionRole).mockResolvedValue('rolle-1');
+
+            await pingPongHandler.rechneSeasonAb();
+
+            // Aufgeräumt und weitergeschaltet wird trotzdem, sonst bliebe die Season offen.
+            expect(redisService.delete).toHaveBeenCalledWith('PING_PONG');
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+            expect(pingPongService.getChampionRole).not.toHaveBeenCalled();
+        });
+
+        it('tut nichts, solange der Monat nicht gewechselt hat', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-07');
 
             await pingPongHandler.rechneSeasonAb();
 
@@ -891,6 +947,133 @@ describe('PingPongHandler', () => {
             warn.mockRestore();
             client.guilds.cache.clear();
         });
+        it('vergibt die Rolle nicht, wenn sie gelöscht wurde - rechnet aber ab', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'neu', score: 5}] as any);
+            vi.mocked(pingPongService.getChampionRole).mockResolvedValue('rolle-weg');
+            const fetch = vi.fn();
+            client.guilds.cache.set('guild-1', {
+                roles: {cache: new Map()},
+                members: {me: {permissions: {has: () => true}, roles: {highest: {comparePositionTo: () => 1}}}, fetch},
+            } as any);
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(fetch).not.toHaveBeenCalled();
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+            warn.mockRestore();
+            client.guilds.cache.clear();
+        });
+
+        it('vergibt die Rolle nicht ohne das Recht "Rollen verwalten" - rechnet aber ab', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'neu', score: 5}] as any);
+            vi.mocked(pingPongService.getChampionRole).mockResolvedValue('rolle-1');
+            const fetch = vi.fn();
+            client.guilds.cache.set('guild-1', {
+                roles: {cache: new Map([['rolle-1', {id: 'rolle-1', members: new Map()}]])},
+                members: {me: {permissions: {has: () => false}, roles: {highest: {comparePositionTo: () => 1}}}, fetch},
+            } as any);
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(fetch).not.toHaveBeenCalled();
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+            warn.mockRestore();
+            client.guilds.cache.clear();
+        });
+
+        // Der Ruhmeshallen-Eintrag steht dann trotzdem schon - nur die Rolle entfällt.
+        it('kommt damit klar, dass der Champion den Server verlassen hat', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'weg', score: 5}] as any);
+            vi.mocked(pingPongService.getChampionRole).mockResolvedValue('rolle-1');
+            const altTraeger = {id: 'alt', roles: {remove: vi.fn().mockResolvedValue(undefined)}};
+            const rolle = {id: 'rolle-1', members: new Map([['alt', altTraeger]])};
+            client.guilds.cache.set('guild-1', {
+                roles: {cache: new Map([['rolle-1', rolle]])},
+                members: {
+                    me: {permissions: {has: () => true}, roles: {highest: {comparePositionTo: () => 1}}},
+                    fetch: vi.fn().mockRejectedValue(new Error('Unknown Member')),
+                },
+            } as any);
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            await pingPongHandler.rechneSeasonAb();
+
+            // Der bisherige Träger ist die Rolle trotzdem los - der Titel ist abgelaufen.
+            expect(altTraeger.roles.remove).toHaveBeenCalled();
+            expect(pingPongService.addRuhmeshalleEintrag).toHaveBeenCalledWith('2026-06', 'weg', 5);
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+            warn.mockRestore();
+            client.guilds.cache.clear();
+        });
+
+        // Best-effort: scheitert das Abnehmen bei einer Person, darf der neue Champion trotzdem
+        // seine Rolle bekommen.
+        it('vergibt die Rolle auch dann, wenn das Abnehmen beim Vorgänger scheitert', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'neu', score: 5}] as any);
+            vi.mocked(pingPongService.getChampionRole).mockResolvedValue('rolle-1');
+            const altTraeger = {id: 'alt', roles: {remove: vi.fn().mockRejectedValue(new Error('Missing Permissions'))}};
+            const neuerChamp = {id: 'neu', roles: {add: vi.fn().mockResolvedValue(undefined)}};
+            const rolle = {id: 'rolle-1', members: new Map([['alt', altTraeger]])};
+            client.guilds.cache.set('guild-1', {
+                roles: {cache: new Map([['rolle-1', rolle]])},
+                members: {
+                    me: {permissions: {has: () => true}, roles: {highest: {comparePositionTo: () => 1}}},
+                    fetch: vi.fn(async () => neuerChamp),
+                },
+            } as any);
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(neuerChamp.roles.add).toHaveBeenCalledWith(rolle);
+            expect(warn).toHaveBeenCalled();
+            warn.mockRestore();
+            client.guilds.cache.clear();
+        });
+
+        // Die Abrechnung selbst ist da schon durch - sie darf an der Rolle nicht nachträglich scheitern.
+        it('fängt einen Fehler beim Vergeben der Rolle ab', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'neu', score: 5}] as any);
+            vi.mocked(pingPongService.getChampionRole).mockRejectedValue(new Error('Redis kaputt'));
+            const fehler = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            await expect(pingPongHandler.rechneSeasonAb()).resolves.toBeUndefined();
+
+            expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+            expect(fehler).toHaveBeenCalled();
+            fehler.mockRestore();
+        });
+
+        it('nimmt dem Sieger die Rolle nicht ab, wenn er sie schon trägt', async () => {
+            vi.mocked(pingPongService.getLastSeason).mockResolvedValue('2026-06');
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([{value: 'titelverteidiger', score: 5}] as any);
+            vi.mocked(pingPongService.getChampionRole).mockResolvedValue('rolle-1');
+            const champ = {
+                id: 'titelverteidiger',
+                roles: {remove: vi.fn().mockResolvedValue(undefined), add: vi.fn().mockResolvedValue(undefined)},
+            };
+            const rolle = {id: 'rolle-1', members: new Map([['titelverteidiger', champ]])};
+            client.guilds.cache.set('guild-1', {
+                roles: {cache: new Map([['rolle-1', rolle]])},
+                members: {
+                    me: {permissions: {has: () => true}, roles: {highest: {comparePositionTo: () => 1}}},
+                    fetch: vi.fn(async () => champ),
+                },
+            } as any);
+
+            await pingPongHandler.rechneSeasonAb();
+
+            expect(champ.roles.remove).not.toHaveBeenCalled();
+            expect(champ.roles.add).toHaveBeenCalledWith(rolle);
+            client.guilds.cache.clear();
+        });
     });
 
     describe('handleRuhmeshalle', () => {
@@ -919,6 +1102,26 @@ describe('PingPongHandler', () => {
             await pingPongHandler.handleRuhmeshalle(interaction);
 
             expect(interaction.reply.mock.calls[0][0].content).toContain('noch leer');
+        });
+
+        // Ganze Monate weglassen statt Zeilen abschneiden - Discord lehnt >2000 Zeichen ab.
+        it('lässt ältere Monate weg, statt am Zeichenlimit zu scheitern', async () => {
+            vi.mocked(pingPongService.getRuhmeshalle).mockResolvedValue(
+                Array.from({length: 200}, (_, i) => ({
+                    monat: `2026-${String((i % 12) + 1).padStart(2, '0')}`,
+                    userId: `user-${i}`.padEnd(20, '0'),
+                    punkte: 10,
+                }))
+            );
+            const interaction = mockInteraction();
+
+            await pingPongHandler.handleRuhmeshalle(interaction);
+
+            const {content} = interaction.reply.mock.calls[0][0];
+            expect(content.length).toBeLessThanOrEqual(2000);
+            // Der jüngste Monat steht drin, der 200. nicht mehr.
+            expect(content).toContain('user-0'.padEnd(20, '0'));
+            expect(content).not.toContain('user-199');
         });
 
         it('fängt einen Redis-Fehler ab', async () => {

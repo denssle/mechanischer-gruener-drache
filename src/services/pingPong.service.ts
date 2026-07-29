@@ -44,8 +44,16 @@ class PingPongService {
         await redisService.delete(KEYS.championRolle);
     }
 
-    async addRuhmeshalleEintrag(monat: string, userId: string, punkte: number): Promise<void> {
+    // Trägt den Champion eines Monats ein - aber nur, wenn für diesen Monat noch keiner feststeht.
+    // Der Rückgabewert sagt, ob geschrieben wurde. Grund für den Schutz: bricht die Abrechnung
+    // zwischen Eintrag und Reset ab, läuft sie eine Minute später erneut und sähe nur noch die
+    // Reste im Sorted Set - ein blindes Überschreiben würde den echten Champion still ersetzen.
+    async addRuhmeshalleEintrag(monat: string, userId: string, punkte: number): Promise<boolean> {
+        if (await redisService.hashFieldExists(KEYS.ruhmeshalle, monat)) {
+            return false;
+        }
         await redisService.setHashField(KEYS.ruhmeshalle, monat, JSON.stringify({userId, punkte}));
+        return true;
     }
 
     // Absteigend nach Monat (der jüngste zuerst). Unlesbare Einträge werden übersprungen statt

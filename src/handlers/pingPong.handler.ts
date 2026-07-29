@@ -4,18 +4,15 @@ import {
     ButtonInteraction,
     ButtonStyle,
     ChatInputCommandInteraction,
-    MessageFlags
+    MessageFlags,
+    PermissionFlagsBits
 } from "discord.js";
-import {PermissionFlagsBits} from "discord.js";
 import redisService, {REDIS_KEYS} from "../services/redis.service.js";
 import userService from "../services/user.service.js";
 import pingPongService from "../services/pingPong.service.js";
 import client from "../client.js";
 import config from "../../config.json" with {type: "json"};
 
-// Key-Strings bewusst identisch zum bisherigen Verhalten gehalten (nur die Struktur
-// folgt jetzt der KEYS-Objekt-Konvention) - eine Änderung des Formats würde alle
-// bereits in Redis gespeicherten Ping-Pong-Scores verwaisen lassen.
 // Nach jeder Herausforderung darf man erst nach Ablauf dieser Zeit wieder aufschlagen -
 // verhindert, dass jemand den halben Server in Serie herausfordert.
 const COOLDOWN_SECONDS = 30;
@@ -39,6 +36,10 @@ const DUELL_PREFIX = 'pingpong-duell:';
 // strikt besser als das normale und würde es verdrängen. Eine Ansage "ich verliere" gibt es
 // bewusst nicht: mit Bonus UND Malus käme sie rechnerisch immer auf 0 heraus (risikofreie
 // Versicherung), das wäre eine tote Option.
+// EINSCHRÄNKUNG, bewusst hingenommen: der Erwartungswert ist erst ab 2 Punkten null. Wer bei 0 oder
+// 1 Punkt steht, dem schluckt der Clamp auf 0 (siehe DUELL_LOSS) einen Teil des Malus - dort ist das
+// Ansage-Duell tatsächlich die bessere Wahl. Das ist die gleiche Linie wie beim Season-Titel:
+// mitspielen darf sich lohnen (siehe Kommentar am Season-Block).
 const ANSAGE_PREFIX = 'pingpong-ansage:';
 const ANSAGE_BONUS = 1;
 const ANSAGE_MALUS = 1;
@@ -86,6 +87,9 @@ export function formatAnsage(istAnsageDuell: boolean, herausfordererId: string, 
 // von einem einzelnen Duell ist keine.
 const MIN_SERIE = 2;
 
+// Key-Strings bewusst identisch zum ursprünglichen Verhalten gehalten (nur die Struktur folgt der
+// KEYS-Objekt-Konvention) - eine Änderung des Formats würde alle bereits in Redis gespeicherten
+// Ping-Pong-Scores verwaisen lassen. Gilt auch für den Season-Reset, der beide Orte löscht.
 const KEYS = {
     score: (userId: string) => userId + REDIS_KEYS.PING_PONG,
     highscore: REDIS_KEYS.PING_PONG,
@@ -158,6 +162,12 @@ export function formatSerie({siegerId, verliererId, serie, istNeuerRekord, beend
 // nicht dauerhaft von Bestandsspielern zementiert wird. Angestoßen vom EINEN 60-s-setInterval in
 // index.ts (kein zweiter Mechanismus, keine Cron-Dependency) - rechneSeasonAb entscheidet selbst
 // anhand des Monatsmarkers, ob etwas zu tun ist.
+//
+// BEWUSSTES BALANCING: Der Ausgang eines Duells ist reiner Zufall, und eine Niederlage bei 0 Punkten
+// kostet nichts (Clamp). Der Punktestand ist damit ein Random Walk mit Wand bei 0 - wer viel spielt,
+// steht am Monatsende oben. Der Titel geht also im Wesentlichen an den Aktivsten, nicht an den
+// Besten. Das ist so gewollt (Aktivität darf belohnt werden, 2026-07-29 entschieden); wer das je
+// ändern will, dreht am ehesten an COOLDOWN_SECONDS oder wertet die Siegquote statt der Punkte.
 
 const MONATSNAMEN = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
     'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
@@ -506,9 +516,11 @@ class PingPongHandler {
         return this.convertScoreToNumber(await redisService.get(KEYS.serie(userId)) ?? 0);
     }
 
+    // Kein Logging hier: der Score wird bei jedem Duell zweimal gelesen, und die Logs sind auf
+    // Uberspace persistiert und über /config/logs einsehbar - das war reines Rauschen genau dort,
+    // wo man im Problemfall nachsieht.
     async getScore(userId: string): Promise<number> {
         const score = await redisService.get(KEYS.score(userId));
-        console.log("Retrieved score for user", userId, "to", score);
 
         if (!score) {
             return await this.updateScore(userId, 0);
@@ -535,7 +547,11 @@ class PingPongHandler {
 
     async handlePingPongHighscore(interaction: ChatInputCommandInteraction) {
         try {
-            const highscore = await redisService.getSortedSet(KEYS.highscore);
+            // 0-Punkte-Einträge raus: getScore legt jeden Duell-Teilnehmer im Sorted Set an, und wer
+            // seine erste Partie nach dem Season-Reset verliert, steht dort mit 0 (der Abzug wird auf
+            // 0 geklemmt). In einer Bestenliste haben solche Zeilen nichts zu suchen - waehleSieger
+            // filtert aus demselben Grund.
+            const highscore = (await redisService.getSortedSet(KEYS.highscore)).filter(eintrag => eintrag.score > 0);
             // Die Liste nennt die laufende Season - sonst wundert sich am Monatsersten jemand
             // über die plötzlich leere Bestenliste.
             const ueberschrift = `**Bestenliste ${formatMonat(monatsSchluessel(new Date()))}**`;
@@ -569,22 +585,6 @@ class PingPongHandler {
         }
     }
 
-    // Beim Start (nach der Redis-Verbindung): wurde noch nie abgerechnet, wird der Marker OHNE
-    // Abrechnung auf den laufenden Monat gesetzt - sonst würde ein Deploy am 30. sofort mitten im
-    // Monat abrechnen. Muster: sportHandler.initTaeglicherPost.
-    async initSeason(): Promise<void> {
-        try {
-            if (await pingPongService.getLastSeason()) {
-                return;
-            }
-            const monat = monatsSchluessel(new Date());
-            await pingPongService.setLastSeason(monat);
-            console.log(`Ping-Pong-Season initialisiert: laufender Monat ${monat}, keine Abrechnung.`);
-        } catch (error) {
-            console.error('Fehler beim Initialisieren der Ping-Pong-Season:', error);
-        }
-    }
-
     // Vom Minuten-Timer angestoßen: ist der Monat gewechselt, wird der Vormonat abgerechnet.
     // Ein verpasster Monatswechsel wird bewusst NACHGEHOLT (Muster Mitternachts-Kilometerstand,
     // nicht Anstupser) - ein Champion, der wegen eines Neustarts ausfällt, wäre ein echter Verlust.
@@ -592,12 +592,19 @@ class PingPongHandler {
     // dazwischen, läuft die Abrechnung eine Minute später erneut.
     async rechneSeasonAb(): Promise<void> {
         const abgerechnet = await pingPongService.getLastSeason();
-        // Kein Marker = noch nie abgerechnet; das regelt initSeason beim Start, hier nichts tun.
+        const aktuellerMonat = monatsSchluessel(new Date());
+
+        // Noch nie abgerechnet (frischer Deploy): Marker OHNE Abrechnung auf den laufenden Monat -
+        // sonst würde ein Deploy am 30. sofort mitten im Monat abrechnen. Das steht bewusst HIER
+        // und nicht in einem eigenen Init-Schritt beim Start: ein einmaliger Boot-Aufruf, der an
+        // einem Redis-Hiccup scheitert, hätte den Marker dauerhaft leer gelassen - und mit ihm
+        // liefe die Abrechnung nie wieder, still und unbemerkt.
         if (!abgerechnet) {
+            await pingPongService.setLastSeason(aktuellerMonat);
+            console.log(`Ping-Pong-Season initialisiert: laufender Monat ${aktuellerMonat}, keine Abrechnung.`);
             return;
         }
 
-        const aktuellerMonat = monatsSchluessel(new Date());
         if (abgerechnet === aktuellerMonat) {
             return;
         }
@@ -605,9 +612,15 @@ class PingPongHandler {
         const stand = await redisService.getSortedSetAll(KEYS.highscore);
         const sieger = waehleSieger(stand);
 
+        // Nur, wenn für den Monat noch kein Champion feststeht: bricht die Abrechnung mitten im
+        // Reset ab (Redis-Hiccup), läuft sie eine Minute später erneut und fände nur noch die
+        // Reste im Sorted Set - der echte Champion würde sonst still überschrieben.
+        let eingetragen = false;
         if (sieger) {
-            await pingPongService.addRuhmeshalleEintrag(abgerechnet, sieger.userId, sieger.punkte);
-            console.log(`Ping-Pong-Season ${abgerechnet} abgerechnet: ${sieger.userId} mit ${sieger.punkte} Punkten.`);
+            eingetragen = await pingPongService.addRuhmeshalleEintrag(abgerechnet, sieger.userId, sieger.punkte);
+            console.log(eingetragen
+                ? `Ping-Pong-Season ${abgerechnet} abgerechnet: ${sieger.userId} mit ${sieger.punkte} Punkten.`
+                : `Ping-Pong-Season ${abgerechnet} war bereits eingetragen - Champion bleibt unverändert.`);
         } else {
             console.log(`Ping-Pong-Season ${abgerechnet} war leer - kein Champion.`);
         }
@@ -616,8 +629,9 @@ class PingPongHandler {
         await pingPongService.setLastSeason(aktuellerMonat);
 
         // Erst ganz zum Schluss und bewusst fehlertolerant: ohne gesetzte/vergebbare Rolle darf
-        // die Abrechnung nicht scheitern (dann bliebe die Season ewig offen).
-        if (sieger) {
+        // die Abrechnung nicht scheitern (dann bliebe die Season ewig offen). Steht der Champion
+        // schon fest, wird die Rolle nicht an einen Übriggebliebenen weitergereicht.
+        if (sieger && eingetragen) {
             await this.vergebeChampionRolle(sieger.userId);
         }
     }
