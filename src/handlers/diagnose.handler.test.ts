@@ -14,8 +14,9 @@ const character = vi.hoisted(() => ({ getAllLinks: vi.fn(), getRoster: vi.fn() }
 const oauth = vi.hoisted(() => ({ oauthConfigured: vi.fn() }));
 const session = vi.hoisted(() => ({ sessionConfigured: vi.fn() }));
 const channelsFetch = vi.hoisted(() => vi.fn());
+const guildsCache = vi.hoisted(() => new Map<string, unknown>());
 
-vi.mock('../client.js', () => ({ default: { channels: { fetch: channelsFetch } } }));
+vi.mock('../client.js', () => ({ default: { channels: { fetch: channelsFetch }, guilds: { cache: guildsCache } } }));
 vi.mock('../services/twitch.user.service.js', () => ({ default: twitchUser }));
 vi.mock('../services/twitch.service.js', () => ({ default: twitch }));
 vi.mock('../services/sport.service.js', () => ({ default: sport }));
@@ -31,6 +32,7 @@ vi.mock('../services/character.service.js', async (importOriginal) => {
 });
 
 import diagnoseHandler from './diagnose.handler.js';
+import config from '../../config.json' with { type: 'json' };
 
 function makeInteraction(isAdmin = true) {
     return {
@@ -64,6 +66,37 @@ describe('DiagnoseHandler', () => {
         // Standard: Config-Login konfiguriert
         oauth.oauthConfigured.mockReturnValue(true);
         session.sessionConfigured.mockReturnValue(true);
+        // Standard: Bot darf das Audit-Log lesen
+        guildsCache.clear();
+        guildsCache.set(config.GUILD_ID, { members: { me: { permissions: { has: () => true } } } });
+    });
+
+    describe('Audit-Log-Recht', () => {
+        it('meldet vorhandenes Recht als ok', async () => {
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Audit-Log-Zugriff: ✅');
+        });
+
+        it('warnt, wenn dem Bot das Recht fehlt', async () => {
+            guildsCache.set(config.GUILD_ID, { members: { me: { permissions: { has: () => false } } } });
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Audit-Log ansehen" fehlt');
+        });
+
+        it('kommt ohne gecachten Server klar', async () => {
+            guildsCache.clear();
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Audit-Log-Zugriff: ⚠️');
+        });
     });
 
     it('lehnt Nicht-Admins ephemer ab', async () => {

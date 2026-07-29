@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Collection } from 'discord.js';
+import { AuditLogEvent, Collection, PermissionFlagsBits } from 'discord.js';
 
 vi.mock('../services/logging.service.js', () => ({
     default: {
@@ -28,7 +28,121 @@ vi.mock('../client.js', () => ({
 import memberService from '../services/member.service.js';
 import loggingService from '../services/logging.service.js';
 import client from '../client.js';
-import loggingHandler, { kuerzeFuerDiscord, DISCORD_MAX_LENGTH, formatMitgliedsdauer } from './logging.handler.js';
+import loggingHandler, { kuerzeFuerDiscord, DISCORD_MAX_LENGTH, formatMitgliedsdauer, formatAusfuehrer, formatRechteAenderung, beschreibeAuditEintrag } from './logging.handler.js';
+
+// Baut eine Guild, deren Audit-Log die übergebenen Einträge kennt. Ohne Einträge verhält sie
+// sich wie ein Server, auf dem gerade nichts protokolliert wurde.
+function mockGuild(eintraege: { action: AuditLogEvent; targetId: string; executorTag?: string; reason?: string | null; alter?: number }[] = []) {
+    return {
+        fetchAuditLogs: vi.fn(async ({ type }: { type: AuditLogEvent }) => ({
+            entries: eintraege
+                .filter(eintrag => eintrag.action === type)
+                .map(eintrag => ({
+                    targetId: eintrag.targetId,
+                    createdTimestamp: Date.now() - (eintrag.alter ?? 0),
+                    executor: eintrag.executorTag ? { tag: eintrag.executorTag } : null,
+                    reason: eintrag.reason ?? null,
+                })),
+        })),
+    } as any;
+}
+
+describe('formatAusfuehrer', () => {
+    it('bleibt leer, wenn es keinen Audit-Eintrag gibt', () => {
+        expect(formatAusfuehrer(null)).toBe('');
+    });
+
+    it('nennt Urheber und Grund', () => {
+        expect(formatAusfuehrer({ ausfuehrerTag: 'Mod#1', grund: 'Spam' })).toBe(' durch **Mod#1** (Grund: Spam)');
+    });
+
+    it('lässt weg, was unbekannt ist', () => {
+        expect(formatAusfuehrer({ ausfuehrerTag: 'Mod#1', grund: null })).toBe(' durch **Mod#1**');
+        expect(formatAusfuehrer({ ausfuehrerTag: null, grund: 'Spam' })).toBe(' (Grund: Spam)');
+    });
+});
+
+describe('formatRechteAenderung', () => {
+    const ADMIN = String(PermissionFlagsBits.Administrator);
+    const KICK = String(PermissionFlagsBits.KickMembers);
+
+    it('erkennt hinzugefügte Rechte', () => {
+        expect(formatRechteAenderung('0', ADMIN)).toBe('**+** Administrator');
+    });
+
+    it('erkennt entzogene Rechte', () => {
+        expect(formatRechteAenderung(ADMIN, '0')).toBe('**−** Administrator');
+    });
+
+    it('zeigt beide Richtungen zusammen', () => {
+        const beides = formatRechteAenderung(ADMIN, KICK);
+        expect(beides).toContain('**+** KickMembers');
+        expect(beides).toContain('**−** Administrator');
+    });
+
+    it('gibt null zurück, wenn sich nichts geändert hat oder Werte fehlen', () => {
+        expect(formatRechteAenderung(ADMIN, ADMIN)).toBeNull();
+        expect(formatRechteAenderung(null, ADMIN)).toBeNull();
+    });
+});
+
+describe('beschreibeAuditEintrag', () => {
+    const eintrag = (action: AuditLogEvent, extra: Record<string, unknown> = {}) => ({
+        action,
+        executor: { tag: 'Admin#1' },
+        reason: null,
+        changes: [],
+        target: { name: 'Moderator' },
+        ...extra,
+    } as any);
+
+    it('meldet erstellte und gelöschte Rollen mit Urheber', () => {
+        expect(beschreibeAuditEintrag(eintrag(AuditLogEvent.RoleCreate)))
+            .toBe('➕ Rolle **Moderator** wurde erstellt durch **Admin#1**.');
+        expect(beschreibeAuditEintrag(eintrag(AuditLogEvent.RoleDelete)))
+            .toContain('🗑️ Rolle **Moderator** wurde gelöscht');
+    });
+
+    it('nennt bei Rechte-Änderungen, welches Recht dazukam', () => {
+        const meldung = beschreibeAuditEintrag(eintrag(AuditLogEvent.RoleUpdate, {
+            changes: [{ key: 'permissions', old: '0', new: String(PermissionFlagsBits.Administrator) }],
+        }));
+
+        expect(meldung).toContain('🔐 Rechte der Rolle **Moderator**');
+        expect(meldung).toContain('**+** Administrator');
+    });
+
+    it('meldet Umbenennungen', () => {
+        const meldung = beschreibeAuditEintrag(eintrag(AuditLogEvent.RoleUpdate, {
+            changes: [{ key: 'name', old: 'Alt', new: 'Neu' }],
+        }));
+
+        expect(meldung).toContain('**Alt** wurde in **Neu** umbenannt');
+    });
+
+    it('schweigt bei belanglosen Rollen-Änderungen wie der Farbe', () => {
+        expect(beschreibeAuditEintrag(eintrag(AuditLogEvent.RoleUpdate, {
+            changes: [{ key: 'color', old: 1, new: 2 }],
+        }))).toBeNull();
+    });
+
+    it('meldet Kanäle und Webhooks', () => {
+        expect(beschreibeAuditEintrag(eintrag(AuditLogEvent.ChannelDelete, { target: { name: 'allgemein' } })))
+            .toContain('Kanal **allgemein** wurde gelöscht');
+        expect(beschreibeAuditEintrag(eintrag(AuditLogEvent.WebhookCreate, { target: null, changes: [{ key: 'name', new: 'Hook' }] })))
+            .toContain('Webhook **Hook** wurde erstellt');
+    });
+
+    it('ignoriert alles außerhalb der Whitelist', () => {
+        expect(beschreibeAuditEintrag(eintrag(AuditLogEvent.MessageDelete))).toBeNull();
+        expect(beschreibeAuditEintrag(eintrag(AuditLogEvent.MemberBanAdd))).toBeNull();
+    });
+
+    it('nennt den Grund, wenn einer angegeben wurde', () => {
+        expect(beschreibeAuditEintrag(eintrag(AuditLogEvent.RoleDelete, { reason: 'Aufräumen' })))
+            .toContain('(Grund: Aufräumen)');
+    });
+});
 
 describe('formatMitgliedsdauer', () => {
     const TAG = 86400000;
@@ -397,6 +511,96 @@ describe('LoggingHandler', () => {
 
             await expect(loggingHandler.handleGuildMemberRemove(mockMember())).resolves.not.toThrow();
         });
+
+        describe('Kick vs. freiwilliges Gehen (Audit-Log)', () => {
+            const send = vi.fn();
+            const mitGuild = (guild: any, joined: number | null = null) =>
+                ({ id: 'user-1', user: { tag: 'Ex-User#0002' }, joinedTimestamp: joined, guild } as any);
+
+            beforeEach(() => {
+                send.mockReset();
+                vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+                vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+            });
+
+            it('meldet einen Kick samt Urheber und Grund', async () => {
+                const guild = mockGuild([{ action: AuditLogEvent.MemberKick, targetId: 'user-1', executorTag: 'Mod#1', reason: 'Regelverstoß' }]);
+
+                await loggingHandler.handleGuildMemberRemove(mitGuild(guild));
+
+                expect(send).toHaveBeenCalledWith(expect.stringContaining('wurde gekickt durch **Mod#1** (Grund: Regelverstoß)'));
+            });
+
+            it('nennt beim Kick auch die Mitgliedsdauer', async () => {
+                const guild = mockGuild([{ action: AuditLogEvent.MemberKick, targetId: 'user-1', executorTag: 'Mod#1' }]);
+
+                await loggingHandler.handleGuildMemberRemove(mitGuild(guild, Date.now() - 3 * 86400000));
+
+                expect(send).toHaveBeenCalledWith(expect.stringContaining('war 3 Tage dabei'));
+            });
+
+            it('bleibt bei freiwilligem Gehen bei der Austritts-Meldung', async () => {
+                await loggingHandler.handleGuildMemberRemove(mitGuild(mockGuild()));
+
+                expect(send).toHaveBeenCalledWith(expect.stringContaining('hat den Server verlassen'));
+            });
+
+            it('ignoriert einen alten Kick-Eintrag derselben Person', async () => {
+                const guild = mockGuild([{ action: AuditLogEvent.MemberKick, targetId: 'user-1', executorTag: 'Mod#1', alter: 60_000 }]);
+
+                await loggingHandler.handleGuildMemberRemove(mitGuild(guild));
+
+                expect(send).toHaveBeenCalledWith(expect.stringContaining('hat den Server verlassen'));
+            });
+
+            it('schweigt bei einem Bann - den loggt handleGuildBanAdd', async () => {
+                const guild = mockGuild([{ action: AuditLogEvent.MemberBanAdd, targetId: 'user-1', executorTag: 'Mod#1' }]);
+
+                await loggingHandler.handleGuildMemberRemove(mitGuild(guild));
+
+                expect(send).not.toHaveBeenCalled();
+            });
+
+            it('meldet den Austritt auch ohne Audit-Log-Recht', async () => {
+                const guild = { fetchAuditLogs: vi.fn().mockRejectedValue(new Error('Missing Permissions')) } as any;
+
+                await loggingHandler.handleGuildMemberRemove(mitGuild(guild));
+
+                expect(send).toHaveBeenCalledWith(expect.stringContaining('hat den Server verlassen'));
+            });
+        });
+    });
+
+    describe('handleAuditLogEntry', () => {
+        const auditEintrag = (action: AuditLogEvent) => ({
+            action,
+            executor: { tag: 'Admin#1' },
+            reason: null,
+            changes: [],
+            target: { name: 'Moderator' },
+        } as any);
+
+        it('postet Struktur-Änderungen in den Log-Channel', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await loggingHandler.handleAuditLogEntry(auditEintrag(AuditLogEvent.RoleDelete), {} as any);
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('Rolle **Moderator** wurde gelöscht'));
+        });
+
+        it('holt den Log-Channel gar nicht erst für uninteressante Einträge', async () => {
+            await loggingHandler.handleAuditLogEntry(auditEintrag(AuditLogEvent.MessageDelete), {} as any);
+
+            expect(loggingService.getLogChannel).not.toHaveBeenCalled();
+        });
+
+        it('fängt Fehler ab', async () => {
+            vi.mocked(loggingService.getLogChannel).mockRejectedValue(new Error('Redis kaputt'));
+
+            await expect(loggingHandler.handleAuditLogEntry(auditEintrag(AuditLogEvent.RoleDelete), {} as any)).resolves.not.toThrow();
+        });
     });
 
     describe('handleGuildMemberUpdate', () => {
@@ -473,6 +677,47 @@ describe('LoggingHandler', () => {
             const newMember = mockMember([{ id: 'r1', name: 'Einwohner' }]);
 
             await expect(loggingHandler.handleGuildMemberUpdate(oldMember, newMember)).resolves.not.toThrow();
+        });
+
+        describe('Urheber aus dem Audit-Log', () => {
+            const send = vi.fn();
+
+            beforeEach(() => {
+                send.mockReset();
+                vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+                vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+            });
+
+            it('nennt, wer eine Rolle vergeben hat', async () => {
+                const guild = mockGuild([{ action: AuditLogEvent.MemberRoleUpdate, targetId: 'user-1', executorTag: 'Admin#1' }]);
+                const oldMember = mockMember([], { id: 'user-1', guild });
+                const newMember = mockMember([{ id: 'r2', name: 'Einwohner' }], { id: 'user-1', guild });
+
+                await loggingHandler.handleGuildMemberUpdate(oldMember, newMember);
+
+                expect(send).toHaveBeenCalledWith(expect.stringContaining('erhalten durch **Admin#1**.'));
+            });
+
+            it('nennt, wer stummgeschaltet hat', async () => {
+                const guild = mockGuild([{ action: AuditLogEvent.MemberUpdate, targetId: 'user-1', executorTag: 'Mod#1', reason: 'Ruhe' }]);
+                const bis = Date.now() + 600000;
+                const oldMember = mockMember([], { id: 'user-1', guild, communicationDisabledUntilTimestamp: null });
+                const newMember = mockMember([], { id: 'user-1', guild, communicationDisabledUntilTimestamp: bis });
+
+                await loggingHandler.handleGuildMemberUpdate(oldMember, newMember);
+
+                expect(send).toHaveBeenCalledWith(expect.stringContaining('durch **Mod#1** (Grund: Ruhe)'));
+            });
+
+            it('sagt nicht "durch sich selbst", wenn jemand den eigenen Nickname ändert', async () => {
+                const guild = mockGuild([{ action: AuditLogEvent.MemberUpdate, targetId: 'user-1', executorTag: 'User#0001' }]);
+                const oldMember = mockMember([], { id: 'user-1', guild, nickname: null });
+                const newMember = mockMember([], { id: 'user-1', guild, nickname: 'Neu' });
+
+                await loggingHandler.handleGuildMemberUpdate(oldMember, newMember);
+
+                expect(send).toHaveBeenCalledWith(expect.not.stringContaining('durch'));
+            });
         });
 
         it('loggt eine Nickname-Änderung', async () => {

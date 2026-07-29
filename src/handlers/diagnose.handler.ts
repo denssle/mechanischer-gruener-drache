@@ -42,6 +42,7 @@ class DiagnoseHandler {
         lines.push(`Sport-Ankündigungskanal: ${await this.pruefeKanal(await sportService.getAnnouncementChannel())}`);
         lines.push(`Protokoll-Kanal: ${await this.pruefeKanal(await loggingService.getLogChannel())}`);
         lines.push(`Morgengruß-Kanal: ${await this.pruefeKanal(await greetingService.getChannel())}`);
+        lines.push(`Audit-Log-Zugriff: ${this.pruefeAuditLogRecht()}`);
 
         const event = await eventService.getEvent();
         lines.push(event
@@ -73,6 +74,18 @@ class DiagnoseHandler {
         const fehlt = [!login && 'DISCORD_CLIENT_SECRET', !session && 'CONFIG_SESSION_SECRET']
             .filter(Boolean).join(' + ');
         lines.push(`❌ Login NICHT konfiguriert (${fehlt} fehlt) – /config bleibt gesperrt (503).`);
+    }
+
+    // Ohne "Audit-Log ansehen" nennt das Protokoll keine Urheber mehr (Rollen/Bans/Timeouts), meldet
+    // Kicks als gewöhnliches Verlassen und protokolliert Rollen-/Kanal-/Webhook-Änderungen gar nicht -
+    // alles still, ohne Fehlermeldung. Genau deshalb steht es hier.
+    private pruefeAuditLogRecht(): string {
+        const guild = client.guilds.cache.get(config.GUILD_ID);
+        if (!guild) return '⚠️ Server nicht im Cache';
+
+        return guild.members.me?.permissions.has(PermissionFlagsBits.ViewAuditLog)
+            ? '✅ vorhanden'
+            : '⚠️ Recht "Audit-Log ansehen" fehlt – Protokoll nennt keine Urheber, Kicks sehen aus wie Austritte';
     }
 
     // Ein gesetzter Kanal wird gegen Discord gegengeprüft - fängt gelöschte Kanäle / fehlenden Zugriff ab.

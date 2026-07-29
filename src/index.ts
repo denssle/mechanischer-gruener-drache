@@ -117,6 +117,13 @@ client.on(Events.MessageBulkDelete, (messages, channel) => {
         console.error('Fehler im Logging-Handler (MessageBulkDelete):', error);
     });
 });
+// Änderungen an Rollen, Kanälen und Webhooks. Feuert nur, wenn der Bot das Server-Recht
+// "Audit-Log ansehen" hat - fehlt es, bleibt es still (deshalb prüft /diagnose das mit).
+client.on(Events.GuildAuditLogEntryCreate, (entry, guild) => {
+    loggingHandler.handleAuditLogEntry(entry, guild).catch((error) => {
+        console.error('Fehler im Logging-Handler (GuildAuditLogEntryCreate):', error);
+    });
+});
 
 // Prüfintervall für die täglichen Aufgaben. Die Handler entscheiden selbst per Tagesmarker, ob
 // wirklich etwas zu tun ist - der Timer stupst nur regelmäßig an (jede Minute reicht für eine
