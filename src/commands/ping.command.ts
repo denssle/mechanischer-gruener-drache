@@ -1,5 +1,6 @@
 import {ChatInputCommandInteraction, SlashCommandBuilder} from 'discord.js';
 import pingPongHandler from "../handlers/pingPong.handler.js";
+import pingPongSeasonHandler from "../handlers/pingPongSeason.handler.js";
 
 export default {
     data: new SlashCommandBuilder()
@@ -58,7 +59,7 @@ export default {
             case 'bestenliste':
                 return pingPongHandler.handlePingPongHighscore(interaction);
             case 'ruhmeshalle':
-                return pingPongHandler.handleRuhmeshalle(interaction);
+                return pingPongSeasonHandler.handleRuhmeshalle(interaction);
             case 'hilfe':
                 return pingPongHandler.handleHilfe(interaction);
         }

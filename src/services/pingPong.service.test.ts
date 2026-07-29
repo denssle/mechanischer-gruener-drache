@@ -8,15 +8,25 @@ vi.mock('./redis.service.js', () => ({
         hashFieldExists: vi.fn(async () => false),
         setHashField: vi.fn(),
         getHashAll: vi.fn(),
-    }
+    },
+    REDIS_KEYS: {PING_PONG: 'PING_PONG'}
 }));
 
 import redisService from './redis.service.js';
-import pingPongService from './pingPong.service.js';
+import pingPongService, {PING_PONG_KEYS} from './pingPong.service.js';
 
 describe('pingPongService', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+    });
+
+    // Legacy-Format: eine Änderung würde alle bestehenden Punktestände verwaisen lassen.
+    it('haelt die Key-Formate des laufenden Spielbetriebs fest', () => {
+        expect(PING_PONG_KEYS.score('user-1')).toBe('user-1PING_PONG');
+        expect(PING_PONG_KEYS.highscore).toBe('PING_PONG');
+        expect(PING_PONG_KEYS.cooldown('user-1')).toBe('PING_PONG:COOLDOWN:user-1');
+        expect(PING_PONG_KEYS.serie('user-1')).toBe('PING_PONG:SERIE:user-1');
+        expect(PING_PONG_KEYS.rekord('user-1')).toBe('PING_PONG:REKORD:user-1');
     });
 
     it('liest und schreibt den Monatsmarker', async () => {

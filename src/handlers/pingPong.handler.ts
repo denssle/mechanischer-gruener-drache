@@ -4,14 +4,12 @@ import {
     ButtonInteraction,
     ButtonStyle,
     ChatInputCommandInteraction,
-    MessageFlags,
-    PermissionFlagsBits
+    MessageFlags
 } from "discord.js";
-import redisService, {REDIS_KEYS} from "../services/redis.service.js";
+import redisService from "../services/redis.service.js";
 import userService from "../services/user.service.js";
-import pingPongService from "../services/pingPong.service.js";
-import client from "../client.js";
-import config from "../../config.json" with {type: "json"};
+import {formatMonat, monatsSchluessel} from "./pingPongSeason.handler.js";
+import {PING_PONG_KEYS} from "../services/pingPong.service.js";
 
 // Nach jeder Herausforderung darf man erst nach Ablauf dieser Zeit wieder aufschlagen -
 // verhindert, dass jemand den halben Server in Serie herausfordert.
@@ -87,17 +85,6 @@ export function formatAnsage(istAnsageDuell: boolean, herausfordererId: string, 
 // von einem einzelnen Duell ist keine.
 const MIN_SERIE = 2;
 
-// Key-Strings bewusst identisch zum ursprünglichen Verhalten gehalten (nur die Struktur folgt der
-// KEYS-Objekt-Konvention) - eine Änderung des Formats würde alle bereits in Redis gespeicherten
-// Ping-Pong-Scores verwaisen lassen. Gilt auch für den Season-Reset, der beide Orte löscht.
-const KEYS = {
-    score: (userId: string) => userId + REDIS_KEYS.PING_PONG,
-    highscore: REDIS_KEYS.PING_PONG,
-    cooldown: (userId: string) => `PING_PONG:COOLDOWN:${userId}`,
-    serie: (userId: string) => `PING_PONG:SERIE:${userId}`,
-    rekord: (userId: string) => `PING_PONG:REKORD:${userId}`,
-};
-
 // Abschluss-Zeilen fürs Duell, aus Sicht des Siegers formuliert (der Handler setzt die Namen davor).
 // Exportiert + getestet, damit die Auswahl abgesichert ist.
 export const DUELL_FLAVORS = [
@@ -156,88 +143,38 @@ export function formatSerie({siegerId, verliererId, serie, istNeuerRekord, beend
     return saetze.length > 0 ? saetze.join(' ') : null;
 }
 
-// --- Seasons ---------------------------------------------------------------------------------
-// Die Punkte laufen monatsweise: am Monatswechsel bekommt Platz eins die Champion-Rolle und einen
-// Ruhmeshallen-Eintrag, danach werden die Scores zurückgesetzt. Zweck ist, dass die Bestenliste
-// nicht dauerhaft von Bestandsspielern zementiert wird. Angestoßen vom EINEN 60-s-setInterval in
-// index.ts (kein zweiter Mechanismus, keine Cron-Dependency) - rechneSeasonAb entscheidet selbst
-// anhand des Monatsmarkers, ob etwas zu tun ist.
-//
-// BEWUSSTES BALANCING: Der Ausgang eines Duells ist reiner Zufall, und eine Niederlage bei 0 Punkten
-// kostet nichts (Clamp). Der Punktestand ist damit ein Random Walk mit Wand bei 0 - wer viel spielt,
-// steht am Monatsende oben. Der Titel geht also im Wesentlichen an den Aktivsten, nicht an den
-// Besten. Das ist so gewollt (Aktivität darf belohnt werden, 2026-07-29 entschieden); wer das je
-// ändern will, dreht am ehesten an COOLDOWN_SECONDS oder wertet die Siegquote statt der Punkte.
-
-const MONATSNAMEN = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
-    'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
-
-// Monatsmarker in lokaler Zeit (Host = Europe/Berlin), wie alle anderen Tages-/Monatsmarker.
-export function monatsSchluessel(datum: Date): string {
-    return `${datum.getFullYear()}-${String(datum.getMonth() + 1).padStart(2, '0')}`;
-}
-
-// 'Juli 2026' aus '2026-07'. Unbekannte Formate bleiben unverändert stehen, statt zu scheitern
-// (Muster: das englische Datum in parseGameEvents).
-export function formatMonat(schluessel: string): string {
-    const treffer = /^(\d{4})-(\d{2})$/.exec(schluessel);
-    if (!treffer) {
-        return schluessel;
-    }
-    const monat = MONATSNAMEN[Number(treffer[2]) - 1];
-    return monat ? `${monat} ${treffer[1]}` : schluessel;
-}
-
-// Sieger einer Season aus dem Sorted Set. Bei Gleichstand entscheidet bewusst das Los - kein
-// Tie-Break über Serie o.ä. (das wäre ein zweiter, schwer erklärbarer Maßstab). null = leere
-// Season (niemand hat gespielt): kein Sieger, kein Eintrag, Rolle bleibt wie sie ist.
-export function waehleSieger(eintraege: {value: string; score: number}[]): {userId: string; punkte: number} | null {
-    const mitPunkten = eintraege.filter(eintrag => eintrag.score > 0);
-    if (mitPunkten.length === 0) {
-        return null;
-    }
-
-    const bestePunktzahl = Math.max(...mitPunkten.map(eintrag => eintrag.score));
-    const gleichauf = mitPunkten.filter(eintrag => eintrag.score === bestePunktzahl);
-    const gewaehlt = gleichauf[Math.floor(Math.random() * gleichauf.length)];
-
-    return {userId: gewaehlt.value, punkte: gewaehlt.score};
-}
-
 class PingPongHandler {
 
     async handleHerausfordern(interaction: ChatInputCommandInteraction) {
-        try {
-            const herausforderer = interaction.user;
-            const gegner = interaction.options.getUser('gegner', true);
-
-            const abfuhr = await this.pruefeUndSetzeCooldown(herausforderer.id, gegner);
-            if (abfuhr) {
-                return interaction.reply({content: abfuhr, flags: MessageFlags.Ephemeral});
-            }
-
-            const row = this.baueDuellButtons(`${DUELL_PREFIX}annehmen:${herausforderer.id}:${gegner.id}`,
-                `${DUELL_PREFIX}ablehnen:${herausforderer.id}:${gegner.id}`);
-
-            return interaction.reply({
-                content: `<@${herausforderer.id}> fordert <@${gegner.id}> zu einem Ping-Pong-Duell heraus.\n`
-                    + `Gespielt wird auf **${POINTS_TO_WIN}** gewonnene Ballwechsel. `
-                    + `Der Sieg bringt **+${DUELL_WIN}** Punkt, die Niederlage kostet **${DUELL_LOSS}** (nie unter 0).`,
-                components: [row]
-            });
-        } catch (error) {
-            console.error('Fehler beim Erstellen der Ping-Pong-Herausforderung:', error);
-            return interaction.reply({
-                content: 'Es gab einen Fehler beim Ausführen des Befehls.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
+        return this.starteDuell(interaction, DUELL_PREFIX,
+            (herausfordererId, gegnerId) =>
+                `<@${herausfordererId}> fordert <@${gegnerId}> zu einem Ping-Pong-Duell heraus.\n`
+                + `Gespielt wird auf **${POINTS_TO_WIN}** gewonnene Ballwechsel. `
+                + `Der Sieg bringt **+${DUELL_WIN}** Punkt, die Niederlage kostet **${DUELL_LOSS}** (nie unter 0).`,
+            'Fehler beim Erstellen der Ping-Pong-Herausforderung:');
     }
 
     // Ansage-Duell: derselbe Zufalls-Match wie beim normalen Duell, aber der Herausforderer sagt mit
     // dem Befehl den eigenen Sieg an - va banque. Geht es auf, gibt es einen Punkt extra; geht es
     // schief, kostet es einen zusätzlich (siehe ANSAGE_BONUS/ANSAGE_MALUS).
     async handleAnsageduell(interaction: ChatInputCommandInteraction) {
+        return this.starteDuell(interaction, ANSAGE_PREFIX,
+            (herausfordererId, gegnerId) =>
+                `<@${herausfordererId}> fordert <@${gegnerId}> zu einem Ansage-Duell heraus `
+                + `und kündigt schon mal den **eigenen Sieg** an.\n`
+                + `Gespielt wird auf **${POINTS_TO_WIN}** gewonnene Ballwechsel (Sieg **+${DUELL_WIN}**, `
+                + `Niederlage **-${DUELL_LOSS}**, nie unter 0). Geht die Ansage auf, gibt es **+${ANSAGE_BONUS}** Punkt extra – `
+                + `geht sie daneben, kostet die große Klappe **${ANSAGE_MALUS}** Punkt zusätzlich.`,
+            'Fehler beim Erstellen des Ping-Pong-Ansage-Duells:');
+    }
+
+    // Gemeinsamer Ablauf von `herausfordern` und `ansageduell`: Gegner lesen, Cooldown prüfen,
+    // Annehmen/Ablehnen-Buttons mit dem jeweiligen customId-Prefix posten. Die beiden Befehle
+    // unterscheiden sich NUR im Prefix und im Ankündigungstext - das Taktikduell nicht, es hat
+    // vier Buttons und die Aktion in der customId und bleibt deshalb eigenständig.
+    async starteDuell(interaction: ChatInputCommandInteraction, prefix: string,
+                      baueText: (herausfordererId: string, gegnerId: string) => string,
+                      fehlerText: string) {
         try {
             const herausforderer = interaction.user;
             const gegner = interaction.options.getUser('gegner', true);
@@ -247,19 +184,12 @@ class PingPongHandler {
                 return interaction.reply({content: abfuhr, flags: MessageFlags.Ephemeral});
             }
 
-            const row = this.baueDuellButtons(`${ANSAGE_PREFIX}annehmen:${herausforderer.id}:${gegner.id}`,
-                `${ANSAGE_PREFIX}ablehnen:${herausforderer.id}:${gegner.id}`);
+            const row = this.baueDuellButtons(`${prefix}annehmen:${herausforderer.id}:${gegner.id}`,
+                `${prefix}ablehnen:${herausforderer.id}:${gegner.id}`);
 
-            return interaction.reply({
-                content: `<@${herausforderer.id}> fordert <@${gegner.id}> zu einem Ansage-Duell heraus `
-                    + `und kündigt schon mal den **eigenen Sieg** an.\n`
-                    + `Gespielt wird auf **${POINTS_TO_WIN}** gewonnene Ballwechsel (Sieg **+${DUELL_WIN}**, `
-                    + `Niederlage **-${DUELL_LOSS}**, nie unter 0). Geht die Ansage auf, gibt es **+${ANSAGE_BONUS}** Punkt extra – `
-                    + `geht sie daneben, kostet die große Klappe **${ANSAGE_MALUS}** Punkt zusätzlich.`,
-                components: [row]
-            });
+            return interaction.reply({content: baueText(herausforderer.id, gegner.id), components: [row]});
         } catch (error) {
-            console.error('Fehler beim Erstellen des Ping-Pong-Ansage-Duells:', error);
+            console.error(fehlerText, error);
             return interaction.reply({
                 content: 'Es gab einen Fehler beim Ausführen des Befehls.',
                 flags: MessageFlags.Ephemeral
@@ -280,12 +210,12 @@ class PingPongHandler {
             return 'Bots haben keine Hände. Fordere jemanden aus Fleisch und Blut heraus.';
         }
 
-        const remaining = await redisService.getTimeToLive(KEYS.cooldown(herausfordererId));
+        const remaining = await redisService.getTimeToLive(PING_PONG_KEYS.cooldown(herausfordererId));
         if (remaining > 0) {
             return `Kurz durchatmen – du kannst in **${remaining}s** wieder aufschlagen.`;
         }
 
-        await redisService.setWithExpiry(KEYS.cooldown(herausfordererId), '1', COOLDOWN_SECONDS);
+        await redisService.setWithExpiry(PING_PONG_KEYS.cooldown(herausfordererId), '1', COOLDOWN_SECONDS);
         return null;
     }
 
@@ -496,31 +426,31 @@ class PingPongHandler {
     // Bedarf selbst an), die Serie des Verlierers ist beendet und wird gelöscht. Den Rekord halten
     // wir separat, damit er die abgerissene Serie überdauert.
     async verarbeiteSerie(siegerId: string, verliererId: string): Promise<SerienStand> {
-        const beendeteSerie = this.convertScoreToNumber(await redisService.get(KEYS.serie(verliererId)) ?? 0);
+        const beendeteSerie = this.convertScoreToNumber(await redisService.get(PING_PONG_KEYS.serie(verliererId)) ?? 0);
         if (beendeteSerie > 0) {
-            await redisService.delete(KEYS.serie(verliererId));
+            await redisService.delete(PING_PONG_KEYS.serie(verliererId));
         }
 
-        const serie = await redisService.increment(KEYS.serie(siegerId));
-        const bisherigerRekord = this.convertScoreToNumber(await redisService.get(KEYS.rekord(siegerId)) ?? 0);
+        const serie = await redisService.increment(PING_PONG_KEYS.serie(siegerId));
+        const bisherigerRekord = this.convertScoreToNumber(await redisService.get(PING_PONG_KEYS.rekord(siegerId)) ?? 0);
         const istNeuerRekord = serie > bisherigerRekord;
 
         if (istNeuerRekord) {
-            await redisService.set(KEYS.rekord(siegerId), serie.toString());
+            await redisService.set(PING_PONG_KEYS.rekord(siegerId), serie.toString());
         }
 
         return {siegerId, verliererId, serie, istNeuerRekord: istNeuerRekord && serie >= MIN_SERIE, beendeteSerie};
     }
 
     async getSerie(userId: string): Promise<number> {
-        return this.convertScoreToNumber(await redisService.get(KEYS.serie(userId)) ?? 0);
+        return this.convertScoreToNumber(await redisService.get(PING_PONG_KEYS.serie(userId)) ?? 0);
     }
 
     // Kein Logging hier: der Score wird bei jedem Duell zweimal gelesen, und die Logs sind auf
     // Uberspace persistiert und über /config/logs einsehbar - das war reines Rauschen genau dort,
     // wo man im Problemfall nachsieht.
     async getScore(userId: string): Promise<number> {
-        const score = await redisService.get(KEYS.score(userId));
+        const score = await redisService.get(PING_PONG_KEYS.score(userId));
 
         if (!score) {
             return await this.updateScore(userId, 0);
@@ -529,7 +459,7 @@ class PingPongHandler {
     }
 
     async updateScore(userId: string, score: number): Promise<number> {
-        const newScore: number = this.convertScoreToNumber(await redisService.set(KEYS.score(userId), score.toString()))
+        const newScore: number = this.convertScoreToNumber(await redisService.set(PING_PONG_KEYS.score(userId), score.toString()))
         await this.setHighscore(userId, newScore);
         return newScore;
     }
@@ -542,7 +472,7 @@ class PingPongHandler {
     }
 
     async setHighscore(userId: string, newScore: number) {
-        await redisService.setSortedSet(KEYS.highscore, userId, newScore)
+        await redisService.setSortedSet(PING_PONG_KEYS.highscore, userId, newScore)
     }
 
     async handlePingPongHighscore(interaction: ChatInputCommandInteraction) {
@@ -551,7 +481,7 @@ class PingPongHandler {
             // seine erste Partie nach dem Season-Reset verliert, steht dort mit 0 (der Abzug wird auf
             // 0 geklemmt). In einer Bestenliste haben solche Zeilen nichts zu suchen - waehleSieger
             // filtert aus demselben Grund.
-            const highscore = (await redisService.getSortedSet(KEYS.highscore)).filter(eintrag => eintrag.score > 0);
+            const highscore = (await redisService.getSortedSet(PING_PONG_KEYS.highscore)).filter(eintrag => eintrag.score > 0);
             // Die Liste nennt die laufende Season - sonst wundert sich am Monatsersten jemand
             // über die plötzlich leere Bestenliste.
             const ueberschrift = `**Bestenliste ${formatMonat(monatsSchluessel(new Date()))}**`;
@@ -582,153 +512,6 @@ class PingPongHandler {
         } catch (error) {
             console.error("Error handling ping pong highscore:", error);
             return interaction.reply({ content: "Es gab einen Fehler beim Abrufen der Highscores.", flags: MessageFlags.Ephemeral });
-        }
-    }
-
-    // Vom Minuten-Timer angestoßen: ist der Monat gewechselt, wird der Vormonat abgerechnet.
-    // Ein verpasster Monatswechsel wird bewusst NACHGEHOLT (Muster Mitternachts-Kilometerstand,
-    // nicht Anstupser) - ein Champion, der wegen eines Neustarts ausfällt, wäre ein echter Verlust.
-    // Der Marker wird erst NACH dem Ruhmeshallen-Eintrag und dem Reset gesetzt: scheitert etwas
-    // dazwischen, läuft die Abrechnung eine Minute später erneut.
-    async rechneSeasonAb(): Promise<void> {
-        const abgerechnet = await pingPongService.getLastSeason();
-        const aktuellerMonat = monatsSchluessel(new Date());
-
-        // Noch nie abgerechnet (frischer Deploy): Marker OHNE Abrechnung auf den laufenden Monat -
-        // sonst würde ein Deploy am 30. sofort mitten im Monat abrechnen. Das steht bewusst HIER
-        // und nicht in einem eigenen Init-Schritt beim Start: ein einmaliger Boot-Aufruf, der an
-        // einem Redis-Hiccup scheitert, hätte den Marker dauerhaft leer gelassen - und mit ihm
-        // liefe die Abrechnung nie wieder, still und unbemerkt.
-        if (!abgerechnet) {
-            await pingPongService.setLastSeason(aktuellerMonat);
-            console.log(`Ping-Pong-Season initialisiert: laufender Monat ${aktuellerMonat}, keine Abrechnung.`);
-            return;
-        }
-
-        if (abgerechnet === aktuellerMonat) {
-            return;
-        }
-
-        const stand = await redisService.getSortedSetAll(KEYS.highscore);
-        const sieger = waehleSieger(stand);
-
-        // Nur, wenn für den Monat noch kein Champion feststeht: bricht die Abrechnung mitten im
-        // Reset ab (Redis-Hiccup), läuft sie eine Minute später erneut und fände nur noch die
-        // Reste im Sorted Set - der echte Champion würde sonst still überschrieben.
-        let eingetragen = false;
-        if (sieger) {
-            eingetragen = await pingPongService.addRuhmeshalleEintrag(abgerechnet, sieger.userId, sieger.punkte);
-            console.log(eingetragen
-                ? `Ping-Pong-Season ${abgerechnet} abgerechnet: ${sieger.userId} mit ${sieger.punkte} Punkten.`
-                : `Ping-Pong-Season ${abgerechnet} war bereits eingetragen - Champion bleibt unverändert.`);
-        } else {
-            console.log(`Ping-Pong-Season ${abgerechnet} war leer - kein Champion.`);
-        }
-
-        await this.setzeScoresZurueck(stand.map(eintrag => eintrag.value));
-        await pingPongService.setLastSeason(aktuellerMonat);
-
-        // Erst ganz zum Schluss und bewusst fehlertolerant: ohne gesetzte/vergebbare Rolle darf
-        // die Abrechnung nicht scheitern (dann bliebe die Season ewig offen). Steht der Champion
-        // schon fest, wird die Rolle nicht an einen Übriggebliebenen weitergereicht.
-        if (sieger && eingetragen) {
-            await this.vergebeChampionRolle(sieger.userId);
-        }
-    }
-
-    // Reset betrifft NUR den Score - Serie und Rekord bleiben unangetastet (der Rekord ist eine
-    // persönliche Bestmarke, die laufende Serie hängt am Spielverhalten, nicht an der Season).
-    // Der Score liegt doppelt: als Einzelkey je User UND im Sorted Set. Beides wird gelöscht statt
-    // auf 0 gesetzt, sonst stünde die Bestenliste am Monatsanfang voller 0-Punkte-Karteileichen
-    // (getScore legt den Einzelkey bei Bedarf ohnehin neu an).
-    async setzeScoresZurueck(userIds: string[]): Promise<void> {
-        for (const userId of userIds) {
-            await redisService.delete(KEYS.score(userId));
-        }
-        await redisService.delete(KEYS.highscore);
-    }
-
-    // Die Rolle zeigt immer nur den AMTIERENDEN Champion: erst allen aktuellen Trägern abnehmen
-    // (nicht nur dem gespeicherten Vormonatssieger - robuster, falls sie jemand von Hand bekommen
-    // hat), dann dem neuen Sieger geben. Fehlt die Rolle, das Recht oder die Hierarchie, wird das
-    // nur geloggt - genau deshalb prüft /diagnose diese drei Dinge mit.
-    async vergebeChampionRolle(siegerId: string): Promise<void> {
-        try {
-            const rolleId = await pingPongService.getChampionRole();
-            if (!rolleId) {
-                console.warn('Ping-Pong-Season: keine Champion-Rolle konfiguriert - Auszeichnung entfällt.');
-                return;
-            }
-
-            const guild = client.guilds.cache.get(config.GUILD_ID);
-            const rolle = guild?.roles.cache.get(rolleId);
-            if (!guild || !rolle) {
-                console.warn(`Ping-Pong-Season: Champion-Rolle ${rolleId} existiert nicht (mehr).`);
-                return;
-            }
-
-            const me = guild.members.me;
-            if (!me?.permissions.has(PermissionFlagsBits.ManageRoles)) {
-                console.warn('Ping-Pong-Season: mir fehlt das Recht "Rollen verwalten" - Champion-Rolle nicht vergeben.');
-                return;
-            }
-            if (me.roles.highest.comparePositionTo(rolle) <= 0) {
-                console.warn('Ping-Pong-Season: die Champion-Rolle steht über meiner in der Hierarchie - nicht vergeben.');
-                return;
-            }
-
-            for (const traeger of rolle.members.values()) {
-                if (traeger.id !== siegerId) {
-                    await traeger.roles.remove(rolle).catch((error) => {
-                        console.warn(`Konnte die Champion-Rolle nicht von ${traeger.id} entfernen:`, error);
-                    });
-                }
-            }
-
-            // Ist der Sieger nicht mehr auf dem Server, gibt es keine Rolle - der
-            // Ruhmeshallen-Eintrag steht trotzdem schon.
-            const sieger = await guild.members.fetch(siegerId).catch(() => null);
-            if (!sieger) {
-                console.warn(`Ping-Pong-Champion ${siegerId} ist nicht mehr auf dem Server - Rolle nicht vergeben.`);
-                return;
-            }
-            await sieger.roles.add(rolle);
-        } catch (error) {
-            console.error('Fehler beim Vergeben der Ping-Pong-Champion-Rolle:', error);
-        }
-    }
-
-    // Die Rolle zeigt immer nur den aktuellen Champion - ohne Ruhmeshalle verschwänden die
-    // Vormonate spurlos. Bewusst KEIN Verkündungspost am Monatsende: wer es wissen will, fragt hier.
-    // allowedMentions ist Pflicht, sonst pingt jede Abfrage sämtliche Ex-Champions.
-    async handleRuhmeshalle(interaction: ChatInputCommandInteraction) {
-        try {
-            const eintraege = await pingPongService.getRuhmeshalle();
-
-            if (eintraege.length === 0) {
-                return interaction.reply({
-                    content: 'Die Ruhmeshalle ist noch leer – die erste Season läuft gerade.',
-                    allowedMentions: {parse: []},
-                });
-            }
-
-            const zeilen = ['**Ping-Pong-Ruhmeshalle**'];
-            for (const eintrag of eintraege) {
-                const zeile = `${formatMonat(eintrag.monat)}: <@${eintrag.userId}> mit **${eintrag.punkte}** Punkten`;
-                // Ganze Monate weglassen statt am Zeichenlimit abzuschneiden; in Redis bleiben sie.
-                if ([...zeilen, zeile].join('\n').length > 1900) {
-                    break;
-                }
-                zeilen.push(zeile);
-            }
-
-            return interaction.reply({content: zeilen.join('\n'), allowedMentions: {parse: []}});
-        } catch (error) {
-            console.error('Fehler beim Abrufen der Ping-Pong-Ruhmeshalle:', error);
-            return interaction.reply({
-                content: 'Die Ruhmeshalle konnte nicht abgerufen werden.',
-                flags: MessageFlags.Ephemeral,
-            });
         }
     }
 

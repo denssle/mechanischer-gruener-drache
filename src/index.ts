@@ -16,7 +16,7 @@ import sportHandler from "./handlers/sport.handler.js";
 import greetingHandler from "./handlers/greeting.handler.js";
 import anstupserHandler from "./handlers/anstupser.handler.js";
 import geburtstagHandler from "./handlers/geburtstag.handler.js";
-import pingPongHandler from "./handlers/pingPong.handler.js";
+import pingPongSeasonHandler from "./handlers/pingPongSeason.handler.js";
 
 // console.log/warn/error in einen Ringpuffer spiegeln, damit sie auf /config einsehbar sind. Moeglichst
 // frueh, damit die Boot-/Laufzeit-Zeilen (Webhook-Server-Start, Fehler) mitgeschnitten werden.
@@ -158,7 +158,7 @@ client.once(Events.ClientReady, async () => {
             // Prüft selbst per Monatsmarker, ob die Ping-Pong-Season abzurechnen ist; ein
             // verpasster Monatswechsel wird bewusst nachgeholt. Fehlt der Marker ganz (frischer
             // Deploy), setzt der Aufruf ihn selbst - deshalb braucht es hier keinen Init-Schritt.
-            pingPongHandler.rechneSeasonAb().catch((error) => {
+            pingPongSeasonHandler.rechneSeasonAb().catch((error) => {
                 console.error('Fehler beim Abrechnen der Ping-Pong-Season:', error);
             });
         }, TAEGLICHER_POST_INTERVALL_MS);

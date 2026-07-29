@@ -1,9 +1,23 @@
-import redisService from './redis.service.js';
+import redisService, {REDIS_KEYS} from './redis.service.js';
 
 // Season-State des Ping-Pong-Features: die Punkte laufen monatsweise, am Monatswechsel wird
 // abgerechnet (Champion-Rolle + Ruhmeshallen-Eintrag), danach werden die Scores zurückgesetzt.
-// Der laufende Punktestand selbst liegt weiterhin im Handler (Legacy-Key-Format, siehe dort) -
-// hier steht nur, was die Season überdauert. Dokumentiert in docs/datenhaltung.md.
+// Enthält den Season-State und die Keys des laufenden Spielbetriebs; die Spiel- und
+// Anzeigelogik liegt in pingPong.handler.ts (Duelle) und pingPongSeason.handler.ts (Abrechnung).
+// Dokumentiert in docs/datenhaltung.md.
+
+// Keys des laufenden Spielbetriebs. Das Format von `score`/`highscore` ist aus Legacy-Gründen
+// festgelegt (`<userId>PING_PONG` bzw. das Sorted Set `PING_PONG`) - eine Änderung würde alle
+// bestehenden Punktestände verwaisen lassen. Der Score liegt bewusst DOPPELT (Einzelkey je User
+// und Sorted Set); wer ihn schreibt, muss beide Orte bedienen, wer ihn löscht (Season-Reset)
+// ebenfalls. Hier statt im Handler, weil sich Duell- und Season-Handler dieselben Keys teilen.
+export const PING_PONG_KEYS = {
+    score: (userId: string) => userId + REDIS_KEYS.PING_PONG,
+    highscore: REDIS_KEYS.PING_PONG,
+    cooldown: (userId: string) => `PING_PONG:COOLDOWN:${userId}`,
+    serie: (userId: string) => `PING_PONG:SERIE:${userId}`,
+    rekord: (userId: string) => `PING_PONG:REKORD:${userId}`,
+};
 
 export interface RuhmeshalleEintrag {
     monat: string;   // YYYY-MM
@@ -13,8 +27,8 @@ export interface RuhmeshalleEintrag {
 
 const KEYS = {
     // Zuletzt abgerechneter Monat als YYYY-MM. Fehlt er, wurde noch nie abgerechnet - dann setzt
-    // initSeason() ihn ohne Abrechnung auf den laufenden Monat (kein Überraschungs-Reset beim
-    // ersten Deploy, Muster initTaeglicherPost).
+    // rechneSeasonAb ihn ohne Abrechnung auf den laufenden Monat (kein Überraschungs-Reset beim
+    // ersten Deploy).
     lastSeason: 'PING_PONG:LAST_SEASON',
     // Hash: Feld = YYYY-MM, Wert = JSON {userId, punkte}. Bewusst nur die ID - der Name wird zur
     // Anzeigezeit aufgelöst, kein eingefrorener Anzeigename.

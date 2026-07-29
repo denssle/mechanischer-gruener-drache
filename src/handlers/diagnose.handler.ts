@@ -9,7 +9,7 @@ import geburtstagService from '../services/geburtstag.service.js';
 import eventService from '../services/event.service.js';
 import characterService, {CharacterLink, findInRoster} from '../services/character.service.js';
 import pingPongService from '../services/pingPong.service.js';
-import {formatMonat} from './pingPong.handler.js';
+import {formatMonat} from './pingPongSeason.handler.js';
 import {oauthConfigured} from '../services/discordOAuth.service.js';
 import {sessionConfigured} from '../server/config.session.js';
 import config from '../../config.json' with {type: 'json'};
