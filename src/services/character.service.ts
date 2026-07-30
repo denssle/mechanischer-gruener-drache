@@ -59,17 +59,21 @@ export function parseRoster(html: string): CharacterEntry[] | null {
     return entries;
 }
 
-// Sucht einen Charakter im Roster. Der Roster zeigt "<Titel> <Name>", der Titel ändert sich mit
-// Level/Drachentötungen - deshalb Suffix-Match auf Wortgrenze (exakter Name ODER endet auf " Name"),
-// nicht der ganze String. Gespeichert/gesucht wird also der Kern-Name.
-export function findInRoster(roster: CharacterEntry[], name: string): CharacterEntry | null {
-    const needle = name.trim().toLowerCase();
-    if (!needle) return null;
+// Vergleicht einen Anzeigenamen aus dem Spiel ("Centurio Acaine") mit einem Kern-Namen ("Acaine").
+// Das Spiel stellt dem Namen einen level-/drachenabhängigen Titel voran, der sich ändert - deshalb
+// Suffix-Match auf Wortgrenze (exakter Name ODER endet auf " Name") statt Vergleich des ganzen
+// Strings. Einziger Ort für diese Regel; jeder Abgleich Anzeigename <-> Kern-Name läuft hierüber.
+export function passtAufKernNamen(anzeigeName: string, kernName: string): boolean {
+    const full = anzeigeName.trim().toLowerCase();
+    const needle = kernName.trim().toLowerCase();
+    if (!full || !needle) return false;
 
-    return roster.find(entry => {
-        const full = entry.name.toLowerCase();
-        return full === needle || full.endsWith(` ${needle}`);
-    }) ?? null;
+    return full === needle || full.endsWith(` ${needle}`);
+}
+
+// Sucht einen Charakter im Roster. Gespeichert/gesucht wird der Kern-Name (s. passtAufKernNamen).
+export function findInRoster(roster: CharacterEntry[], name: string): CharacterEntry | null {
+    return roster.find(entry => passtAufKernNamen(entry.name, name)) ?? null;
 }
 
 // Eine Verknüpfung Charaktername <-> Discord-User.
@@ -78,15 +82,9 @@ export interface CharacterLink {
     name: string;
 }
 
-// Verknüpfung zu einem Anzeigenamen aus dem Spiel (kann ein Titel-Präfix tragen, s. findInRoster).
+// Verknüpfung zu einem Anzeigenamen aus dem Spiel (kann ein Titel-Präfix tragen, s. passtAufKernNamen).
 export function findLinkForName(links: CharacterLink[], displayName: string): CharacterLink | null {
-    const full = displayName.trim().toLowerCase();
-    if (!full) return null;
-
-    return links.find(link => {
-        const needle = link.name.trim().toLowerCase();
-        return !!needle && (full === needle || full.endsWith(` ${needle}`));
-    }) ?? null;
+    return links.find(link => passtAufKernNamen(displayName, link.name)) ?? null;
 }
 
 function escapeRegex(value: string): string {

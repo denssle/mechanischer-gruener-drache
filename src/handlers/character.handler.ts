@@ -1,5 +1,6 @@
-import {ChatInputCommandInteraction, EmbedBuilder} from 'discord.js';
-import characterService, {CharacterEntry, findInRoster} from '../services/character.service.js';
+import {ChatInputCommandInteraction, EmbedBuilder, MessageFlags} from 'discord.js';
+import characterService, {CharacterEntry, findInRoster, passtAufKernNamen} from '../services/character.service.js';
+import onlineService, {OnlinePlayer} from '../services/online.service.js';
 
 // Lore-Flavor für tote Charaktere: statt nur "tot" eine LotGD-stimmige Zeile. Wiederauferstehung
 // geschieht beim Anbruch des neuen Tages oder über Gefallen beim Totengott Ramius - beides steckt hier drin.
@@ -17,24 +18,59 @@ export function randomTotenFlavor(): string {
 export const CHARAKTER_HELP =
     `**Charakter-Befehle**\n\n` +
     `\`/charakter verknuepfen name:<Name>\` – deinen LotGD-Charakter hinterlegen (nur der öffentliche Name).\n` +
-    `\`/charakter anzeigen [name:<Name>]\` – Charakter-Karte anzeigen; ohne Name deinen verknüpften.\n` +
+    `\`/charakter anzeigen [name:<Name>]\` – Charakter-Karte anzeigen; ohne Name deinen verknüpften. ` +
+    `Sagt auch, ob die Person gerade im Spiel ist und wo – die Antwort siehst nur du.\n` +
     `\`/charakter entfernen\` – deine Verknüpfung löschen.\n` +
     `\`/charakter hilfe\` – zeigt diese Übersicht.\n\n` +
     `Alle Daten stammen aus der öffentlichen Kriegerliste von lotgd.de – kein Login, keine Passwörter.`;
 
-function buildCard(entry: CharacterEntry): EmbedBuilder {
+// Aktivitätsstand aus den beiden Listen von list.php. "online" trägt den Ort mit, weil er dort
+// frischer ist als im (bis zu 10 min gecachten) Roster.
+export type Aktivitaet = { stufe: 'online'; ort: string } | { stufe: 'kuerzlich' };
+
+// Wie aktiv ist der Charakter gerade? null = keine Aussage möglich - entweder ist der Abruf
+// gescheitert (online === null) oder er steht in keiner der beiden Listen. In beiden Fällen fällt
+// die Karte auf "zuletzt gesehen" aus dem Roster zurück, statt etwas zu behaupten.
+// Verglichen wird über den Kern-Namen, weil die Listen den Titel-Präfix genauso tragen wie das Roster.
+export function bestimmeAktivitaet(
+    kernName: string,
+    online: {players: OnlinePlayer[]; recent: string[]} | null,
+): Aktivitaet | null {
+    if (!online) return null;
+
+    const eingeloggt = online.players.find(player => passtAufKernNamen(player.name, kernName));
+    if (eingeloggt) return {stufe: 'online', ort: eingeloggt.ort};
+
+    if (online.recent.some(name => passtAufKernNamen(name, kernName))) return {stufe: 'kuerzlich'};
+
+    return null;
+}
+
+// Die eine Zeile, um die es beim Ausbau ging: lohnt es sich, ins Spiel zu gehen? Ohne
+// Aktivitätsstand die tagesgenaue Roster-Angabe ("Heute", "5 Tage") - feiner gibt die Seite es nicht her.
+export function formatAktivitaet(aktivitaet: Aktivitaet | null, zuletztDa: string): string {
+    if (aktivitaet?.stufe === 'online') return 'gerade im Spiel';
+    if (aktivitaet?.stufe === 'kuerzlich') return 'in den letzten 30 Minuten aktiv';
+    return `zuletzt gesehen: ${zuletztDa}`;
+}
+
+function buildCard(entry: CharacterEntry, aktivitaet: Aktivitaet | null = null): EmbedBuilder {
+    // Beim Eingeloggten den Ort aus der Online-Tabelle nehmen; das Roster ist bis zu 10 min alt.
+    const ort = aktivitaet?.stufe === 'online' ? aktivitaet.ort : entry.ort;
+    const status = formatAktivitaet(aktivitaet, entry.zuletztDa);
+
     const lines = [
         `Stufe ${entry.level} · ${entry.rasse} · ${entry.geschlecht}`,
-        `Ort: ${entry.ort}`,
+        `Ort: ${ort}`,
     ];
     if (entry.gilde) {
         lines.push(`Gilde: ${entry.gilde}`);
     }
     if (entry.lebt) {
-        lines.push(`lebendig · zuletzt gesehen: ${entry.zuletztDa}`);
+        lines.push(`lebendig · ${status}`);
     } else {
         lines.push(`tot – ${randomTotenFlavor()}`);
-        lines.push(`zuletzt gesehen: ${entry.zuletztDa}`);
+        lines.push(status);
     }
 
     return new EmbedBuilder()
@@ -81,7 +117,9 @@ class CharacterHandler {
     async handleAnzeigen(interaction: ChatInputCommandInteraction) {
         const provided = interaction.options.getString('name', false)?.trim();
 
-        await interaction.deferReply();
+        // Ephemer: die Karte beantwortet "lohnt es sich gerade, ins Spiel zu gehen?" - eine private
+        // Frage, die den Kanal nichts angeht (Noise-Linie des Projekts).
+        await interaction.deferReply({flags: MessageFlags.Ephemeral});
 
         const name = provided ?? await characterService.getLinkedName(interaction.user.id);
         if (!name) {
@@ -91,7 +129,9 @@ class CharacterHandler {
             );
         }
 
-        const roster = await characterService.getRoster();
+        // Zwei unabhängige Abrufe (Roster + Online-Stand) parallel. getOnline() fängt selbst alles
+        // ab und liefert null - der Aktivitätsstand ist ein Bonus, die Karte darf daran nicht scheitern.
+        const [roster, online] = await Promise.all([characterService.getRoster(), onlineService.getOnline()]);
         if (!roster) {
             return interaction.editReply('Konnte die Kriegerliste gerade nicht abrufen. Versuch es später nochmal.');
         }
@@ -103,7 +143,7 @@ class CharacterHandler {
             );
         }
 
-        return interaction.editReply({embeds: [buildCard(entry)]});
+        return interaction.editReply({embeds: [buildCard(entry, bestimmeAktivitaet(name, online))]});
     }
 
     async handleEntfernen(interaction: ChatInputCommandInteraction) {

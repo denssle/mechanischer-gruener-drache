@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MessageFlags } from 'discord.js';
 
 const svc = vi.hoisted(() => ({
     getLinkedName: vi.fn(),
@@ -12,7 +13,12 @@ vi.mock('../services/character.service.js', async (importOriginal) => {
     return { ...actual, default: svc };
 });
 
-import characterHandler, { CHARAKTER_HELP, TOTEN_FLAVORS, randomTotenFlavor } from './character.handler.js';
+const online = vi.hoisted(() => ({ getOnline: vi.fn() }));
+vi.mock('../services/online.service.js', () => ({ default: online }));
+
+import characterHandler, {
+    CHARAKTER_HELP, TOTEN_FLAVORS, randomTotenFlavor, bestimmeAktivitaet, formatAktivitaet,
+} from './character.handler.js';
 
 const ACAINE = {
     name: 'Centurio Acaine', gilde: '', ort: 'Im Haus', level: '5',
@@ -29,8 +35,18 @@ function makeInteraction(name: string | null = null) {
     } as any;
 }
 
+// Ein gerade eingeloggter Spieler, wie ihn online.service liefert (Name mit Titel-Praefix).
+const ACAINE_ONLINE = {
+    name: 'Centurio Acaine', ort: 'Im Haus von Tirsis', level: '5', rasse: 'Mensch', gilde: '', lebt: true,
+};
+
 describe('CharacterHandler', () => {
-    beforeEach(() => Object.values(svc).forEach(fn => fn.mockReset()));
+    beforeEach(() => {
+        Object.values(svc).forEach(fn => fn.mockReset());
+        online.getOnline.mockReset();
+        // Standard: Online-Stand nicht verfuegbar - die Karte faellt auf "zuletzt gesehen" zurueck.
+        online.getOnline.mockResolvedValue(null);
+    });
 
     describe('verknuepfen', () => {
         it('verknüpft und zeigt die Karte, wenn der Charakter existiert', async () => {
@@ -107,6 +123,41 @@ describe('CharacterHandler', () => {
             expect(interaction.editReply.mock.calls[0][0]).toContain('keinen Charakter verknüpft');
         });
 
+        it('antwortet ephemer – die Karte sieht nur die fragende Person', async () => {
+            svc.getRoster.mockResolvedValue([ACAINE]);
+            const interaction = makeInteraction('acaine');
+
+            await characterHandler.handleAnzeigen(interaction);
+
+            expect(interaction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
+        });
+
+        it('meldet "gerade im Spiel" samt frischem Ort, wenn der Charakter eingeloggt ist', async () => {
+            svc.getRoster.mockResolvedValue([ACAINE]);
+            online.getOnline.mockResolvedValue({ players: [ACAINE_ONLINE], recent: [] });
+            const interaction = makeInteraction('acaine');
+
+            await characterHandler.handleAnzeigen(interaction);
+
+            const beschreibung = interaction.editReply.mock.calls[0][0].embeds[0].data.description;
+            expect(beschreibung).toContain('gerade im Spiel');
+            // Ort aus der Online-Tabelle, nicht der aeltere Roster-Ort ("Im Haus").
+            expect(beschreibung).toContain('Ort: Im Haus von Tirsis');
+            expect(beschreibung).not.toContain('zuletzt gesehen');
+        });
+
+        it('faellt auf "zuletzt gesehen" zurueck, wenn der Online-Abruf scheitert', async () => {
+            svc.getRoster.mockResolvedValue([ACAINE]);
+            online.getOnline.mockResolvedValue(null);
+            const interaction = makeInteraction('acaine');
+
+            await characterHandler.handleAnzeigen(interaction);
+
+            const beschreibung = interaction.editReply.mock.calls[0][0].embeds[0].data.description;
+            expect(beschreibung).toContain('zuletzt gesehen: 5 Tage');
+            expect(beschreibung).toContain('Ort: Im Haus');
+        });
+
         it('gibt toten Charakteren eine Lore-Flavor-Zeile statt nur "tot"', async () => {
             svc.getRoster.mockResolvedValue([{ ...ACAINE, lebt: false }]);
             const interaction = makeInteraction('acaine');
@@ -136,6 +187,45 @@ describe('CharacterHandler', () => {
             await characterHandler.handleEntfernen(interaction);
 
             expect(interaction.reply).toHaveBeenCalledWith('Du hast keinen Charakter verknüpft.');
+        });
+    });
+
+    describe('bestimmeAktivitaet', () => {
+        it('erkennt den Eingeloggten trotz Titel-Praefix und gibt den Ort mit', () => {
+            const stand = bestimmeAktivitaet('Acaine', { players: [ACAINE_ONLINE], recent: [] });
+
+            expect(stand).toEqual({ stufe: 'online', ort: 'Im Haus von Tirsis' });
+        });
+
+        it('erkennt die 30-Minuten-Liste', () => {
+            const stand = bestimmeAktivitaet('Acaine', { players: [], recent: ['Centurio Acaine'] });
+
+            expect(stand).toEqual({ stufe: 'kuerzlich' });
+        });
+
+        it('bevorzugt "online" gegenueber der 30-Minuten-Liste', () => {
+            const stand = bestimmeAktivitaet('Acaine', { players: [ACAINE_ONLINE], recent: ['Centurio Acaine'] });
+
+            expect(stand).toEqual({ stufe: 'online', ort: 'Im Haus von Tirsis' });
+        });
+
+        it('gibt null, wenn der Charakter in keiner Liste steht oder der Abruf scheiterte', () => {
+            expect(bestimmeAktivitaet('Acaine', { players: [], recent: ['Bora'] })).toBeNull();
+            expect(bestimmeAktivitaet('Acaine', null)).toBeNull();
+        });
+
+        it('matcht nicht auf Namens-Teilstuecke', () => {
+            const bora = { ...ACAINE_ONLINE, name: 'Boracaine' };
+
+            expect(bestimmeAktivitaet('Acaine', { players: [bora], recent: [] })).toBeNull();
+        });
+    });
+
+    describe('formatAktivitaet', () => {
+        it('formuliert die drei Stufen', () => {
+            expect(formatAktivitaet({ stufe: 'online', ort: 'Romar' }, '5 Tage')).toBe('gerade im Spiel');
+            expect(formatAktivitaet({ stufe: 'kuerzlich' }, '5 Tage')).toBe('in den letzten 30 Minuten aktiv');
+            expect(formatAktivitaet(null, '5 Tage')).toBe('zuletzt gesehen: 5 Tage');
         });
     });
 

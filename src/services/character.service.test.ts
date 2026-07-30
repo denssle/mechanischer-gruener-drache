@@ -10,7 +10,9 @@ const redis = vi.hoisted(() => ({
 }));
 vi.mock('./redis.service.js', () => ({ default: redis }));
 
-import characterService, { parseRoster, findInRoster, findLinkForName, findLinksInText } from './character.service.js';
+import characterService, {
+    parseRoster, findInRoster, findLinkForName, findLinksInText, passtAufKernNamen,
+} from './character.service.js';
 
 // Ausschnitt echten Roster-Markups (list.php?op=bypage): 8 Spalten inkl. "Zuletzt da", ein
 // Titel-Praefix ("Centurio Acaine"), ein Regenbogen-Name mit Gilde (<CdF>), ein toter Charakter.
@@ -43,6 +45,21 @@ describe('character.service', () => {
 
         it('gibt null zurück wenn die Kriegerlisten-Kopfzeile fehlt', () => {
             expect(parseRoster('<html>keine liste</html>')).toBeNull();
+        });
+    });
+
+    // Die geteilte Regel hinter findInRoster/findLinkForName/bestimmeAktivitaet - hier direkt
+    // festgenagelt, damit sie nicht nur ueber ihre Aufrufer abgesichert ist.
+    describe('passtAufKernNamen', () => {
+        it('matcht exakt und als Suffix auf Wortgrenze, case-insensitiv', () => {
+            expect(passtAufKernNamen('Abraxar', 'abraxar')).toBe(true);
+            expect(passtAufKernNamen('Centurio Acaine', 'Acaine')).toBe(true);
+        });
+
+        it('matcht kein Teilstueck und nichts Leeres', () => {
+            expect(passtAufKernNamen('Boracaine', 'Acaine')).toBe(false);
+            expect(passtAufKernNamen('Centurio Acaine', '  ')).toBe(false);
+            expect(passtAufKernNamen('', 'Acaine')).toBe(false);
         });
     });
 
