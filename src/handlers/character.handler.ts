@@ -1,5 +1,5 @@
 import {ChatInputCommandInteraction, EmbedBuilder, MessageFlags} from 'discord.js';
-import characterService, {CharacterEntry, findInRoster, passtAufKernNamen} from '../services/character.service.js';
+import characterService, {CharacterEntry, findInRoster, findLinkForName, passtAufKernNamen} from '../services/character.service.js';
 import onlineService, {OnlinePlayer} from '../services/online.service.js';
 import beobachtenService from '../services/beobachten.service.js';
 
@@ -20,7 +20,8 @@ export const CHARAKTER_HELP =
     `**Charakter-Befehle**\n\n` +
     `\`/charakter verknuepfen name:<Name>\` – deinen LotGD-Charakter hinterlegen (nur der öffentliche Name).\n` +
     `\`/charakter anzeigen [name:<Name>]\` – Charakter-Karte anzeigen; ohne Name deinen verknüpften. ` +
-    `Sagt auch, ob die Person gerade im Spiel ist und wo – die Antwort siehst nur du.\n` +
+    `Sagt auch, ob die Person gerade im Spiel ist und wo, und ob sie die Beobachtung ` +
+    `(\`/beobachten\`) freigegeben hat – die Antwort siehst nur du.\n` +
     `\`/charakter entfernen\` – deine Verknüpfung löschen.\n` +
     `\`/charakter beobachtbar schalter:<an/aus>\` – erlauben oder verbieten, dass andere sich per ` +
     `\`/beobachten\` melden lassen, wenn dein Charakter online geht. Standard ist aus.\n` +
@@ -57,7 +58,25 @@ export function formatAktivitaet(aktivitaet: Aktivitaet | null, zuletztDa: strin
     return `zuletzt gesehen: ${zuletztDa}`;
 }
 
-function buildCard(entry: CharacterEntry, aktivitaet: Aktivitaet | null = null): EmbedBuilder {
+// Darf dieser Charakter beobachtet werden (Opt-in via /charakter beobachtbar)? "Nein" deckt
+// bewusst BEIDE Fälle ab (nicht verknüpft / Freigabe nicht erteilt) - dieselbe Orakel-Vermeidung
+// wie bei der Abfuhr in /beobachten hinzufuegen. null = gerade nicht feststellbar (Redis-Problem);
+// die Zeile entfällt dann ersatzlos, der Stand ist ein Bonus und darf die Karte nie kosten.
+async function ermittleBeobachtbar(anzeigeName: string): Promise<boolean | null> {
+    try {
+        const link = findLinkForName(await characterService.getAllLinks(), anzeigeName);
+        return link !== null && await beobachtenService.hatFreigabe(link.discordUserId);
+    } catch (error) {
+        console.warn('Konnte den Beobachtbar-Stand nicht ermitteln:', error);
+        return null;
+    }
+}
+
+function buildCard(
+    entry: CharacterEntry,
+    aktivitaet: Aktivitaet | null = null,
+    beobachtbar: boolean | null = null,
+): EmbedBuilder {
     // Beim Eingeloggten den Ort aus der Online-Tabelle nehmen; das Roster ist bis zu 10 min alt.
     const ort = aktivitaet?.stufe === 'online' ? aktivitaet.ort : entry.ort;
     const status = formatAktivitaet(aktivitaet, entry.zuletztDa);
@@ -75,6 +94,10 @@ function buildCard(entry: CharacterEntry, aktivitaet: Aktivitaet | null = null):
         lines.push(`tot – ${randomTotenFlavor()}`);
         lines.push(status);
     }
+    if (beobachtbar !== null) {
+        lines.push(beobachtbar ? 'Beobachtung: freigegeben' : 'Beobachtung: nicht freigegeben');
+    }
+
     return new EmbedBuilder()
         .setColor(entry.lebt ? 0x2ecc71 : 0x992d22)
         .setTitle(entry.name)
@@ -110,9 +133,12 @@ class CharacterHandler {
         // Den eingegebenen Kern-Namen speichern (der Titel-Präfix im Roster ändert sich).
         await characterService.linkCharacter(interaction.user.id, name);
 
+        // Frisch verknüpft ist die Beobachtungs-Freigabe immer aus (entfernen räumt sie mit ab) -
+        // kein Abruf nötig, dafür der Hinweis, wie man sie einschaltet.
         return interaction.editReply({
-            content: `Charakter **${entry.name}** verknüpft!`,
-            embeds: [buildCard(entry)],
+            content: `Charakter **${entry.name}** verknüpft! Beobachtung ist standardmäßig aus – ` +
+                `freigeben kannst du sie mit \`/charakter beobachtbar schalter:an\`.`,
+            embeds: [buildCard(entry, null, false)],
         });
     }
 
@@ -145,7 +171,9 @@ class CharacterHandler {
             );
         }
 
-        return interaction.editReply({embeds: [buildCard(entry, bestimmeAktivitaet(name, online))]});
+        return interaction.editReply({
+            embeds: [buildCard(entry, bestimmeAktivitaet(name, online), await ermittleBeobachtbar(entry.name))],
+        });
     }
 
     async handleEntfernen(interaction: ChatInputCommandInteraction) {

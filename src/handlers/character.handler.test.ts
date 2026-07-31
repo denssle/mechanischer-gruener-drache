@@ -6,6 +6,7 @@ const svc = vi.hoisted(() => ({
     getRoster: vi.fn(),
     linkCharacter: vi.fn(),
     unlinkCharacter: vi.fn(),
+    getAllLinks: vi.fn(),
 }));
 // findInRoster (rein) real lassen, nur den Service-Default mocken.
 vi.mock('../services/character.service.js', async (importOriginal) => {
@@ -19,6 +20,7 @@ vi.mock('../services/online.service.js', () => ({ default: online }));
 const beobachten = vi.hoisted(() => ({
     setzeFreigabe: vi.fn(),
     entferneFreigabe: vi.fn(),
+    hatFreigabe: vi.fn(),
 }));
 vi.mock('../services/beobachten.service.js', () => ({ default: beobachten }));
 
@@ -53,6 +55,9 @@ describe('CharacterHandler', () => {
         online.getOnline.mockReset();
         // Standard: Online-Stand nicht verfuegbar - die Karte faellt auf "zuletzt gesehen" zurueck.
         online.getOnline.mockResolvedValue(null);
+        // Standard: keine Verknuepfungen, keine Freigabe - die Karte zeigt "nicht freigegeben".
+        svc.getAllLinks.mockResolvedValue([]);
+        beobachten.hatFreigabe.mockResolvedValue(false);
     });
 
     describe('verknuepfen', () => {
@@ -66,6 +71,19 @@ describe('CharacterHandler', () => {
             expect(svc.linkCharacter).toHaveBeenCalledWith('u1', 'Acaine');
             const reply = interaction.editReply.mock.calls[0][0];
             expect(reply.embeds[0].data.title).toBe('Centurio Acaine');
+        });
+
+        // Frisch verknuepft ist die Freigabe immer aus - Karte und Hinweis sagen das direkt.
+        it('weist auf die ausgeschaltete Beobachtung hin', async () => {
+            svc.getLinkedName.mockResolvedValue(null);
+            svc.getRoster.mockResolvedValue([ACAINE]);
+            const interaction = makeInteraction('Acaine');
+
+            await characterHandler.handleVerknuepfen(interaction);
+
+            const reply = interaction.editReply.mock.calls[0][0];
+            expect(reply.content).toContain('/charakter beobachtbar');
+            expect(reply.embeds[0].data.description).toContain('Beobachtung: nicht freigegeben');
         });
 
         it('blockt, wenn schon ein Charakter verknüpft ist', async () => {
@@ -163,6 +181,48 @@ describe('CharacterHandler', () => {
             const beschreibung = interaction.editReply.mock.calls[0][0].embeds[0].data.description;
             expect(beschreibung).toContain('zuletzt gesehen: 5 Tage');
             expect(beschreibung).toContain('Ort: Im Haus');
+        });
+
+        it('zeigt "Beobachtung: freigegeben", wenn die verknüpfte Person zugestimmt hat', async () => {
+            svc.getRoster.mockResolvedValue([ACAINE]);
+            svc.getAllLinks.mockResolvedValue([{ discordUserId: 'besitzer1', name: 'Acaine' }]);
+            beobachten.hatFreigabe.mockResolvedValue(true);
+            const interaction = makeInteraction('acaine');
+
+            await characterHandler.handleAnzeigen(interaction);
+
+            const beschreibung = interaction.editReply.mock.calls[0][0].embeds[0].data.description;
+            expect(beschreibung).toContain('Beobachtung: freigegeben');
+            expect(beobachten.hatFreigabe).toHaveBeenCalledWith('besitzer1');
+        });
+
+        // "nicht freigegeben" deckt bewusst BEIDE Faelle ab (nicht verknuepft / keine Freigabe) -
+        // die Karte darf kein Orakel dafuer sein, wer den Bot nutzt.
+        it.each([
+            ['nicht verknuepft', []],
+            ['verknuepft ohne Freigabe', [{ discordUserId: 'besitzer1', name: 'Acaine' }]],
+        ])('zeigt "nicht freigegeben" bei %s', async (_fall, links) => {
+            svc.getRoster.mockResolvedValue([ACAINE]);
+            svc.getAllLinks.mockResolvedValue(links);
+            const interaction = makeInteraction('acaine');
+
+            await characterHandler.handleAnzeigen(interaction);
+
+            const beschreibung = interaction.editReply.mock.calls[0][0].embeds[0].data.description;
+            expect(beschreibung).toContain('Beobachtung: nicht freigegeben');
+        });
+
+        // Der Stand ist ein Bonus - ein Redis-Problem darf die Karte nicht kosten.
+        it('laesst die Beobachtungs-Zeile weg, wenn der Stand nicht ermittelbar ist', async () => {
+            vi.spyOn(console, 'warn').mockImplementation(() => {});
+            svc.getRoster.mockResolvedValue([ACAINE]);
+            svc.getAllLinks.mockRejectedValue(new Error('Redis weg'));
+            const interaction = makeInteraction('acaine');
+
+            await characterHandler.handleAnzeigen(interaction);
+
+            const beschreibung = interaction.editReply.mock.calls[0][0].embeds[0].data.description;
+            expect(beschreibung).not.toContain('Beobachtung:');
         });
 
         it('gibt toten Charakteren eine Lore-Flavor-Zeile statt nur "tot"', async () => {
