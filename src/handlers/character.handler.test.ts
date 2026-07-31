@@ -16,6 +16,12 @@ vi.mock('../services/character.service.js', async (importOriginal) => {
 const online = vi.hoisted(() => ({ getOnline: vi.fn() }));
 vi.mock('../services/online.service.js', () => ({ default: online }));
 
+const beobachten = vi.hoisted(() => ({
+    setzeFreigabe: vi.fn(),
+    entferneFreigabe: vi.fn(),
+}));
+vi.mock('../services/beobachten.service.js', () => ({ default: beobachten }));
+
 import characterHandler, {
     CHARAKTER_HELP, TOTEN_FLAVORS, randomTotenFlavor, bestimmeAktivitaet, formatAktivitaet,
 } from './character.handler.js';
@@ -43,6 +49,7 @@ const ACAINE_ONLINE = {
 describe('CharacterHandler', () => {
     beforeEach(() => {
         Object.values(svc).forEach(fn => fn.mockReset());
+        Object.values(beobachten).forEach(fn => fn.mockReset());
         online.getOnline.mockReset();
         // Standard: Online-Stand nicht verfuegbar - die Karte faellt auf "zuletzt gesehen" zurueck.
         online.getOnline.mockResolvedValue(null);
@@ -180,6 +187,15 @@ describe('CharacterHandler', () => {
             expect(interaction.reply).toHaveBeenCalledWith('Deine Charakter-Verknüpfung wurde entfernt.');
         });
 
+        // Sonst würde eine spätere Neu-Verknüpfung die alte Zustimmung stillschweigend erben.
+        it('räumt die Beobachtungs-Freigabe mit ab', async () => {
+            svc.unlinkCharacter.mockResolvedValue(true);
+
+            await characterHandler.handleEntfernen(makeInteraction());
+
+            expect(beobachten.entferneFreigabe).toHaveBeenCalledWith('u1');
+        });
+
         it('meldet, wenn nichts verknüpft war', async () => {
             svc.unlinkCharacter.mockResolvedValue(false);
             const interaction = makeInteraction();
@@ -187,6 +203,43 @@ describe('CharacterHandler', () => {
             await characterHandler.handleEntfernen(interaction);
 
             expect(interaction.reply).toHaveBeenCalledWith('Du hast keinen Charakter verknüpft.');
+            expect(beobachten.entferneFreigabe).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('beobachtbar', () => {
+        it('setzt die Freigabe bei "an" und antwortet ephemer', async () => {
+            svc.getLinkedName.mockResolvedValue('Acaine');
+            const interaction = makeInteraction('an');
+
+            await characterHandler.handleBeobachtbar(interaction);
+
+            expect(beobachten.setzeFreigabe).toHaveBeenCalledWith('u1');
+            const antwort = interaction.reply.mock.calls[0][0];
+            expect(antwort.flags).toBe(MessageFlags.Ephemeral);
+            expect(antwort.content).toContain('Acaine');
+        });
+
+        it('entfernt die Freigabe bei "aus"', async () => {
+            svc.getLinkedName.mockResolvedValue('Acaine');
+            const interaction = makeInteraction('aus');
+
+            await characterHandler.handleBeobachtbar(interaction);
+
+            expect(beobachten.entferneFreigabe).toHaveBeenCalledWith('u1');
+            expect(interaction.reply.mock.calls[0][0].content).toContain('aus');
+        });
+
+        // Die Freigabe gilt für den verknüpften, validierten Charakter - ohne Verknüpfung
+        // gibt es nichts freizugeben.
+        it('verlangt eine bestehende Verknüpfung', async () => {
+            svc.getLinkedName.mockResolvedValue(null);
+            const interaction = makeInteraction('an');
+
+            await characterHandler.handleBeobachtbar(interaction);
+
+            expect(beobachten.setzeFreigabe).not.toHaveBeenCalled();
+            expect(interaction.reply.mock.calls[0][0].content).toContain('verknuepfen');
         });
     });
 
@@ -244,5 +297,6 @@ describe('CharacterHandler', () => {
         expect(CHARAKTER_HELP).toContain('/charakter verknuepfen');
         expect(CHARAKTER_HELP).toContain('/charakter anzeigen');
         expect(CHARAKTER_HELP).toContain('/charakter entfernen');
+        expect(CHARAKTER_HELP).toContain('/charakter beobachtbar');
     });
 });

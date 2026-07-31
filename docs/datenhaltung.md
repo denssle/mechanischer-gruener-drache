@@ -45,6 +45,7 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `WATCH:BEOBACHTER` (Set) | Discord-User-IDs, die überhaupt eine Liste haben – erspart dem Poller einen Key-Scan | bis die eigene Liste leer ist | Beobachtungsliste |
 | `WATCH:ONLINE` (Set) | Übergangs-State: welche **beobachteten** Namen waren beim letzten Poll eingeloggt (keine Historie, wird bei jedem Durchlauf ersetzt) | bis zum nächsten Poll | nur beim Übergang offline→online melden |
 | `WATCH:GEMELDET:<userId>:<name>` | Marker, dass für diese Person+Namen gerade gemeldet wurde | 1 Stunde (TTL) | Schutz gegen Doppelmeldung bei kurzem Ausloggen |
+| `WATCH:FREIGABEN` (Set) | Discord-User-IDs, die per `/charakter beobachtbar` erlaubt haben, dass ihr verknüpfter Charakter beobachtet wird (Opt-in; ohne Eintrag wird niemand gemeldet) | bis zum Widerruf (`/charakter beobachtbar schalter:aus`) oder Entfernen der Verknüpfung | Beobachtungsliste |
 | `MEMBER:JOIN_COUNT:<userId>` | Zahl: wie oft die Person dem Server schon beigetreten ist | dauerhaft | Beitritts-Meldung im Audit-Log |
 | `BLAHAJ:TOTAL_EUR` | eine einzige Zahl (Summe aller je erwähnten Euro-Beträge) | dauerhaft | `/blahaj` |
 | `EVENT:NEXT` | Timestamp + optionaler Titel des nächsten Community-Events | bis zum Entfernen über `/config` | `/event countdown` |

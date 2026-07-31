@@ -23,6 +23,17 @@ export default {
             .setName('entfernen')
             .setDescription('Deine Charakter-Verknuepfung loeschen'))
         .addSubcommand(sub => sub
+            .setName('beobachtbar')
+            .setDescription('Erlauben oder verbieten, dass andere deinen Charakter beobachten (/beobachten)')
+            .addStringOption(option => option
+                .setName('schalter')
+                .setDescription('an = Beobachtung erlauben, aus = widerrufen')
+                .setRequired(true)
+                .addChoices(
+                    {name: 'an', value: 'an'},
+                    {name: 'aus', value: 'aus'},
+                )))
+        .addSubcommand(sub => sub
             .setName('hilfe')
             .setDescription('Zeigt alle verfuegbaren Charakter-Befehle')),
 
@@ -36,6 +47,8 @@ export default {
                 return characterHandler.handleAnzeigen(interaction);
             case 'entfernen':
                 return characterHandler.handleEntfernen(interaction);
+            case 'beobachtbar':
+                return characterHandler.handleBeobachtbar(interaction);
             case 'hilfe':
                 return characterHandler.handleHilfe(interaction);
         }

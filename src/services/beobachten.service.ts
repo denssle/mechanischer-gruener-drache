@@ -16,6 +16,10 @@ const KEYS = {
     // Meldesperre pro Person+Name (TTL). Fällt jemand kurz aus der Liste und kommt wieder,
     // wäre das sonst eine zweite Meldung für dieselbe Sitzung.
     sperre: (userId: string, name: string) => `WATCH:GEMELDET:${userId}:${name.toLowerCase()}`,
+    // Opt-in (Community-Beschwerde 2026-07-31): Discord-User-IDs, deren verknüpfter Charakter
+    // beobachtet werden DARF. Ohne Eintrag hier wird niemand gemeldet - wer seinen Charakter
+    // nicht verknüpft (oder gar nicht auf dem Server ist), ist damit automatisch geschützt.
+    freigaben: 'WATCH:FREIGABEN',
 };
 
 // Höchstens so viele Namen pro Person - sonst abonniert jemand die halbe Kriegerliste und
@@ -67,6 +71,24 @@ class BeobachtenService {
 
     async sperre(userId: string, name: string): Promise<void> {
         await redisService.setWithExpiry(KEYS.sperre(userId, name), '1', SPERRE_SEKUNDEN);
+    }
+
+    // Freigabe = die Person mit dieser Discord-ID erlaubt, dass ihr verknüpfter Charakter
+    // beobachtet wird (Opt-in, geschaltet über /charakter beobachtbar).
+    async setzeFreigabe(userId: string): Promise<void> {
+        await redisService.addToSet(KEYS.freigaben, userId);
+    }
+
+    async entferneFreigabe(userId: string): Promise<void> {
+        await redisService.removeFromSet(KEYS.freigaben, userId);
+    }
+
+    async hatFreigabe(userId: string): Promise<boolean> {
+        return redisService.isSetMember(KEYS.freigaben, userId);
+    }
+
+    async holeFreigaben(): Promise<string[]> {
+        return redisService.getSetMembers(KEYS.freigaben);
     }
 }
 

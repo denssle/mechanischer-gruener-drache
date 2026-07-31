@@ -10,6 +10,8 @@ const service = vi.hoisted(() => ({
     setzeZuletztOnline: vi.fn(),
     istGesperrt: vi.fn(),
     sperre: vi.fn(),
+    hatFreigabe: vi.fn(),
+    holeFreigaben: vi.fn(),
 }));
 vi.mock('../services/beobachten.service.js', async (original) => ({
     ...(await original<Record<string, unknown>>()),
@@ -20,9 +22,10 @@ const getOnline = vi.hoisted(() => vi.fn());
 vi.mock('../services/online.service.js', () => ({default: {getOnline}}));
 
 const getRoster = vi.hoisted(() => vi.fn());
+const getAllLinks = vi.hoisted(() => vi.fn());
 vi.mock('../services/character.service.js', async (original) => ({
     ...(await original<Record<string, unknown>>()),
-    default: {getRoster},
+    default: {getRoster, getAllLinks},
 }));
 
 const sendeDm = vi.hoisted(() => vi.fn());
@@ -63,6 +66,11 @@ describe('BeobachtenHandler', () => {
         service.holeBeobachter.mockResolvedValue([]);
         service.holeZuletztOnline.mockResolvedValue([]);
         service.istGesperrt.mockResolvedValue(false);
+        // Standard: Acaine gehört einem verknüpften User mit erteilter Freigabe - das Opt-in
+        // steht damit den Alt-Tests nicht im Weg, die den restlichen Ablauf prüfen.
+        service.hatFreigabe.mockResolvedValue(true);
+        service.holeFreigaben.mockResolvedValue(['besitzer1']);
+        getAllLinks.mockResolvedValue([{discordUserId: 'besitzer1', name: 'Acaine'}]);
         sendeDm.mockResolvedValue(true);
         getRoster.mockResolvedValue([{name: 'Centurio Acaine', gilde: '', ort: 'Romar', level: '12', rasse: 'Mensch', lebt: true}]);
         getOnline.mockResolvedValue({players: [], recent: []});
@@ -137,6 +145,29 @@ describe('BeobachtenHandler', () => {
 
             expect(service.fuegeHinzu).not.toHaveBeenCalled();
             expect(interaction.reply.mock.calls[0][0].content).toContain('voll');
+        });
+
+        // Opt-in der Beobachteten: ohne Verknüpfung mit Freigabe wird nichts gespeichert.
+        it('lehnt einen Charakter ab, der mit keinem Discord-User verknüpft ist', async () => {
+            getAllLinks.mockResolvedValue([]);
+            const interaction = mockInteraction('Acaine');
+
+            await beobachtenHandler.handleHinzufuegen(interaction);
+
+            expect(service.fuegeHinzu).not.toHaveBeenCalled();
+            expect(interaction.editReply.mock.calls[0][0]).toContain('nicht freigegeben');
+        });
+
+        it('lehnt einen verknüpften Charakter ohne Freigabe ab - mit DERSELBEN Meldung', async () => {
+            service.hatFreigabe.mockResolvedValue(false);
+            const interaction = mockInteraction('Acaine');
+
+            await beobachtenHandler.handleHinzufuegen(interaction);
+
+            expect(service.fuegeHinzu).not.toHaveBeenCalled();
+            // Bewusst dieselbe Abfuhr wie bei "nicht verknüpft" - die Meldung darf kein Orakel
+            // dafür sein, wer den Bot nutzt.
+            expect(interaction.editReply.mock.calls[0][0]).toContain('nicht freigegeben');
         });
 
         it('antwortet ephemer - wen jemand beobachtet, geht niemanden sonst etwas an', async () => {
@@ -241,6 +272,30 @@ describe('BeobachtenHandler', () => {
 
             expect(sendeDm).not.toHaveBeenCalled();
             expect(service.setzeZuletztOnline).toHaveBeenCalledWith([]);
+        });
+
+        // Die Freigabe wird bei JEDEM Poll geprüft: Bestandseinträge von vor dem Opt-in und
+        // später widerrufene Freigaben bleiben damit stumm liegen.
+        it('meldet keinen Charakter, dessen Freigabe fehlt oder widerrufen wurde', async () => {
+            service.holeBeobachter.mockResolvedValue(['u1']);
+            service.holeListe.mockResolvedValue(['Acaine']);
+            service.holeFreigaben.mockResolvedValue([]);
+            getOnline.mockResolvedValue({players: [spieler('Centurio Acaine')], recent: []});
+
+            await pollen();
+
+            expect(sendeDm).not.toHaveBeenCalled();
+        });
+
+        it('meldet keinen Charakter ohne Verknüpfung, selbst wenn er auf einer Liste steht', async () => {
+            service.holeBeobachter.mockResolvedValue(['u1']);
+            service.holeListe.mockResolvedValue(['Acaine']);
+            getAllLinks.mockResolvedValue([]);
+            getOnline.mockResolvedValue({players: [spieler('Centurio Acaine')], recent: []});
+
+            await pollen();
+
+            expect(sendeDm).not.toHaveBeenCalled();
         });
 
         it('respektiert die Meldesperre', async () => {

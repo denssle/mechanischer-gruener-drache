@@ -9,6 +9,7 @@ const redis = vi.hoisted(() => ({
     delete: vi.fn(),
     setWithExpiry: vi.fn(),
     getTimeToLive: vi.fn(),
+    isSetMember: vi.fn(),
 }));
 vi.mock('./redis.service.js', () => ({default: redis}));
 
@@ -81,6 +82,31 @@ describe('beobachten.service', () => {
             await beobachtenService.sperre('u1', 'AcAiNe');
 
             expect(redis.setWithExpiry).toHaveBeenCalledWith('WATCH:GEMELDET:u1:acaine', '1', SPERRE_SEKUNDEN);
+        });
+    });
+
+    // Opt-in der Beobachteten: die Freigabe hängt an der Discord-ID der verknüpften Person.
+    describe('Freigabe', () => {
+        it('setzt und entfernt die Freigabe im Freigaben-Set', async () => {
+            await beobachtenService.setzeFreigabe('u1');
+            expect(redis.addToSet).toHaveBeenCalledWith('WATCH:FREIGABEN', 'u1');
+
+            await beobachtenService.entferneFreigabe('u1');
+            expect(redis.removeFromSet).toHaveBeenCalledWith('WATCH:FREIGABEN', 'u1');
+        });
+
+        it('fragt die Freigabe per Set-Mitgliedschaft ab', async () => {
+            redis.isSetMember.mockResolvedValue(true);
+
+            expect(await beobachtenService.hatFreigabe('u1')).toBe(true);
+            expect(redis.isSetMember).toHaveBeenCalledWith('WATCH:FREIGABEN', 'u1');
+        });
+
+        it('liefert alle Freigaben für den Poll-Abgleich', async () => {
+            redis.getSetMembers.mockResolvedValue(['u1', 'u2']);
+
+            expect(await beobachtenService.holeFreigaben()).toEqual(['u1', 'u2']);
+            expect(redis.getSetMembers).toHaveBeenCalledWith('WATCH:FREIGABEN');
         });
     });
 

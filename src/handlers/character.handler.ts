@@ -1,6 +1,7 @@
 import {ChatInputCommandInteraction, EmbedBuilder, MessageFlags} from 'discord.js';
 import characterService, {CharacterEntry, findInRoster, passtAufKernNamen} from '../services/character.service.js';
 import onlineService, {OnlinePlayer} from '../services/online.service.js';
+import beobachtenService from '../services/beobachten.service.js';
 
 // Lore-Flavor für tote Charaktere: statt nur "tot" eine LotGD-stimmige Zeile. Wiederauferstehung
 // geschieht beim Anbruch des neuen Tages oder über Gefallen beim Totengott Ramius - beides steckt hier drin.
@@ -21,6 +22,8 @@ export const CHARAKTER_HELP =
     `\`/charakter anzeigen [name:<Name>]\` – Charakter-Karte anzeigen; ohne Name deinen verknüpften. ` +
     `Sagt auch, ob die Person gerade im Spiel ist und wo – die Antwort siehst nur du.\n` +
     `\`/charakter entfernen\` – deine Verknüpfung löschen.\n` +
+    `\`/charakter beobachtbar schalter:<an/aus>\` – erlauben oder verbieten, dass andere sich per ` +
+    `\`/beobachten\` melden lassen, wenn dein Charakter online geht. Standard ist aus.\n` +
     `\`/charakter hilfe\` – zeigt diese Übersicht.\n\n` +
     `Alle Daten stammen aus der öffentlichen Kriegerliste von lotgd.de – kein Login, keine Passwörter.`;
 
@@ -72,7 +75,6 @@ function buildCard(entry: CharacterEntry, aktivitaet: Aktivitaet | null = null):
         lines.push(`tot – ${randomTotenFlavor()}`);
         lines.push(status);
     }
-
     return new EmbedBuilder()
         .setColor(entry.lebt ? 0x2ecc71 : 0x992d22)
         .setTitle(entry.name)
@@ -152,7 +154,44 @@ class CharacterHandler {
             return interaction.reply('Du hast keinen Charakter verknüpft.');
         }
 
+        // Die Beobachtungs-Freigabe hängt an der Verknüpfung und fällt mit ihr - sonst würde
+        // eine spätere Neu-Verknüpfung (womöglich ein anderer Charakter) die alte Zustimmung
+        // stillschweigend erben.
+        await beobachtenService.entferneFreigabe(interaction.user.id);
+
         return interaction.reply('Deine Charakter-Verknüpfung wurde entfernt.');
+    }
+
+    // Opt-in für die Beobachtungsliste (/beobachten): nur wer hier zustimmt, kann von anderen
+    // beobachtet werden. Setzt eine Verknüpfung voraus - die Freigabe gilt für den eigenen,
+    // validierten Charakter, nicht für beliebige Namen. Ephemer wie /charakter anzeigen
+    // (eine persönliche Einstellung geht den Kanal nichts an).
+    async handleBeobachtbar(interaction: ChatInputCommandInteraction) {
+        const schalter = interaction.options.getString('schalter', true);
+
+        const name = await characterService.getLinkedName(interaction.user.id);
+        if (!name) {
+            return interaction.reply({
+                content: 'Du hast keinen Charakter verknüpft. Nutze zuerst `/charakter verknuepfen name:<Name>` – ' +
+                    'die Freigabe gilt für deinen verknüpften Charakter.',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        if (schalter === 'an') {
+            await beobachtenService.setzeFreigabe(interaction.user.id);
+            return interaction.reply({
+                content: `Andere können sich jetzt per \`/beobachten\` melden lassen, wenn **${name}** ` +
+                    `online geht. Mit \`/charakter beobachtbar schalter:aus\` widerrufst du das jederzeit.`,
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        await beobachtenService.entferneFreigabe(interaction.user.id);
+        return interaction.reply({
+            content: `Beobachtung ist aus – niemand bekommt mehr eine Meldung, wenn **${name}** online geht.`,
+            flags: MessageFlags.Ephemeral,
+        });
     }
 
     async handleHilfe(interaction: ChatInputCommandInteraction) {

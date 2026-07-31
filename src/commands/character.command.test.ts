@@ -5,6 +5,7 @@ vi.mock('../handlers/character.handler.js', () => ({
         handleVerknuepfen: vi.fn(),
         handleAnzeigen: vi.fn(),
         handleEntfernen: vi.fn(),
+        handleBeobachtbar: vi.fn(),
         handleHilfe: vi.fn(),
     }
 }));
@@ -25,6 +26,7 @@ describe('character.command', () => {
         ['verknuepfen', 'handleVerknuepfen'],
         ['anzeigen', 'handleAnzeigen'],
         ['entfernen', 'handleEntfernen'],
+        ['beobachtbar', 'handleBeobachtbar'],
         ['hilfe', 'handleHilfe'],
     ] as const)('leitet Subcommand "%s" an characterHandler.%s weiter', async (subcommand, handlerMethod) => {
         const interaction = mockInteraction(subcommand);
@@ -42,6 +44,7 @@ describe('character.command', () => {
         expect(characterHandler.handleVerknuepfen).not.toHaveBeenCalled();
         expect(characterHandler.handleAnzeigen).not.toHaveBeenCalled();
         expect(characterHandler.handleEntfernen).not.toHaveBeenCalled();
+        expect(characterHandler.handleBeobachtbar).not.toHaveBeenCalled();
         expect(characterHandler.handleHilfe).not.toHaveBeenCalled();
     });
 
@@ -49,7 +52,7 @@ describe('character.command', () => {
     // einzige Absicherung gegen Drift zwischen beiden (wie bei twitch/sport).
     it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
         const definedSubcommands = characterCommand.data.options.map((option) => option.toJSON().name);
-        const dispatchedSubcommands = ['verknuepfen', 'anzeigen', 'entfernen', 'hilfe'];
+        const dispatchedSubcommands = ['verknuepfen', 'anzeigen', 'entfernen', 'beobachtbar', 'hilfe'];
 
         expect(definedSubcommands.sort()).toEqual(dispatchedSubcommands.sort());
     });

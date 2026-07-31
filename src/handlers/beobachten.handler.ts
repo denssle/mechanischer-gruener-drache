@@ -1,7 +1,7 @@
 import {ChatInputCommandInteraction, MessageFlags} from 'discord.js';
 import beobachtenService, {MAX_NAMEN} from '../services/beobachten.service.js';
 import onlineService, {OnlinePlayer} from '../services/online.service.js';
-import characterService, {findInRoster, passtAufKernNamen} from '../services/character.service.js';
+import characterService, {findInRoster, findLinkForName, passtAufKernNamen} from '../services/character.service.js';
 import {sendeDm} from '../services/dm.service.js';
 
 // Beobachtungsliste für LotGD-Charaktere (war README-Todo): wer will, hinterlegt Namen und
@@ -11,6 +11,16 @@ import {sendeDm} from '../services/dm.service.js';
 // EINZELNEN Person (kein serverweiter Aushang, keine Admin-Liste) und die Meldung kommt per
 // DM. Wen jemand beobachtet, geht deshalb niemanden sonst etwas an - alle Antworten hier sind
 // ephemer, und es gibt bewusst keinen Weg, fremde Listen einzusehen.
+//
+// Opt-in der Beobachteten (seit 2026-07-31, Community-Beschwerde): beobachten lässt sich NUR,
+// wer den eigenen Charakter per /charakter verknuepfen hinterlegt und die Beobachtung per
+// /charakter beobachtbar freigegeben hat. Wer nicht verknüpft ist (auch: gar nicht auf dem
+// Server), ist damit automatisch geschützt - die Kriegerliste ist zwar öffentlich, aber eine
+// automatisierte Meldung über Login-Zeiten ist etwas anderes als gelegentliches Nachsehen.
+// Geprüft wird an ZWEI Stellen: beim Hinzufügen (klare Rückmeldung) und bei jedem Poll (fängt
+// Bestandseinträge und später widerrufene Freigaben ab). Die Abfuhr beim Hinzufügen ist für
+// "nicht verknüpft" und "nicht freigegeben" bewusst DIESELBE - sonst wäre sie ein Orakel dafür,
+// wer den Bot nutzt.
 //
 // Es gibt keine Push-API, also Polling der ohnehin gescrapten Kriegerliste. Angestoßen vom
 // EINEN 60-s-Timer in index.ts (kein zweiter Mechanismus) - die Taktung macht diese Datei
@@ -30,6 +40,8 @@ export const BEOBACHTEN_HILFE =
     `Geht jemand von deiner Liste im Spiel online, schicke ich dir eine DM. ` +
     `Gemeldet wird nur der Moment des Einloggens, nicht wiederholt, solange jemand drin bleibt – ` +
     `und höchstens einmal pro Stunde und Name.\n` +
+    `Beobachten lässt sich nur, wer selbst zugestimmt hat: Die Person muss ihren Charakter mit ` +
+    `/charakter verknuepfen hinterlegt und mit /charakter beobachtbar freigegeben haben.\n` +
     `Deine Liste sieht nur du, sie fasst höchstens ${MAX_NAMEN} Namen. ` +
     `Damit die DM ankommt, müssen „Direktnachrichten von Servermitgliedern" in deinen ` +
     `Discord-Einstellungen erlaubt sein – beim ersten Namen wird das direkt geprüft.`;
@@ -81,6 +93,17 @@ class BeobachtenHandler {
             return interaction.editReply(
                 `**${eingabe}** finde ich nicht in der Kriegerliste. Schreib den Namen ohne Titel, ` +
                 `also z.B. „Acaine" statt „Centurio Acaine".`
+            );
+        }
+
+        // Opt-in der beobachteten Person (siehe Kopfkommentar): ohne verknüpften Charakter MIT
+        // Freigabe wird nichts gespeichert. Bewusst EINE Meldung für beide Fälle.
+        const link = findLinkForName(await characterService.getAllLinks(), treffer.name);
+        if (!link || !(await beobachtenService.hatFreigabe(link.discordUserId))) {
+            return interaction.editReply(
+                `**${treffer.name}** hat die Beobachtung nicht freigegeben. Auf eine Liste setzen ` +
+                `lässt sich nur, wer den eigenen Charakter mit \`/charakter verknuepfen\` hinterlegt ` +
+                `und mit \`/charakter beobachtbar\` zugestimmt hat.`
             );
         }
 
@@ -191,13 +214,21 @@ class BeobachtenHandler {
     // Welche beobachteten Namen sind gerade eingeloggt - und wer wartet jeweils darauf?
     // Verglichen wird über passtAufKernNamen, weil die Kriegerliste den level-/drachenabhängigen
     // Titel voranstellt ("Centurio Acaine"), der gespeicherte Name aber der Kern ist.
+    // Die Freigabe wird HIER erneut geprüft, nicht nur beim Hinzufügen: das fängt Einträge von
+    // vor dem Opt-in ab und lässt einen Widerruf sofort wirken - Bestandslisten bleiben dann
+    // einfach stumm liegen.
     private async sammleTreffer(beobachter: string[], spieler: OnlinePlayer[]) {
         const treffer = new Map<string, { anzeigeName: string; ort: string; beobachter: string[] }>();
+        const links = await characterService.getAllLinks();
+        const freigaben = new Set(await beobachtenService.holeFreigaben());
 
         for (const userId of beobachter) {
             for (const name of await beobachtenService.holeListe(userId)) {
                 const player = spieler.find(p => passtAufKernNamen(p.name, name));
                 if (!player) continue;
+
+                const link = findLinkForName(links, player.name);
+                if (!link || !freigaben.has(link.discordUserId)) continue;
 
                 const schluessel = name.toLowerCase();
                 const eintrag = treffer.get(schluessel)
