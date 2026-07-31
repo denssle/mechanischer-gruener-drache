@@ -1,6 +1,7 @@
 import {ChatInputCommandInteraction} from 'discord.js';
 import onlineService, {OnlinePlayer} from '../services/online.service.js';
 import characterService, {CharacterLink, findLinkForName} from '../services/character.service.js';
+import spielzeitService from '../services/spielzeit.service.js';
 
 // Discord-Nachrichtenlimit ist 2000 Zeichen; mit Puffer bleiben, lieber ganze Einträge weglassen.
 const MAX_LENGTH = 1900;
@@ -34,11 +35,26 @@ export function groupByCity(players: OnlinePlayer[]): Array<{ ort: string; spiel
         .sort((a, b) => b.spieler.length - a.spieler.length || a.ort.localeCompare(b.ort, 'de'));
 }
 
+// Als Discord-Timestamp (<t:unix:R>), der sich beim Betrachter selbst aktualisiert. Möglich
+// ohne Annahme über die Zeitzone des Spielservers, weil die Seite eine Restdauer liefert und
+// spielzeitService sie auf unsere eigene Uhr rechnet. null = Abruf/Markup kaputt, dann fällt
+// die Zeile ersatzlos weg: der Countdown ist ein Bonus, er darf die Online-Liste nie kosten.
+function formatTageswechsel(zielMs: number | null): string | null {
+    if (zielMs === null) return null;
+    return `\n_Der neue Tag bricht <t:${Math.floor(zielMs / 1000)}:R> an._`;
+}
+
 class OnlineHandler {
     async handleOnline(interaction: ChatInputCommandInteraction) {
         await interaction.deferReply();
 
-        const data = await onlineService.getOnline();
+        // Zwei unabhängige Seiten (list.php + about.php), also parallel abrufen.
+        const [data, zielMs] = await Promise.all([
+            onlineService.getOnline(),
+            spielzeitService.getTageswechsel(),
+        ]);
+        const tageswechselZeile = formatTageswechsel(zielMs);
+
         if (!data) {
             return interaction.editReply('Konnte die Kriegerliste gerade nicht abrufen. Versuch es später nochmal.');
         }
@@ -54,6 +70,9 @@ class OnlineHandler {
         const {players, recent} = data;
         const parts: string[] = [];
         let length = 0;
+        // Platz für den Countdown vorab abziehen: an einem vollen Tag ist er sonst das Erste,
+        // was rausfliegt - dabei fragt man dann am ehesten, ob sich der Wald noch lohnt.
+        const budget = MAX_LENGTH - (tageswechselZeile?.length ?? 0);
 
         if (players.length === 0) {
             parts.push('Gerade ist niemand im Wyrmland eingeloggt.');
@@ -67,12 +86,12 @@ class OnlineHandler {
             for (const {ort, spieler} of groupByCity(players)) {
                 if (voll) break;
                 const stadtZeile = `__${ort}__ (${spieler.length})`;
-                if (length + stadtZeile.length + 1 > MAX_LENGTH) break;
+                if (length + stadtZeile.length + 1 > budget) break;
                 parts.push(stadtZeile);
                 length += stadtZeile.length + 1;
                 for (const player of spieler) {
                     const line = formatPlayer(player, links);
-                    if (length + line.length + 1 > MAX_LENGTH) {
+                    if (length + line.length + 1 > budget) {
                         voll = true;
                         break;
                     }
@@ -92,7 +111,7 @@ class OnlineHandler {
             for (const name of extras) {
                 const marked = markLinked(name, findLinkForName(links, name));
                 const addition = (fitting.length ? ', ' : '') + marked;
-                if (recentLength + addition.length + 3 > MAX_LENGTH) break;
+                if (recentLength + addition.length + 3 > budget) break;
                 fitting.push(marked);
                 recentLength += addition.length;
             }
@@ -102,9 +121,13 @@ class OnlineHandler {
             }
         }
 
+        // Ist gerade niemand da, ist der Countdown die einzige Information - erst recht mitnehmen.
         if (players.length === 0 && extras.length === 0) {
-            return interaction.editReply('Gerade ist niemand im Wyrmland eingeloggt.');
+            const leer = 'Gerade ist niemand im Wyrmland eingeloggt.';
+            return interaction.editReply(leer + (tageswechselZeile ?? ''));
         }
+
+        if (tageswechselZeile) parts.push(tageswechselZeile);
 
         return interaction.editReply({
             content: parts.join('\n'),

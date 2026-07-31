@@ -5,6 +5,11 @@ vi.mock('../services/online.service.js', () => ({
     default: { getOnline: (...args: unknown[]) => getOnline(...args) },
 }));
 
+const getTageswechsel = vi.fn();
+vi.mock('../services/spielzeit.service.js', () => ({
+    default: { getTageswechsel: (...args: unknown[]) => getTageswechsel(...args) },
+}));
+
 // Nur Redis wegmocken - die Match-Logik von character.service soll echt laufen.
 vi.mock('../services/redis.service.js', () => ({
     default: { get: vi.fn(), getList: vi.fn() },
@@ -27,6 +32,9 @@ describe('OnlineHandler', () => {
         getOnline.mockReset();
         getAllLinks.mockReset();
         getAllLinks.mockResolvedValue([]);
+        // Standardfall in den Bestandstests: kein Countdown, damit die Erwartungen unverändert gelten.
+        getTageswechsel.mockReset();
+        getTageswechsel.mockResolvedValue(null);
     });
 
     it('formatiert die eingeloggten Spieler mit Stufe und Rasse, gruppiert nach Stadt', async () => {
@@ -149,6 +157,63 @@ describe('OnlineHandler', () => {
         await onlineHandler.handleOnline(interaction);
 
         expect(interaction.editReply).toHaveBeenCalledWith('Gerade ist niemand im Wyrmland eingeloggt.');
+    });
+
+    it('hängt den Tageswechsel als Discord-Timestamp an', async () => {
+        getOnline.mockResolvedValue({
+            players: [{ gilde: '', name: 'Cvetanka', ort: 'Romar', level: '14', rasse: 'Echse', lebt: true }],
+            recent: [],
+        });
+        getTageswechsel.mockResolvedValue(1_753_980_327_000);
+        const interaction = makeInteraction();
+
+        await onlineHandler.handleOnline(interaction);
+
+        expect(content(interaction)).toContain('_Der neue Tag bricht <t:1753980327:R> an._');
+    });
+
+    it('nennt den Tageswechsel auch, wenn niemand eingeloggt ist', async () => {
+        getOnline.mockResolvedValue({ players: [], recent: [] });
+        getTageswechsel.mockResolvedValue(1_753_980_327_000);
+        const interaction = makeInteraction();
+
+        await onlineHandler.handleOnline(interaction);
+
+        expect(interaction.editReply.mock.calls[0][0]).toContain('<t:1753980327:R>');
+    });
+
+    // Der Countdown ist ein Bonus: ein kaputter about.php-Abruf darf die Liste nicht kosten.
+    it('lässt die Zeile weg, wenn der Tageswechsel nicht abrufbar ist', async () => {
+        getOnline.mockResolvedValue({
+            players: [{ gilde: '', name: 'Cvetanka', ort: 'Romar', level: '14', rasse: 'Echse', lebt: true }],
+            recent: [],
+        });
+        getTageswechsel.mockResolvedValue(null);
+        const interaction = makeInteraction();
+
+        await onlineHandler.handleOnline(interaction);
+
+        const reply = content(interaction);
+        expect(reply).toContain('Cvetanka');
+        expect(reply).not.toContain('neue Tag');
+    });
+
+    // Platz für den Countdown wird vorab reserviert - sonst fällt er an vollen Tagen als Erstes weg.
+    it('behält den Countdown, wenn die Liste ans Zeichenlimit stößt', async () => {
+        getOnline.mockResolvedValue({
+            players: Array.from({length: 200}, (_, i) => ({
+                gilde: '', name: `Spieler${i}`, ort: 'Romar', level: '14', rasse: 'Echse', lebt: true,
+            })),
+            recent: [],
+        });
+        getTageswechsel.mockResolvedValue(1_753_980_327_000);
+        const interaction = makeInteraction();
+
+        await onlineHandler.handleOnline(interaction);
+
+        const reply = content(interaction);
+        expect(reply).toContain('<t:1753980327:R>');
+        expect(reply.length).toBeLessThanOrEqual(2000);
     });
 
     it('meldet einen Abruf-Fehler, statt zu crashen', async () => {
