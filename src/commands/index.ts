@@ -15,6 +15,7 @@ import diagnose from "./diagnose.command.js";
 import rollenspiel from "./rollenspiel.command.js";
 import anstupser from "./anstupser.command.js";
 import geburtstag from "./geburtstag.command.js";
+import beobachten from "./beobachten.command.js";
 
 export default [
     ping,
@@ -33,5 +34,6 @@ export default [
     diagnose,
     rollenspiel,
     anstupser,
-    geburtstag
+    geburtstag,
+    beobachten
 ];

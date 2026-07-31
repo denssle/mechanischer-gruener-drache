@@ -1,6 +1,6 @@
 import {ChatInputCommandInteraction, MessageFlags} from 'discord.js';
-import client from '../client.js';
 import anstupserService from '../services/anstupser.service.js';
+import {sendeDm} from '../services/dm.service.js';
 
 // Täglicher 13:37-Anstupser als Abo (war README-Todo). Wer will, meldet sich SELBST an und bekommt
 // dann jeden Tag um 13:37 (lokale Host-Zeit = Europe/Berlin) eine DM.
@@ -9,8 +9,7 @@ import anstupserService from '../services/anstupser.service.js';
 // DM-Schwäche (Discord verweigert Bot-DMs mit Fehler 50007, wenn "Direktnachrichten von
 // Servermitgliedern" aus ist) trifft nur Leute, die sich aktiv angemeldet haben.
 //
-// client wird nur in Methodenkörpern benutzt, nie auf Modul-Top-Level - der Handler ist über
-// commands/index.js erreichbar, sonst greift die Zirkular-Import-Falle (siehe CLAUDE.md).
+// Der DM-Versand selbst liegt in dm.service.ts (teilt ihn sich mit der Beobachtungsliste).
 
 export const ANSTUPSER_TEXT = 'Er brauchts mal wieder';
 
@@ -18,9 +17,6 @@ export const ANSTUPSER_TEXT = 'Er brauchts mal wieder';
 // Prüfung passiert hier - deshalb reicht eine Konstante statt einer Cron-Dependency.
 export const STUNDE = 13;
 export const MINUTE = 37;
-
-// Discord-Fehlercode für "kann dieser Person keine DM schicken" (DMs zu, oder Bot blockiert).
-export const DM_GESCHLOSSEN = 50007;
 
 // Lokales Datum als YYYY-MM-DD (Host läuft auf Europe/Berlin) - Tagesmarker wie beim Sport-Feature.
 export function formatTag(date: Date): string {
@@ -49,7 +45,7 @@ class AnstupserHandler {
     // Anmelden. Verschickt ZUERST eine Test-DM: kommt sie nicht an, wird gar nicht erst abonniert
     // und die Antwort sagt sofort Bescheid - sonst wartet jemand wochenlang still auf nichts.
     async handleAn(interaction: ChatInputCommandInteraction) {
-        const zugestellt = await this.sendeDm(interaction.user.id, ANSTUPSER_TEXT);
+        const zugestellt = await sendeDm(interaction.user.id, ANSTUPSER_TEXT, 'Anstupser');
         if (!zugestellt) {
             return interaction.reply({
                 content: 'Ich kann dir gerade keine DM schicken – vermutlich sind deine ' +
@@ -112,30 +108,10 @@ class AnstupserHandler {
             const abonnenten = await anstupserService.holeAbonnenten();
             for (const userId of abonnenten) {
                 // Pro Person eigenes Fangen: eine geschlossene DM darf die anderen nicht abbrechen.
-                await this.sendeDm(userId, ANSTUPSER_TEXT);
+                await sendeDm(userId, ANSTUPSER_TEXT, 'Anstupser');
             }
         } catch (error) {
             console.error('Fehler beim Verschicken der Anstupser:', error);
-        }
-    }
-
-    // Schickt eine DM und meldet, ob sie ankam. false statt Fehler, damit beide Aufrufer
-    // (Anmeldung und tägliche Runde) sich darauf verlassen können, dass nichts durchschlägt.
-    private async sendeDm(userId: string, text: string): Promise<boolean> {
-        try {
-            const user = await client.users.fetch(userId);
-            await user.send(text);
-            return true;
-        } catch (error) {
-            const code = (error as {code?: number}).code;
-            if (code === DM_GESCHLOSSEN) {
-                // Kein Grund zur Aufregung: die Person hat ihre DMs zu. Nur vermerken - bewusst
-                // KEINE automatische Abmeldung (Hobby-Scope; sie kann die DMs jederzeit öffnen).
-                console.warn(`Anstupser-DM an ${userId} nicht zustellbar (DMs geschlossen).`);
-            } else {
-                console.error(`Fehler beim Senden der Anstupser-DM an ${userId}:`, error);
-            }
-            return false;
         }
     }
 }

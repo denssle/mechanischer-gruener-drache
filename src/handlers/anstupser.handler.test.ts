@@ -18,9 +18,9 @@ vi.mock('../client.js', () => ({
 
 import anstupserService from '../services/anstupser.service.js';
 import client from '../client.js';
+import {DM_GESCHLOSSEN} from '../services/dm.service.js';
 import anstupserHandler, {
     ANSTUPSER_TEXT,
-    DM_GESCHLOSSEN,
     formatTag,
     istAnstupserZeit,
     STUNDE,

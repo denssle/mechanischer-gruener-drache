@@ -8,7 +8,8 @@ export const SPIELWELT_HELP =
     `\`/news\` – die neueste Ankündigung der Spielbetreiber (die „News" von lotgd.de).\n` +
     `\`/ereignisse\` – das Ingame-Geschehen: die letzten Kämpfe, Wiederbelebungen und Blamagen der Mitspielenden.\n` +
     `\`/online\` – wer gerade eingeloggt ist (mit Stufe, Rasse, Ort und Gilde), dazu die Namen der letzten 30 Minuten und wann der neue Tag anbricht.\n` +
-    `\`/charakter\` – deinen Charakter verknüpfen und seine Karte abrufen (Details: \`/charakter hilfe\`).\n\n` +
+    `\`/charakter\` – deinen Charakter verknüpfen und seine Karte abrufen (Details: \`/charakter hilfe\`).\n` +
+    `\`/beobachten\` – Namen hinterlegen und eine DM bekommen, sobald jemand davon online geht (Details: \`/beobachten hilfe\`).\n\n` +
     `Wer seinen Charakter verknüpft hat, wird in \`/online\` und \`/ereignisse\` hervorgehoben.\n` +
     `Alle Befehle holen die Daten direkt von lotgd.de – ohne Login, immer frisch auf Abruf.`;
 

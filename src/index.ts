@@ -17,6 +17,7 @@ import greetingHandler from "./handlers/greeting.handler.js";
 import anstupserHandler from "./handlers/anstupser.handler.js";
 import geburtstagHandler from "./handlers/geburtstag.handler.js";
 import pingPongSeasonHandler from "./handlers/pingPongSeason.handler.js";
+import beobachtenHandler from "./handlers/beobachten.handler.js";
 
 // console.log/warn/error in einen Ringpuffer spiegeln, damit sie auf /config einsehbar sind. Moeglichst
 // frueh, damit die Boot-/Laufzeit-Zeilen (Webhook-Server-Start, Fehler) mitgeschnitten werden.
@@ -160,6 +161,11 @@ client.once(Events.ClientReady, async () => {
             // Deploy), setzt der Aufruf ihn selbst - deshalb braucht es hier keinen Init-Schritt.
             pingPongSeasonHandler.rechneSeasonAb().catch((error) => {
                 console.error('Fehler beim Abrechnen der Ping-Pong-Season:', error);
+            });
+            // Pollt die Kriegerliste fuer die Beobachtungslisten. Taktet sich selbst herunter
+            // (alle 5 Minuten) und ruft gar nichts ab, solange niemand jemanden beobachtet.
+            beobachtenHandler.pruefeBeobachtungen().catch((error) => {
+                console.error('Fehler beim Pruefen der Beobachtungslisten:', error);
             });
         }, TAEGLICHER_POST_INTERVALL_MS);
     } catch (error) {
