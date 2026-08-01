@@ -24,6 +24,12 @@ const beobachten = vi.hoisted(() => ({
 }));
 vi.mock('../services/beobachten.service.js', () => ({ default: beobachten }));
 
+const drachen = vi.hoisted(() => ({ deleteLevel: vi.fn() }));
+vi.mock('../services/drachen.service.js', () => ({ default: drachen }));
+// Die Drachen-Prüfung hängt nur nebenher an /charakter anzeigen und zieht client hoch.
+const drachenHandler = vi.hoisted(() => ({ pruefeLevel: vi.fn() }));
+vi.mock('./drachen.handler.js', () => ({ default: drachenHandler }));
+
 import characterHandler, {
     CHARAKTER_HELP, TOTEN_FLAVORS, randomTotenFlavor, bestimmeAktivitaet, formatAktivitaet,
 } from './character.handler.js';
@@ -52,6 +58,9 @@ describe('CharacterHandler', () => {
     beforeEach(() => {
         Object.values(svc).forEach(fn => fn.mockReset());
         Object.values(beobachten).forEach(fn => fn.mockReset());
+        Object.values(drachen).forEach(fn => fn.mockReset());
+        drachenHandler.pruefeLevel.mockReset();
+        drachenHandler.pruefeLevel.mockResolvedValue(undefined);
         online.getOnline.mockReset();
         // Standard: Online-Stand nicht verfuegbar - die Karte faellt auf "zuletzt gesehen" zurueck.
         online.getOnline.mockResolvedValue(null);
@@ -127,6 +136,27 @@ describe('CharacterHandler', () => {
             await characterHandler.handleAnzeigen(interaction);
 
             expect(interaction.editReply.mock.calls[0][0].embeds[0].data.title).toBe('Centurio Acaine');
+        });
+
+        // Opportunistische Drachentötungs-Erkennung: der Roster liegt hier ohnehin komplett
+        // vor, also gleich ALLE verknüpften Charaktere abgleichen - nicht nur den angezeigten.
+        it('reicht den ganzen Roster an die Drachentötungs-Prüfung weiter', async () => {
+            const roster = [ACAINE, {...ACAINE, name: 'Bora', level: '1'}];
+            svc.getLinkedName.mockResolvedValue('Acaine');
+            svc.getRoster.mockResolvedValue(roster);
+
+            await characterHandler.handleAnzeigen(makeInteraction(null));
+
+            expect(drachenHandler.pruefeLevel).toHaveBeenCalledWith(roster);
+        });
+
+        it('prüft nichts, wenn der Roster gar nicht abrufbar war', async () => {
+            svc.getLinkedName.mockResolvedValue('Acaine');
+            svc.getRoster.mockResolvedValue(null);
+
+            await characterHandler.handleAnzeigen(makeInteraction(null));
+
+            expect(drachenHandler.pruefeLevel).not.toHaveBeenCalled();
         });
 
         it('nutzt den angegebenen Namen direkt', async () => {
@@ -239,6 +269,7 @@ describe('CharacterHandler', () => {
 
     describe('entfernen', () => {
         it('bestätigt das Entfernen', async () => {
+            svc.getLinkedName.mockResolvedValue('Acaine');
             svc.unlinkCharacter.mockResolvedValue(true);
             const interaction = makeInteraction();
 
@@ -249,11 +280,23 @@ describe('CharacterHandler', () => {
 
         // Sonst würde eine spätere Neu-Verknüpfung die alte Zustimmung stillschweigend erben.
         it('räumt die Beobachtungs-Freigabe mit ab', async () => {
+            svc.getLinkedName.mockResolvedValue('Acaine');
             svc.unlinkCharacter.mockResolvedValue(true);
 
             await characterHandler.handleEntfernen(makeInteraction());
 
             expect(beobachten.entferneFreigabe).toHaveBeenCalledWith('u1');
+        });
+
+        // Ohne Verknüpfung liest die Drachen-Prüfung den Level-Stand nie wieder - er bliebe
+        // als Karteileiche liegen. Gelöscht wird unter dem Kern-Namen, nicht der User-ID.
+        it('räumt den zuletzt gesehenen Level-Stand mit ab', async () => {
+            svc.getLinkedName.mockResolvedValue('Acaine');
+            svc.unlinkCharacter.mockResolvedValue(true);
+
+            await characterHandler.handleEntfernen(makeInteraction());
+
+            expect(drachen.deleteLevel).toHaveBeenCalledWith('Acaine');
         });
 
         it('meldet, wenn nichts verknüpft war', async () => {

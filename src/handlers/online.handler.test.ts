@@ -10,6 +10,10 @@ vi.mock('../services/spielzeit.service.js', () => ({
     default: { getTageswechsel: (...args: unknown[]) => getTageswechsel(...args) },
 }));
 
+// Die Drachen-Prüfung hängt nur nebenher an /online (fire-and-forget) und zieht client hoch.
+const drachenHandler = vi.hoisted(() => ({ pruefeLevel: vi.fn() }));
+vi.mock('./drachen.handler.js', () => ({ default: drachenHandler }));
+
 // Nur Redis wegmocken - die Match-Logik von character.service soll echt laufen.
 vi.mock('../services/redis.service.js', () => ({
     default: { get: vi.fn(), getList: vi.fn() },
@@ -35,6 +39,29 @@ describe('OnlineHandler', () => {
         // Standardfall in den Bestandstests: kein Countdown, damit die Erwartungen unverändert gelten.
         getTageswechsel.mockReset();
         getTageswechsel.mockResolvedValue(null);
+        drachenHandler.pruefeLevel.mockReset();
+        drachenHandler.pruefeLevel.mockResolvedValue(undefined);
+    });
+
+    // Opportunistische Drachentötungs-Erkennung: /online hat die Stufen ohnehin geholt, also
+    // werden sie gleich mitgeprüft - ohne zusätzlichen Abruf bei lotgd.de.
+    it('reicht die geholten Stufen an die Drachentötungs-Prüfung weiter', async () => {
+        const players = [
+            { gilde: '', name: 'Cvetanka', ort: 'Glorfindal', level: '14', rasse: 'Echse', lebt: true },
+        ];
+        getOnline.mockResolvedValue({ players, recent: [] });
+
+        await onlineHandler.handleOnline(makeInteraction());
+
+        expect(drachenHandler.pruefeLevel).toHaveBeenCalledWith(players);
+    });
+
+    it('prüft nichts, wenn die Kriegerliste gar nicht abrufbar war', async () => {
+        getOnline.mockResolvedValue(null);
+
+        await onlineHandler.handleOnline(makeInteraction());
+
+        expect(drachenHandler.pruefeLevel).not.toHaveBeenCalled();
     });
 
     it('formatiert die eingeloggten Spieler mit Stufe und Rasse, gruppiert nach Stadt', async () => {

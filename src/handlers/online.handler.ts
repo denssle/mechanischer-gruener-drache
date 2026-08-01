@@ -2,6 +2,7 @@ import {ChatInputCommandInteraction} from 'discord.js';
 import onlineService, {OnlinePlayer} from '../services/online.service.js';
 import characterService, {CharacterLink, findLinkForName} from '../services/character.service.js';
 import spielzeitService from '../services/spielzeit.service.js';
+import drachenHandler from './drachen.handler.js';
 
 // Discord-Nachrichtenlimit ist 2000 Zeichen; mit Puffer bleiben, lieber ganze Einträge weglassen.
 const MAX_LENGTH = 1900;
@@ -68,6 +69,12 @@ class OnlineHandler {
         }
 
         const {players, recent} = data;
+
+        // Opportunistische Drachentötungs-Erkennung mit den ohnehin geholten Stufen - kein
+        // zusätzlicher Abruf. Bewusst NICHT abgewartet: die Liste soll nicht auf einen
+        // Redis-/Channel-Roundtrip warten, und der Handler fängt intern schon alles ab.
+        void drachenHandler.pruefeLevel(players);
+
         const parts: string[] = [];
         let length = 0;
         // Platz für den Countdown vorab abziehen: an einem vollen Tag ist er sonst das Erste,

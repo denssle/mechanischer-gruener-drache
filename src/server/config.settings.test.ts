@@ -35,6 +35,9 @@ vi.mock('../services/greeting.service.js', () => ({
 vi.mock('../services/geburtstag.service.js', () => ({
     default: {getChannel: vi.fn(async () => null), setChannel: vi.fn()}
 }));
+vi.mock('../services/drachen.service.js', () => ({
+    default: {getChannel: vi.fn(async () => null), setChannel: vi.fn()}
+}));
 vi.mock('../services/event.service.js', () => ({
     default: {getEvent: vi.fn(), setEvent: vi.fn(), clearEvent: vi.fn()}
 }));
@@ -158,7 +161,7 @@ describe('config.settings – Kanal-Felder (bearbeiten)', () => {
         (client.channels.fetch as any).mockResolvedValue({name: 'irgendwas'});
 
         const felder = await ladeKanalFelder();
-        expect(felder.map(f => f.schluessel)).toEqual(['protokoll', 'twitch-kanal', 'sport-kanal', 'morgengruss-kanal', 'geburtstag-kanal']);
+        expect(felder.map(f => f.schluessel)).toEqual(['protokoll', 'twitch-kanal', 'sport-kanal', 'morgengruss-kanal', 'geburtstag-kanal', 'spielwelt-kanal']);
         expect(felder.find(f => f.schluessel === 'protokoll')!.aktuelleId).toBe('log-1');
         expect(felder.find(f => f.schluessel === 'sport-kanal')!.aktuelleId).toBe('sport-1');
         expect(felder.find(f => f.schluessel === 'twitch-kanal')!.aktuelleId).toBeNull();

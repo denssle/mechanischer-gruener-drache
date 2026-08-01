@@ -1052,11 +1052,24 @@ describe('config.router', () => {
         expect(html).toContain('action="/config/sport"');
         expect(html).toContain('action="/config/morgengruss"');
         // Jeder Bereich hat sein Sprungziel.
-        for (const bereich of ['twitch', 'sport', 'protokoll', 'morgengruss', 'geburtstag', 'pingpong', 'event']) {
+        for (const bereich of ['twitch', 'sport', 'protokoll', 'morgengruss', 'geburtstag', 'spielwelt', 'pingpong', 'event']) {
             expect(html).toContain(`id="bereich-${bereich}"`);
         }
         // Ohne Meldung steht keine da.
         expect(html).not.toContain('class="meldung');
+    });
+
+    // Der Spielwelt-Bereich hat ausser dem Kanal kein Formular - ohne den Hinweis staende dort
+    // ein Dropdown ohne erkennbaren Zweck.
+    it('renderConfigSeite erklaert im Spielwelt-Bereich, wofuer der Kanal gut ist', () => {
+        const html = renderConfigSeite({
+            ...vollstaendigeDaten(),
+            kanalFelder: [{schluessel: 'spielwelt-kanal', label: 'Spielwelt-Ankündigungskanal', aktuelleId: 'c1', status: 'ok' as const}],
+        });
+        const bereich = html.slice(html.indexOf('id="bereich-spielwelt"'), html.indexOf('id="bereich-pingpong"'));
+        expect(bereich).toContain('Spielwelt-Ankündigungskanal');
+        expect(bereich).toContain('Drachen erlegt');
+        expect(bereich).toContain('name="feld" value="spielwelt-kanal"');
     });
 
     it('renderConfigSeite escaped den Meldungstext und zeigt ihn nur im eigenen Bereich', () => {

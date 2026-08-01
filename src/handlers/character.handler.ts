@@ -2,6 +2,8 @@ import {ChatInputCommandInteraction, EmbedBuilder, MessageFlags} from 'discord.j
 import characterService, {CharacterEntry, findInRoster, findLinkForName, passtAufKernNamen} from '../services/character.service.js';
 import onlineService, {OnlinePlayer} from '../services/online.service.js';
 import beobachtenService from '../services/beobachten.service.js';
+import drachenService from '../services/drachen.service.js';
+import drachenHandler from './drachen.handler.js';
 
 // Lore-Flavor für tote Charaktere: statt nur "tot" eine LotGD-stimmige Zeile. Wiederauferstehung
 // geschieht beim Anbruch des neuen Tages oder über Gefallen beim Totengott Ramius - beides steckt hier drin.
@@ -171,14 +173,23 @@ class CharacterHandler {
             );
         }
 
+        // Opportunistische Drachentötungs-Erkennung: der Roster liegt hier ohnehin komplett vor,
+        // also gleich alle verknüpften Charaktere abgleichen (nicht nur den angezeigten) - das
+        // ist die vollständigste Quelle, die der Bot ohne Extra-Abruf zu sehen bekommt.
+        // Bewusst nicht abgewartet, die Karte soll nicht darauf warten.
+        void drachenHandler.pruefeLevel(roster);
+
         return interaction.editReply({
             embeds: [buildCard(entry, bestimmeAktivitaet(name, online), await ermittleBeobachtbar(entry.name))],
         });
     }
 
     async handleEntfernen(interaction: ChatInputCommandInteraction) {
+        // Den Namen VOR dem Entfernen lesen - danach ist er weg, und der Level-Stand unten
+        // liegt unter genau diesem Kern-Namen.
+        const name = await characterService.getLinkedName(interaction.user.id);
         const removed = await characterService.unlinkCharacter(interaction.user.id);
-        if (!removed) {
+        if (!removed || !name) {
             return interaction.reply('Du hast keinen Charakter verknüpft.');
         }
 
@@ -186,6 +197,10 @@ class CharacterHandler {
         // eine spätere Neu-Verknüpfung (womöglich ein anderer Charakter) die alte Zustimmung
         // stillschweigend erben.
         await beobachtenService.entferneFreigabe(interaction.user.id);
+        // Ebenso der zuletzt gesehene Level-Stand: ohne Verknüpfung wird er nie wieder gelesen
+        // (die Drachen-Prüfung läuft nur über verknüpfte Charaktere) und bliebe als Karteileiche
+        // liegen. Nebeneffekt gewollt: nach einer Neu-Verknüpfung wird sauber neu beobachtet.
+        await drachenService.deleteLevel(name);
 
         return interaction.reply('Deine Charakter-Verknüpfung wurde entfernt.');
     }

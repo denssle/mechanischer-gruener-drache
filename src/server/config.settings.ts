@@ -8,6 +8,7 @@ import sportHandler from '../handlers/sport.handler.js';
 import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import geburtstagService from '../services/geburtstag.service.js';
+import drachenService from '../services/drachen.service.js';
 import eventService from '../services/event.service.js';
 import pingPongService from '../services/pingPong.service.js';
 import {ableiteEmoji, GRUSS_EMOJIS} from '../handlers/greeting.handler.js';
@@ -88,6 +89,11 @@ const KANAL_SERVICES: Record<string, KanalService> = {
         label: 'Geburtstagskanal',
         lade: () => geburtstagService.getChannel(),
         speichere: (id) => geburtstagService.setChannel(id),
+    },
+    'spielwelt-kanal': {
+        label: 'Spielwelt-Ankündigungskanal',
+        lade: () => drachenService.getChannel(),
+        speichere: (id) => drachenService.setChannel(id),
     },
 };
 

@@ -461,6 +461,15 @@ export function renderGeburtstagHinweis(): string {
     ${GRATULATIONS_STUNDE} Uhr in diesem Kanal.</p>`;
 }
 
+// Der Spielwelt-Bereich hat (noch) kein eigenes Formular ausser dem Kanal - der Hinweis erklaert,
+// wofuer der Kanal ueberhaupt gut ist. Ohne ihn stuende dort ein Dropdown ohne erkennbaren Zweck.
+export function renderSpielweltHinweis(): string {
+    return `<p class="feld-hinweis">Hier gratuliert der Bot, wenn eine Person mit verknüpftem
+    Charakter den Drachen erlegt hat (erkannt am Stufen-Rücksturz auf 1, wenn
+    <code>/online</code> oder <code>/charakter anzeigen</code> ohnehin Daten abrufen).
+    Ohne Kanal passiert nichts.</p>`;
+}
+
 function configBody(bereicheHtml: string): string {
     return `<h1>Mechanischer Grüner Drache</h1>
     <p>Bot-Einstellungen, nach Bereich gruppiert.</p>
@@ -586,6 +595,9 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
         renderBereich('geburtstag', 'Geburtstage',
             kanal('geburtstag-kanal') + renderGeburtstagHinweis(),
             meldungFuer('geburtstag')) +
+        renderBereich('spielwelt', 'Spielwelt',
+            kanal('spielwelt-kanal') + renderSpielweltHinweis(),
+            meldungFuer('spielwelt')) +
         renderBereich('pingpong', 'Ping-Pong',
             rolle('pingpong-champion') + renderPingPongHinweis(),
             meldungFuer('pingpong')) +
@@ -678,6 +690,7 @@ const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
     'sport-kanal': {bereich: 'sport', text: 'Sport-Ankündigungskanal gespeichert.'},
     'morgengruss-kanal': {bereich: 'morgengruss', text: 'Morgengruß-Kanal gespeichert.'},
     'geburtstag-kanal': {bereich: 'geburtstag', text: 'Geburtstagskanal gespeichert.'},
+    'spielwelt-kanal': {bereich: 'spielwelt', text: 'Spielwelt-Ankündigungskanal gespeichert.'},
     'twitch-rolle': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle gespeichert.'},
     'twitch-rolle-entfernt': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle entfernt.'},
     'pingpong-champion': {bereich: 'pingpong', text: 'Champion-Rolle gespeichert.'},

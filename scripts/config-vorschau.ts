@@ -14,6 +14,7 @@ const html = renderConfigSeite({
         {schluessel: 'sport-kanal', label: 'Sport-Ankündigungskanal', aktuelleId: null, status: 'leer'},
         {schluessel: 'morgengruss-kanal', label: 'Morgengruß-Kanal', aktuelleId: 'c3', status: 'ok'},
         {schluessel: 'geburtstag-kanal', label: 'Geburtstagskanal', aktuelleId: null, status: 'leer'},
+        {schluessel: 'spielwelt-kanal', label: 'Spielwelt-Ankündigungskanal', aktuelleId: 'c2', status: 'ok'},
     ],
     kanaele: [
         {id: 'c1', name: 'stream-alerts'},
