@@ -47,6 +47,34 @@ describe('ableiteEmoji (Fallback)', () => {
     it('ist stabil für dieselbe User-ID', () => {
         expect(ableiteEmoji('123456789012345678')).toBe(ableiteEmoji('123456789012345678'));
     });
+
+    // Der Pool ist die einzige Quelle der Abwechslung - ein doppelter Eintrag verschenkt still
+    // eine Variante und macht sie doppelt so wahrscheinlich.
+    it('der Pool ist duplikatfrei', () => {
+        expect(new Set(GRUSS_EMOJIS).size).toBe(GRUSS_EMOJIS.length);
+    });
+
+    // WELLE ist das gemeinsame Zeichen, das der Bot ZUSÄTZLICH setzt. Als persönliches Emoji wäre
+    // sie die zweite identische Reaktion, und werteReaktionenAus filtert sie beim Lernen heraus -
+    // die Zuordnung ließe sich also nie wieder aus der Historie bestätigen.
+    it('enthält die Welle NICHT', () => {
+        expect(GRUSS_EMOJIS).not.toContain(WELLE);
+    });
+
+    // Mit zwölf Emojis teilten sich auf einem kleinen Server zu viele dasselbe Zeichen. Die Zahl
+    // darf wachsen, aber nicht wieder unter eine brauchbare Streuung fallen.
+    it('bietet genug Auswahl für einen Server voller Leute', () => {
+        expect(GRUSS_EMOJIS.length).toBeGreaterThanOrEqual(40);
+    });
+
+    // Bei genug Streuung sollen verschiedene Personen auch sichtbar verschiedene Emojis bekommen -
+    // sonst wäre der grosse Pool ohne Wirkung (z.B. wenn der Hash schlecht streut).
+    it('verteilt 40 verschiedene User-IDs über viele verschiedene Emojis', () => {
+        const ids = Array.from({length: 40}, (_, i) => `10000000000000000${i}`);
+        const verteilt = new Set(ids.map(ableiteEmoji));
+
+        expect(verteilt.size).toBeGreaterThanOrEqual(15);
+    });
 });
 
 describe('werteReaktionenAus', () => {

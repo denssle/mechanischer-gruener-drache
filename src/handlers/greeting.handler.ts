@@ -13,8 +13,31 @@ import greetingService from '../services/greeting.service.js';
 export const WELLE = '👋';
 
 // Fallback-Pool: persönliches Emoji stabil aus der User-ID abgeleitet, falls sich aus der Historie
-// (siehe lerneUndSpeichere) noch nichts lernen ließ. Bewusst morgendlich/freundlich getönt.
-export const GRUSS_EMOJIS = ['☀️', '🌅', '🌞', '🌻', '🌈', '☕', '🌷', '🌼', '🍀', '🐦', '🌤️', '🕊️'];
+// (siehe lerneUndSpeichere) noch nichts lernen ließ. Bewusst morgendlich/freundlich getönt -
+// keine Gesten, keine Gesichter, nichts Schroffes; das hier ist ein Guten-Morgen-Gruß.
+//
+// AM 2026-08-01 VON 12 AUF 55 ERWEITERT (User-Wunsch "mehr Abwechslung"): bei zwölf Emojis teilen
+// sich auf einem Server mit ~20 Leuten rechnerisch schon die Hälfte ihr Zeichen, und die alte Liste
+// war zusätzlich in sich ähnlich (drei Sonnen, vier Blumen). Preis der Erweiterung, bewusst
+// hingenommen: `ableiteEmoji` rechnet `hash % laenge`, mit der neuen Länge bekommt also **jede
+// abgeleitete Zuordnung einmalig ein anderes Emoji**. Von Hand gesetzte und gelernte Zuordnungen
+// liegen in Redis und bleiben unberührt - betroffen ist nur, was ohnehin geraten war.
+//
+// WICHTIG: WELLE (👋) darf hier NIE hinein - sie ist das gemeinsame Zeichen, das der Bot zusätzlich
+// setzt. Als persönliches Emoji wäre sie die zweite identische Reaktion (die zweite verpufft), und
+// werteReaktionenAus filtert sie beim Lernen bewusst heraus - die Zuordnung ließe sich also nie
+// wieder aus der Historie bestätigen. Ein Test nagelt das fest.
+export const GRUSS_EMOJIS = [
+    // Himmel & Wetter
+    '☀️', '🌅', '🌞', '🌈', '🌤️', '🌙', '⭐', '🌟', '❄️', '☔', '⚡', '🌊', '💧',
+    // Pflanzen
+    '🌻', '🌷', '🌼', '🍀', '🌿', '🌵', '🍄', '🍁', '🌲', '🌸', '🌹', '🌺', '🌱',
+    // Tiere
+    '🐦', '🕊️', '🦊', '🐻', '🐼', '🐧', '🦔', '🐳', '🐬', '🐢', '🐸', '🦉', '🐝',
+    '🦋', '🐌', '🐱', '🐶', '🦄', '🐉',
+    // Gemütliches
+    '☕', '🍵', '🍪', '🧸', '📚', '🎨', '🎵', '💡', '🔮', '✨',
+];
 
 // Wie viele Nachrichten der Kanal-Historie beim Lernen zurück gescannt werden. Für einen kleinen
 // Privatserver großzügig; paginiert in 100er-Schritten (Discord-Limit pro Fetch).
@@ -26,7 +49,10 @@ export const SCAN_LIMIT = 500;
 export const MIN_BEOBACHTUNGEN = 1;
 
 // Deterministischer Hash über die User-ID → ein festes Emoji aus dem Pool. Reiner Fallback, wenn für
-// die Person nichts gelernt wurde. Gleiche Person, gleiches Emoji - für immer, ohne Speicherung.
+// die Person nichts gelernt wurde. Gleiche Person, gleiches Emoji - ohne jede Speicherung, und
+// stabil, SOLANGE DER POOL GLEICH LANG BLEIBT (`hash % laenge`). Wächst der Pool, verschieben sich
+// alle abgeleiteten Zuordnungen einmalig; wer seines behalten will, pinnt es auf /config fest -
+// von Hand gesetzte Werte liegen in einem eigenen Hash und sind gegen so etwas immun.
 export function ableiteEmoji(userId: string): string {
     let hash = 0;
     for (const zeichen of userId) {

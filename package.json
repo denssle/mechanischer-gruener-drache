@@ -1,6 +1,6 @@
 {
   "name": "mechanischer-gruener-drache",
-  "version": "1.85.0",
+  "version": "1.86.0",
   "description": "Discord-Bot für den Community-Server von Legend of the Green Dragon (lotgd.de)",
   "license": "MIT",
   "main": "dist/index.js",
