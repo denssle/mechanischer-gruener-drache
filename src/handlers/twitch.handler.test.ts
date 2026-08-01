@@ -252,9 +252,11 @@ describe('TwitchHandler', () => {
 
             await twitchHandler.handleStreamOnline('twitch-1', event);
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('GespeicherterName'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('<@&role-1>'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('twitch.tv/teststreamer'));
+            expect(send.mock.calls[0][0].content).toContain('GespeicherterName');
+            expect(send.mock.calls[0][0].content).toContain('<@&role-1>');
+            expect(send.mock.calls[0][0].content).toContain('twitch.tv/teststreamer');
+            // Nur die Benachrichtigungsrolle darf pingen - siehe Allowlist-Test unten.
+            expect(send.mock.calls[0][0].allowedMentions).toEqual({roles: ['role-1']});
         });
 
         it('fällt auf den Twitch-Anzeigenamen zurück, wenn kein User gespeichert ist, und lässt die Rolle weg', async () => {
@@ -267,8 +269,10 @@ describe('TwitchHandler', () => {
 
             await twitchHandler.handleStreamOnline('twitch-1', event);
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('TestStreamer'));
-            expect(send).toHaveBeenCalledWith(expect.not.stringContaining('<@&'));
+            expect(send.mock.calls[0][0].content).toContain('TestStreamer');
+            expect(send.mock.calls[0][0].content).not.toContain('<@&');
+            // Ohne Rolle bleibt gar nichts erlaubt.
+            expect(send.mock.calls[0][0].allowedMentions).toEqual({parse: []});
         });
 
         it('ergänzt Spiel/Kategorie und Titel wenn Twitch Stream-Infos liefert', async () => {
@@ -284,8 +288,8 @@ describe('TwitchHandler', () => {
 
             await twitchHandler.handleStreamOnline('twitch-1', event);
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Just Chatting'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Wir quatschen'));
+            expect(send.mock.calls[0][0].content).toContain('Just Chatting');
+            expect(send.mock.calls[0][0].content).toContain('Wir quatschen');
         });
 
         it('lässt Spiel/Titel weg wenn keine Stream-Infos verfügbar sind (Fallback)', async () => {
@@ -299,7 +303,7 @@ describe('TwitchHandler', () => {
 
             await twitchHandler.handleStreamOnline('twitch-1', event);
 
-            const message = send.mock.calls[0][0] as string;
+            const message = send.mock.calls[0][0].content as string;
             expect(message).toContain('ist jetzt live');
             expect(message).not.toContain('🎮');
             expect(message).not.toContain('📝');

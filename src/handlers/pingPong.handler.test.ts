@@ -654,7 +654,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. 🌞 Erster - 42\n2. 🌞 Zweiter - 10'));
+            expect(interaction.reply.mock.calls[0][0].content).toContain('1. 🌞 Erster - 42\n2. 🌞 Zweiter - 10');
         });
 
         // Das persönliche Emoji aus dem Morgengruß steht als Erkennungszeichen vor dem Namen -
@@ -675,7 +675,22 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. ☕ Erster - 42\n2. 🌻 Zweiter - 10'));
+            expect(interaction.reply.mock.calls[0][0].content).toContain('1. ☕ Erster - 42\n2. 🌻 Zweiter - 10');
+        });
+
+        // Der Anzeigename kommt aus den gespeicherten Userdaten und wird von jeder Person selbst
+        // gesetzt - ein Name wie `<@…>` würde sonst bei jedem Aufruf jemanden anpingen. Hier ist
+        // keine einzige Mention gewollt (anders als in der Ruhmeshalle, die dasselbe Muster nutzt).
+        it('unterdrückt jede Mention - der Anzeigename ist selbst gewählt', async () => {
+            vi.mocked(redisService.getSortedSet).mockResolvedValue([
+                { value: 'user-1', score: 3 },
+            ] as any);
+            vi.mocked(userService.getUser).mockResolvedValue({ displayName: '<@everyone-troll>' } as any);
+            const interaction = mockInteraction();
+
+            await pingPongHandler.handlePingPongHighscore(interaction);
+
+            expect(interaction.reply.mock.calls[0][0].allowedMentions).toEqual({parse: []});
         });
 
         it('fällt auf die rohe User-ID zurück wenn kein gespeicherter User existiert', async () => {
@@ -687,7 +702,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. 🌞 user-1 - 5'));
+            expect(interaction.reply.mock.calls[0][0].content).toContain('1. 🌞 user-1 - 5');
         });
 
         // getScore legt jeden Duell-Teilnehmer im Sorted Set an - wer nach dem Season-Reset seine
@@ -702,8 +717,8 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply.mock.calls[0][0]).toContain('1. 🌞 Erster - 3');
-            expect(interaction.reply.mock.calls[0][0]).not.toContain('user-2');
+            expect(interaction.reply.mock.calls[0][0].content).toContain('1. 🌞 Erster - 3');
+            expect(interaction.reply.mock.calls[0][0].content).not.toContain('user-2');
         });
 
         it('meldet eine Season ohne Punkte, auch wenn nur 0-Einträge existieren', async () => {
@@ -742,7 +757,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. 🌞 Erster - 42 (4 in Folge)\n2. 🌞 Zweiter - 10'));
+            expect(interaction.reply.mock.calls[0][0].content).toContain('1. 🌞 Erster - 42 (4 in Folge)\n2. 🌞 Zweiter - 10');
         });
     });
 });

@@ -141,7 +141,15 @@ class TwitchHandler {
         lines.push(`https://twitch.tv/${event.broadcaster_user_login}`);
         lines.push(`Live seit ${startedAt} Uhr`);
 
-        await channel.send(lines.join('\n'));
+        // Allowlist statt "Mentions aus": die Benachrichtigungsrolle SOLL gepingt werden, sonst
+        // nichts. Nötig ist das, weil hier gleich drei fremde Texte im Nachrichten-Content landen -
+        // `displayName` (setzt die Person selbst), vor allem aber der **Stream-Titel**, der auf
+        // Twitch beliebiger Freitext ist. Ohne die Einschränkung würde ein `<@…>` oder `@everyone`
+        // im Titel beim Live-Gehen mitpingen.
+        await channel.send({
+            content: lines.join('\n'),
+            allowedMentions: roleId ? {roles: [roleId]} : {parse: []},
+        });
     }
 
     async handleSubscriptionRevoked(subscriptionId: string, reason: string) {

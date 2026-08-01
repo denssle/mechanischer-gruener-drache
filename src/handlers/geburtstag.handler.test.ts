@@ -315,8 +315,11 @@ describe('GeburtstagHandler', () => {
             await geburtstagHandler.posteGeburtstagsgruesse();
 
             expect(send).toHaveBeenCalledTimes(1);
-            expect(send.mock.calls[0][0]).toContain('<@u1>');
-            expect(send.mock.calls[0][0]).toContain('36');
+            expect(send.mock.calls[0][0].content).toContain('<@u1>');
+            expect(send.mock.calls[0][0].content).toContain('36');
+            // Der Gruß SOLL das Geburtstagskind pingen - aber als Allowlist auf genau diese
+            // Person, damit nichts anderes aus den Textbausteinen mitpingen kann.
+            expect(send.mock.calls[0][0].allowedMentions).toEqual({users: ['u1']});
             expect(svc.setLastPostDay).toHaveBeenCalledWith('2026-03-05');
         });
 

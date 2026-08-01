@@ -515,9 +515,17 @@ class PingPongHandler {
                 })
                 .join('\n');
 
-            return interaction.reply(`${ueberschrift}\n${message}\n`
-                + `Am Monatsende gewinnt Platz eins die Champion-Rolle, danach starten alle wieder bei 0 `
-                + `(frühere Sieger: \`/pingpong ruhmeshalle\`).`);
+            // allowedMentions ist PFLICHT: die Zeilen tragen `displayName` aus den gespeicherten
+            // Userdaten, und den setzt jede Person selbst. Ein Anzeigename wie `<@…>` würde sonst
+            // bei jedem Aufruf der Bestenliste jemanden anpingen (Nutzer-Mentions brauchen dafür
+            // keinerlei Sonderrechte). Hier ist keine einzige Mention gewollt, also alles aus -
+            // dasselbe Muster wie in der Ruhmeshalle nebenan.
+            return interaction.reply({
+                content: `${ueberschrift}\n${message}\n`
+                    + `Am Monatsende gewinnt Platz eins die Champion-Rolle, danach starten alle wieder bei 0 `
+                    + `(frühere Sieger: \`/pingpong ruhmeshalle\`).`,
+                allowedMentions: {parse: []},
+            });
         } catch (error) {
             console.error("Error handling ping pong highscore:", error);
             return interaction.reply({ content: "Es gab einen Fehler beim Abrufen der Highscores.", flags: MessageFlags.Ephemeral });

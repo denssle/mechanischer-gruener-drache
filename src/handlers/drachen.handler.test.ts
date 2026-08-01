@@ -132,9 +132,10 @@ describe('DrachenHandler.pruefeLevel', () => {
         await drachenHandler.pruefeLevel([{name: 'Centurio Acaine', level: '1'}]);
 
         expect(channel.send).toHaveBeenCalledTimes(1);
-        expect(channel.send.mock.calls[0][0]).toContain('<@u1>');
-        // Der Ping ist hier der Sinn der Sache - also KEIN allowedMentions-Maulkorb wie sonst.
-        expect(typeof channel.send.mock.calls[0][0]).toBe('string');
+        expect(channel.send.mock.calls[0][0].content).toContain('<@u1>');
+        // Der Ping ist hier gewollt, aber als Allowlist auf genau diese Person: im Text steht
+        // ein aus der Kriegerliste GESCRAPTER Name, der soll nichts anderes auslösen können.
+        expect(channel.send.mock.calls[0][0].allowedMentions).toEqual({users: ['u1']});
     });
 
     it('schreibt den neuen Stand fort, auch ohne Gratulation', async () => {

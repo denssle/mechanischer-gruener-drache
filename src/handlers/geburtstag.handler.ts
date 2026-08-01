@@ -239,8 +239,13 @@ class GeburtstagHandler {
             for (const [userId, geburtstag] of heutige) {
                 try {
                     // Die Erwähnung DARF pingen - das ist der Sinn eines Glückwunschs (anders als
-                    // bei /geburtstag liste, wo allowedMentions bewusst leer ist).
-                    await channel.send(waehleGlueckwunsch(`<@${userId}>`, berechneAlter(geburtstag, jetzt)));
+                    // bei /geburtstag liste, wo allowedMentions bewusst leer ist). Als Allowlist
+                    // auf genau diese Person: der Glückwunsch soll das Geburtstagskind erreichen
+                    // und sonst niemanden, egal was künftig in die Textbausteine wandert.
+                    await channel.send({
+                        content: waehleGlueckwunsch(`<@${userId}>`, berechneAlter(geburtstag, jetzt)),
+                        allowedMentions: {users: [userId]},
+                    });
                 } catch (error) {
                     console.error(`Fehler beim Posten des Geburtstagsgrußes für ${userId}:`, error);
                 }

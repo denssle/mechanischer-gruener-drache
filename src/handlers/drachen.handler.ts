@@ -123,10 +123,14 @@ class DrachenHandler {
     // Gratulation beim nächsten Mal noch nachkommen (Muster der Beobachtungsliste).
     private async gratuliere(channel: TextChannel, link: CharacterLink, anzeigeName: string): Promise<void> {
         try {
-            // Der Ping ist hier der Sinn der Sache (wie beim Geburtstagsgruß), also bewusst
-            // OHNE allowedMentions-Einschränkung - anders als /online oder die Ruhmeshalle,
-            // wo Mentions nur der Zuordnung dienen.
-            await channel.send(formatGratulation(link.discordUserId, anzeigeName));
+            // Der Ping ist hier der Sinn der Sache (wie beim Geburtstagsgruß) - aber als
+            // Allowlist auf genau diese eine Person, nicht als "Mentions frei". Im Text steht mit
+            // `anzeigeName` ein aus der Kriegerliste GESCRAPTER Name; ob lotgd.de dort ein `@`
+            // zulässt, ist nicht unsere Zusicherung. Die Allowlist macht die Frage gegenstandslos.
+            await channel.send({
+                content: formatGratulation(link.discordUserId, anzeigeName),
+                allowedMentions: {users: [link.discordUserId]},
+            });
             await drachenService.merkeGemeldet(link.name);
         } catch (error) {
             console.error(`Fehler beim Posten der Drachentötungs-Gratulation für ${link.name}:`, error);
