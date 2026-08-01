@@ -100,6 +100,19 @@ describe('Gratulations-Text', () => {
     });
 });
 
+// Der gemeinsame Poller fragt das, bevor er lotgd.de abruft.
+describe('DrachenHandler.brauchtOnlineStand', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('meldet Bedarf nur bei konfiguriertem Kanal', async () => {
+        drachen.getChannel.mockResolvedValue('kanal-1');
+        expect(await drachenHandler.brauchtOnlineStand()).toBe(true);
+
+        drachen.getChannel.mockResolvedValue(null);
+        expect(await drachenHandler.brauchtOnlineStand()).toBe(false);
+    });
+});
+
 describe('DrachenHandler.pruefeLevel', () => {
     let channel: ReturnType<typeof makeChannel>;
 

@@ -9,9 +9,12 @@ import characterService, {CharacterLink, findLinkForName} from '../services/char
 // Level-STURZ ist praktisch immer ein Drachenkill - im Spiel gibt es keinen anderen Weg, viele
 // Stufen auf einmal zu verlieren (Sterben delevelt nicht).
 //
-// Bewusst OPPORTUNISTISCH statt per Timer: geprüft wird mit den Daten, die /online und
-// /charakter anzeigen ohnehin abrufen - kein zusätzlicher Abruf bei lotgd.de, kein zweiter
-// Scheduling-Mechanismus. Eine Gratulation darf Stunden oder Tage später kommen.
+// Bewusst kein eigener Abruf: geprüft wird mit Daten, die es ohnehin schon gibt - aus /online
+// und /charakter anzeigen (opportunistisch) sowie aus dem gemeinsamen 5-Minuten-Poll der
+// Kriegerliste (onlinePoll.handler, der auch die Beobachtungsliste bedient). Der Poll ist der
+// verlässliche Weg: wer gerade einen Drachen erlegt hat, IST in dem Moment eingeloggt und steht
+// damit in genau dieser Tabelle - und den hohen Ausgangsstand hat der Poll vorher gesehen.
+// Die Befehle bleiben trotzdem angeschlossen: der Roster dort kennt auch Offline-Charaktere.
 
 // Das Spiel geht bis Stufe 15, erst dort ist der Drache fällig. Verlangt wird trotzdem nur ein
 // Sturz von MIN_ALTES_LEVEL abwärts, nicht exakt von 15: unser letzter gesehener Stand kann
@@ -63,7 +66,15 @@ export interface LevelBeobachtung {
 }
 
 class DrachenHandler {
-    // Wird von /online und /charakter anzeigen mit den ohnehin geholten Daten gefüttert.
+    // Lohnt sich der Abruf unseretwegen? Ohne konfigurierten Kanal tut pruefeLevel ohnehin
+    // nichts - dann muss der Poller lotgd.de für uns nicht behelligen. Bewusst nur der
+    // Kanal-Check (ein Redis-Read), nicht die volle Auflösung über die Discord-API.
+    async brauchtOnlineStand(): Promise<boolean> {
+        return await drachenService.getChannel() !== null;
+    }
+
+    // Wird von /online, /charakter anzeigen und dem 5-Minuten-Poll (onlinePoll.handler) mit den
+    // ohnehin geholten Daten gefüttert.
     // Fehlertolerant wie alle Nebenaufgaben: eine Gratulation darf den auslösenden Befehl
     // niemals kosten, deshalb try/catch um alles und Aufruf per void an der Rufstelle.
     async pruefeLevel(beobachtungen: LevelBeobachtung[]): Promise<void> {

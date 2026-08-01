@@ -1,6 +1,6 @@
 import {ChatInputCommandInteraction, MessageFlags} from 'discord.js';
 import beobachtenService, {MAX_NAMEN} from '../services/beobachten.service.js';
-import onlineService, {OnlinePlayer} from '../services/online.service.js';
+import {OnlinePlayer} from '../services/online.service.js';
 import characterService, {findInRoster, findLinkForName, passtAufKernNamen} from '../services/character.service.js';
 import {sendeDm} from '../services/dm.service.js';
 
@@ -22,14 +22,10 @@ import {sendeDm} from '../services/dm.service.js';
 // "nicht verknüpft" und "nicht freigegeben" bewusst DIESELBE - sonst wäre sie ein Orakel dafür,
 // wer den Bot nutzt.
 //
-// Es gibt keine Push-API, also Polling der ohnehin gescrapten Kriegerliste. Angestoßen vom
-// EINEN 60-s-Timer in index.ts (kein zweiter Mechanismus) - die Taktung macht diese Datei
-// selbst, siehe POLL_INTERVALL_MS.
-
-// Wie oft list.php wirklich abgerufen wird. Bewusst nicht im Minutentakt: die Seite gehört
-// nicht uns, ~288 Abrufe am Tag sind ein höflicher Kompromiss. Preis dafür: die Meldung kommt
-// bis zu 5 Minuten später, und sehr kurze Sitzungen können zwischen zwei Abrufen durchrutschen.
-export const POLL_INTERVALL_MS = 5 * 60 * 1000;
+// Es gibt keine Push-API, also Polling der ohnehin gescrapten Kriegerliste. Den Abruf selbst
+// macht seit 2026-08-01 der gemeinsame `onlinePoll.handler` (die Drachentötungs-Gratulation ist
+// als zweiter Abnehmer dazugekommen); hier bleibt nur die Verarbeitung - siehe
+// brauchtOnlineStand/verarbeiteOnlineStand.
 
 export const BEOBACHTEN_HILFE =
     `**Beobachtungs-Befehle**\n\n` +
@@ -55,11 +51,6 @@ export function formatMeldung(anzeigeName: string, ort: string): string {
 }
 
 class BeobachtenHandler {
-    // Zeitpunkt des letzten Abrufs. Bewusst NUR im Speicher, kein Redis-Marker wie bei den
-    // Tagesaufgaben: ein verpasster Poll wird nicht nachgeholt (der Online-Stand von vorhin
-    // ist wertlos), und nach einem Neustart darf sofort wieder gepollt werden.
-    #letzterPoll = 0;
-
     async handleHinzufuegen(interaction: ChatInputCommandInteraction) {
         const eingabe = interaction.options.getString('name', true).trim();
 
@@ -173,23 +164,22 @@ class BeobachtenHandler {
         return interaction.reply(BEOBACHTEN_HILFE);
     }
 
-    // Wird vom 60-s-Timer angestupst und entscheidet selbst, ob wirklich etwas zu tun ist.
-    // Fehlertolerant wie die anderen Timer-Aufgaben.
-    async pruefeBeobachtungen(): Promise<void> {
-        try {
-            if (Date.now() - this.#letzterPoll < POLL_INTERVALL_MS) return;
+    // Beobachtet überhaupt jemand etwas? Wenn nein, muss der Poller lotgd.de unseretwegen nicht
+    // behelligen (er fragt auch die Drachen-Gratulation, es kann also trotzdem abgerufen werden).
+    async brauchtOnlineStand(): Promise<boolean> {
+        return (await beobachtenService.holeBeobachter()).length > 0;
+    }
 
-            // Beobachtet niemand etwas, wird lotgd.de gar nicht erst behelligt.
+    // Verarbeitet den vom onlinePoll.handler geholten Online-Stand. Der Abruf selbst liegt dort,
+    // weil zwei Features an ihm hängen; hier bleibt nur, was die Beobachtungsliste damit tut.
+    // Fehlertolerant wie die anderen Timer-Aufgaben - der zweite Abnehmer soll nicht mit
+    // ausfallen, wenn hier etwas schiefgeht.
+    async verarbeiteOnlineStand(spieler: OnlinePlayer[]): Promise<void> {
+        try {
             const beobachter = await beobachtenService.holeBeobachter();
-            this.#letzterPoll = Date.now();
             if (beobachter.length === 0) return;
 
-            const data = await onlineService.getOnline();
-            // Abruf/Markup kaputt: Übergangs-State NICHT anfassen. Würde er hier geleert, gälte
-            // beim nächsten Durchlauf jeder Eingeloggte als frisch online.
-            if (!data) return;
-
-            const treffer = await this.sammleTreffer(beobachter, data.players);
+            const treffer = await this.sammleTreffer(beobachter, spieler);
 
             const zuletzt = new Set(await beobachtenService.holeZuletztOnline());
             // Den neuen Stand VOR dem Versand festhalten (Anstupser-Muster): viele DMs dauern,

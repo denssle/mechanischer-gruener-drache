@@ -31,7 +31,7 @@ vi.mock('../services/character.service.js', async (original) => ({
 const sendeDm = vi.hoisted(() => vi.fn());
 vi.mock('../services/dm.service.js', () => ({sendeDm, DM_GESCHLOSSEN: 50007}));
 
-import beobachtenHandler, {BEOBACHTEN_HILFE, formatMeldung, POLL_INTERVALL_MS} from './beobachten.handler.js';
+import beobachtenHandler, {BEOBACHTEN_HILFE, formatMeldung} from './beobachten.handler.js';
 import {MAX_NAMEN} from '../services/beobachten.service.js';
 
 const spieler = (name: string, ort = 'Romar') =>
@@ -45,23 +45,19 @@ const mockInteraction = (name?: string, userId = 'u1') => ({
     editReply: vi.fn(),
 } as any);
 
-// Der Poller taktet sich selbst herunter - für aufeinanderfolgende Durchläufe die Uhr weiterdrehen.
+// Den Abruf macht seit 2026-08-01 der gemeinsame onlinePoll.handler; hier wird nur noch die
+// Verarbeitung geprüft. Der Helfer reicht durch, was die Tests am getOnline-Mock eingestellt
+// haben - dadurch bleiben ihre Bodies unverändert.
 async function pollen() {
-    vi.setSystemTime(Date.now() + POLL_INTERVALL_MS + 1000);
-    await beobachtenHandler.pruefeBeobachtungen();
+    const data = await getOnline();
+    await beobachtenHandler.verarbeiteOnlineStand(data?.players ?? []);
 }
 
 describe('BeobachtenHandler', () => {
-    // Der Handler merkt sich den letzten Abruf im Speicher und überlebt als Singleton die
-    // einzelnen Tests - die Testuhr muss deshalb monoton weiterlaufen, sonst läge der
-    // gemerkte Zeitpunkt in der Zukunft und jeder Poll stiege sofort wieder aus.
-    let basis = new Date('2026-07-31T12:00:00').getTime();
-
     beforeEach(() => {
         vi.clearAllMocks();
         vi.useFakeTimers();
-        basis += 60 * 60 * 1000;
-        vi.setSystemTime(basis);
+        vi.setSystemTime(new Date('2026-07-31T12:00:00'));
         service.holeListe.mockResolvedValue([]);
         service.holeBeobachter.mockResolvedValue([]);
         service.holeZuletztOnline.mockResolvedValue([]);
@@ -223,11 +219,21 @@ describe('BeobachtenHandler', () => {
         });
     });
 
-    describe('pruefeBeobachtungen', () => {
-        it('ruft gar nichts ab, solange niemand jemanden beobachtet', async () => {
-            await pollen();
+    describe('verarbeiteOnlineStand', () => {
+        // Der Poller fragt vorher brauchtOnlineStand; kommt der Stand trotzdem herein (der
+        // zweite Abnehmer wollte ihn), darf hier nichts passieren.
+        it('meldet gar nichts, solange niemand jemanden beobachtet', async () => {
+            await beobachtenHandler.verarbeiteOnlineStand([spieler('Centurio Acaine')]);
 
-            expect(getOnline).not.toHaveBeenCalled();
+            expect(sendeDm).not.toHaveBeenCalled();
+            expect(service.setzeZuletztOnline).not.toHaveBeenCalled();
+        });
+
+        it('brauchtOnlineStand sagt dem Poller, ob der Abruf sich lohnt', async () => {
+            expect(await beobachtenHandler.brauchtOnlineStand()).toBe(false);
+
+            service.holeBeobachter.mockResolvedValue(['u1']);
+            expect(await beobachtenHandler.brauchtOnlineStand()).toBe(true);
         });
 
         it('meldet einen beobachteten Charakter, der neu online ist', async () => {
@@ -332,27 +338,6 @@ describe('BeobachtenHandler', () => {
         });
 
         // Sonst gälte beim nächsten Durchlauf jeder Eingeloggte als frisch online.
-        it('lässt den Übergangs-State unangetastet, wenn der Abruf scheitert', async () => {
-            service.holeBeobachter.mockResolvedValue(['u1']);
-            getOnline.mockResolvedValue(null);
-
-            await pollen();
-
-            expect(service.setzeZuletztOnline).not.toHaveBeenCalled();
-            expect(sendeDm).not.toHaveBeenCalled();
-        });
-
-        it('ruft lotgd.de nur im eingestellten Takt ab, nicht bei jedem Timer-Schlag', async () => {
-            service.holeBeobachter.mockResolvedValue(['u1']);
-
-            await pollen();
-            await beobachtenHandler.pruefeBeobachtungen(); // gleich danach nochmal
-            vi.setSystemTime(Date.now() + 60 * 1000);
-            await beobachtenHandler.pruefeBeobachtungen(); // eine Minute später
-
-            expect(getOnline).toHaveBeenCalledTimes(1);
-        });
-
         it('läuft nicht in einen Fehler, wenn Redis wegbricht', async () => {
             vi.spyOn(console, 'error').mockImplementation(() => {});
             service.holeBeobachter.mockRejectedValue(new Error('Redis weg'));
