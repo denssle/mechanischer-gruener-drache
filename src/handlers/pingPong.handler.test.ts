@@ -32,8 +32,20 @@ vi.mock("./pingPongSeason.handler.js", () => ({
     monatsSchluessel: () => '2026-07',
 }));
 
+// greeting.handler liefert das persönliche Morgengruß-Emoji für die Bestenliste - mocken, damit
+// dieser Test nicht client (via greeting.handler) mitziehen muss. emojiFuerNachricht reicht den
+// Wert durch (die echte Auflösung testet greeting.handler.test.ts).
+vi.mock("./greeting.handler.js", () => ({
+    default: {
+        holePersoenlicheEmojis: vi.fn(async (ids: string[]) =>
+            Object.fromEntries(ids.map(id => [id, '🌞']))),
+    },
+    emojiFuerNachricht: (wert: string) => wert,
+}));
+
 import redisService from "../services/redis.service.js";
 import userService from "../services/user.service.js";
+import greetingHandler from "./greeting.handler.js";
 import pingPongHandler, {
     DUELL_FLAVORS,
     entscheideTaktik,
@@ -642,7 +654,28 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. Erster - 42\n2. Zweiter - 10'));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. 🌞 Erster - 42\n2. 🌞 Zweiter - 10'));
+        });
+
+        // Das persönliche Emoji aus dem Morgengruß steht als Erkennungszeichen vor dem Namen -
+        // jede Zeile bekommt das Emoji der jeweiligen Person, nicht irgendeins.
+        it('stellt jedem Eintrag das persönliche Morgengruß-Emoji voran', async () => {
+            vi.mocked(redisService.getSortedSet).mockResolvedValue([
+                { value: 'user-1', score: 42 },
+                { value: 'user-2', score: 10 },
+            ] as any);
+            vi.mocked(userService.getUser)
+                .mockResolvedValueOnce({ displayName: 'Erster' } as any)
+                .mockResolvedValueOnce({ displayName: 'Zweiter' } as any);
+            vi.mocked(greetingHandler.holePersoenlicheEmojis).mockResolvedValueOnce({
+                'user-1': '☕',
+                'user-2': '🌻',
+            });
+            const interaction = mockInteraction();
+
+            await pingPongHandler.handlePingPongHighscore(interaction);
+
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. ☕ Erster - 42\n2. 🌻 Zweiter - 10'));
         });
 
         it('fällt auf die rohe User-ID zurück wenn kein gespeicherter User existiert', async () => {
@@ -654,7 +687,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. user-1 - 5'));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. 🌞 user-1 - 5'));
         });
 
         // getScore legt jeden Duell-Teilnehmer im Sorted Set an - wer nach dem Season-Reset seine
@@ -669,7 +702,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply.mock.calls[0][0]).toContain('1. Erster - 3');
+            expect(interaction.reply.mock.calls[0][0]).toContain('1. 🌞 Erster - 3');
             expect(interaction.reply.mock.calls[0][0]).not.toContain('user-2');
         });
 
@@ -709,7 +742,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. Erster - 42 (4 in Folge)\n2. Zweiter - 10'));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('1. 🌞 Erster - 42 (4 in Folge)\n2. 🌞 Zweiter - 10'));
         });
     });
 });

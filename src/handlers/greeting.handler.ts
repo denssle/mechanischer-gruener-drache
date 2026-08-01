@@ -1,4 +1,5 @@
 import {
+    Guild,
     Message,
     OmitPartialGroupDMChannel,
     TextBasedChannel,
@@ -32,6 +33,16 @@ export function ableiteEmoji(userId: string): string {
         hash = (hash * 31 + zeichen.charCodeAt(0)) >>> 0;
     }
     return GRUSS_EMOJIS[hash % GRUSS_EMOJIS.length];
+}
+
+// Macht aus einem gespeicherten Emoji-Wert etwas, das in einer Discord-NACHRICHT rendert: Unicode
+// direkt, Custom-Emojis (liegen als blanke Snowflake-ID im Hash) als <:name:id> über die Guild
+// aufgelöst. Eine ID ohne Treffer (Emoji vom Server gelöscht) fällt auf das abgeleitete Emoji
+// zurück - eine nackte Zahl im Text wäre schlechter als der Fallback. Für Reaktionen ist das NICHT
+// nötig (message.react nimmt die ID direkt), nur für Text wie die Ping-Pong-Bestenliste.
+export function emojiFuerNachricht(wert: string, guild: Guild | null, userId: string): string {
+    if (!/^\d+$/.test(wert)) return wert;
+    return guild?.emojis.cache.get(wert)?.toString() ?? ableiteEmoji(userId);
 }
 
 // Kern der Historien-Auswertung (rein, exportiert + getestet): Aus den Reaktionen der vergangenen
@@ -103,17 +114,7 @@ class GreetingHandler {
         // möglich, aber harmlos: nur eine zusätzliche Reaktion). Bewusst kein atomares SET NX.
         await greetingService.setLastGreetingDay(message.author.id, heute);
 
-        // Drei Stufen, in dieser Reihenfolge: von Hand auf /config gesetzt > aus der Historie gelernt >
-        // stabiler Hash-Fallback. Die Handeingabe steht ganz oben, damit der Historien-Scan sie nicht
-        // aushebelt (er schreibt nur in den gelernten Hash). Fehlertolerant: ein Redis-Problem darf den
-        // Gruß nicht ganz kosten.
-        const [manuell, gelernt] = await Promise.all([
-            greetingService.getManualEmojis().catch(() => ({} as Record<string, string>)),
-            greetingService.getLearnedEmojis().catch(() => ({} as Record<string, string>)),
-        ]);
-        const persoenlich = manuell[message.author.id]
-            ?? gelernt[message.author.id]
-            ?? ableiteEmoji(message.author.id);
+        const persoenlich = (await this.holePersoenlicheEmojis([message.author.id]))[message.author.id];
 
         // Reaktionen best-effort: ein Fehler bei einem Emoji darf das andere nicht verhindern.
         await message.react(WELLE).catch((error) => {
@@ -122,6 +123,21 @@ class GreetingHandler {
         await message.react(persoenlich).catch((error) => {
             console.error('Konnte das persönliche Morgengruß-Emoji nicht setzen:', error);
         });
+    }
+
+    // Persönliches Emoji je User in drei Stufen, in dieser Reihenfolge: von Hand auf /config gesetzt >
+    // aus der Historie gelernt > stabiler Hash-Fallback. Die Handeingabe steht ganz oben, damit der
+    // Historien-Scan sie nicht aushebelt (er schreibt nur in den gelernten Hash). Genutzt vom Gruß
+    // selbst und von der Ping-Pong-Bestenliste - die Rangfolge liegt damit an EINER Stelle (plus
+    // holeMorgengrussEmojis in config.settings, das zusätzlich die Herkunft braucht). Fehlertolerant:
+    // ein Redis-Problem darf weder Gruß noch Bestenliste kosten, dann greift für alle der Fallback -
+    // die Methode wirft nie.
+    async holePersoenlicheEmojis(userIds: string[]): Promise<Record<string, string>> {
+        const [manuell, gelernt] = await Promise.all([
+            greetingService.getManualEmojis().catch(() => ({} as Record<string, string>)),
+            greetingService.getLearnedEmojis().catch(() => ({} as Record<string, string>)),
+        ]);
+        return Object.fromEntries(userIds.map(id => [id, manuell[id] ?? gelernt[id] ?? ableiteEmoji(id)]));
     }
 
     // Scannt die Kanal-Historie und schreibt die abgeleiteten Emojis in Redis. Gibt die Anzahl der

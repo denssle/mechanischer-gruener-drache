@@ -10,6 +10,9 @@ import redisService from "../services/redis.service.js";
 import userService from "../services/user.service.js";
 import {formatMonat, monatsSchluessel} from "./pingPongSeason.handler.js";
 import {PING_PONG_KEYS} from "../services/pingPong.service.js";
+// Nur für das persönliche Morgengruß-Emoji in der Bestenliste. greeting.handler nutzt client
+// ausschließlich in Methodenkörpern - die Zirkular-Import-Falle greift also nicht.
+import greetingHandler, {emojiFuerNachricht} from "./greeting.handler.js";
 
 // Nach jeder Herausforderung darf man erst nach Ablauf dieser Zeit wieder aufschlagen -
 // verhindert, dass jemand den halben Server in Serie herausfordert.
@@ -496,13 +499,19 @@ class PingPongHandler {
             const serien = await Promise.all(
                 highscore.map(item => this.getSerie(item.value))
             );
+            // Persönliches Emoji aus dem Morgengruß als kleines Erkennungszeichen vor dem Namen -
+            // dieselbe Rangfolge wie beim Gruß (manuell > gelernt > abgeleitet), die Methode wirft
+            // nie (Fallback für alle). Funktionales Item-Icon wie die Sport-Aktivitäts-Labels,
+            // keine Dekoration.
+            const emojis = await greetingHandler.holePersoenlicheEmojis(highscore.map(item => item.value));
 
             const message = highscore
                 .map((item, index) => {
                     const user = users[index];
                     const displayName = user?.displayName ?? item.value;
                     const serie = serien[index] >= MIN_SERIE ? ` (${serien[index]} in Folge)` : '';
-                    return `${index + 1}. ${displayName} - ${item.score}${serie}`;
+                    const emoji = emojiFuerNachricht(emojis[item.value], interaction.guild, item.value);
+                    return `${index + 1}. ${emoji} ${displayName} - ${item.score}${serie}`;
                 })
                 .join('\n');
 

@@ -19,6 +19,7 @@ import greetingHandler, {
     WELLE,
     GRUSS_EMOJIS,
     ableiteEmoji,
+    emojiFuerNachricht,
     werteReaktionenAus,
 } from './greeting.handler.js';
 
@@ -77,6 +78,59 @@ describe('werteReaktionenAus', () => {
             { authorId: 'nur-welle', emojis: [WELLE] },
         ]);
         expect(map['nur-welle']).toBeUndefined();
+    });
+});
+
+// Für Text-Ausgaben (z.B. Ping-Pong-Bestenliste): Unicode direkt, Custom-IDs über die Guild,
+// gelöschte Custom-Emojis fallen auf das abgeleitete Emoji zurück statt als nackte Zahl zu stehen.
+describe('emojiFuerNachricht', () => {
+    const guild = {
+        emojis: { cache: new Map([['123456789012345678', { toString: () => '<:blob:123456789012345678>' }]]) },
+    } as any;
+
+    it('reicht Unicode-Emojis unverändert durch', () => {
+        expect(emojiFuerNachricht('☕', guild, 'u1')).toBe('☕');
+    });
+
+    it('löst Custom-Emoji-IDs über die Guild zu <:name:id> auf', () => {
+        expect(emojiFuerNachricht('123456789012345678', guild, 'u1')).toBe('<:blob:123456789012345678>');
+    });
+
+    it('fällt bei einer unbekannten ID (Emoji gelöscht) auf das abgeleitete Emoji zurück', () => {
+        expect(emojiFuerNachricht('999999999999999999', guild, 'u1')).toBe(ableiteEmoji('u1'));
+    });
+
+    it('fällt ohne Guild auf das abgeleitete Emoji zurück', () => {
+        expect(emojiFuerNachricht('123456789012345678', null, 'u1')).toBe(ableiteEmoji('u1'));
+    });
+});
+
+// Die Rangfolge manuell > gelernt > abgeleitet für mehrere User auf einmal - genutzt vom Gruß
+// selbst und von der Ping-Pong-Bestenliste.
+describe('GreetingHandler.holePersoenlicheEmojis', () => {
+    beforeEach(() => {
+        Object.values(svc).forEach(fn => fn.mockReset());
+        svc.getManualEmojis.mockResolvedValue({});
+        svc.getLearnedEmojis.mockResolvedValue({});
+    });
+
+    it('wendet die Rangfolge manuell > gelernt > abgeleitet je User an', async () => {
+        svc.getManualEmojis.mockResolvedValue({ u1: '🍪' });
+        svc.getLearnedEmojis.mockResolvedValue({ u1: '🔥', u2: '☕' });
+
+        const emojis = await greetingHandler.holePersoenlicheEmojis(['u1', 'u2', 'u3']);
+
+        expect(emojis).toEqual({ u1: '🍪', u2: '☕', u3: ableiteEmoji('u3') });
+    });
+
+    // Wirft nie: ein Redis-Problem darf weder den Gruß noch die Bestenliste kosten.
+    it('liefert bei Redis-Fehlern für alle den abgeleiteten Fallback', async () => {
+        svc.getManualEmojis.mockRejectedValue(new Error('Redis weg'));
+        svc.getLearnedEmojis.mockRejectedValue(new Error('Redis weg'));
+
+        const emojis = await greetingHandler.holePersoenlicheEmojis(['u1', 'u2']);
+
+        expect(emojis).toEqual({ u1: ableiteEmoji('u1'), u2: ableiteEmoji('u2') });
     });
 });
 
