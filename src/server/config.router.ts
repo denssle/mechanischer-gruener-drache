@@ -434,6 +434,10 @@ export function renderMorgengrussEmojiSeite(
     <p>Womit der Bot die erste Nachricht des Tages quittiert. „Manuell" ist hier von Hand gesetzt und
     bleibt beim Lernen unangetastet, „gelernt" stammt aus der Chat-Historie, „abgeleitet" ist der feste
     Fallback aus der User-ID.</p>
+    <p class="feld-hinweis">Ins Feld darf das Emoji selbst (🍪), ein Discord-Shortcode
+    (<code>:cookie:</code>) oder ein Server-Emoji (<code>:name:</code> bzw. eingefügt als
+    <code>&lt;:name:id&gt;</code>). Heißt ein Server-Emoji wie ein Shortcode, gewinnt das
+    Server-Emoji.</p>
     ${gespeichert ? '<p class="meldung status-ok">Persönliches Emoji gespeichert.</p>' : ''}
     ${renderMorgengrussEmojis(eintraege, vorschlaege, csrfToken)}
     <p><a href="/config">Zurück zu den Einstellungen</a></p>`;

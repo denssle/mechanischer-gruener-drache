@@ -52,6 +52,7 @@ import twitchUserService from '../services/twitch.user.service.js';
 import sportService from '../services/sport.service.js';
 import sportHandler from '../handlers/sport.handler.js';
 import {ableiteEmoji, GRUSS_EMOJIS} from '../handlers/greeting.handler.js';
+import {EMOJI_SHORTCODES} from '../data/emoji-shortcodes.js';
 import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import eventService from '../services/event.service.js';
@@ -402,6 +403,7 @@ describe('config.settings – Morgengruß-Emojis', () => {
             emojis: {
                 cache: new Collection<string, any>([
                     ['555', {id: '555', name: 'blahaj', imageURL: () => 'https://cdn/555.png'}],
+                    ['1336646220168433674', {id: '1336646220168433674', name: 'blahaj', imageURL: () => 'https://cdn/echt.png'}],
                 ])
             }
         }]]);
@@ -580,6 +582,57 @@ describe('config.settings – Morgengruß-Emojis', () => {
         it('versteht das eingefügte Discord-Markup <:name:id>', () => {
             expect(deuteEmojiEingabe('<:blahaj:555>')).toBe('555');
             expect(deuteEmojiEingabe('<a:blahaj:555>')).toBe('555');
+        });
+
+        // REGRESSION (bis 2026-08-01): die Längengrenze von 16 Zeichen stand vor der
+        // Markup-Prüfung. Eine echte Snowflake hat 17-19 Ziffern, das Markup ist damit IMMER
+        // länger - die dokumentierte Einfüge-Form wurde also ausnahmslos abgelehnt. Verdeckt
+        // wurde das von der dreistelligen Fantasie-ID im Test darüber, deshalb hier eine echte.
+        it('versteht Markup auch mit einer echten (langen) Snowflake', () => {
+            expect(deuteEmojiEingabe('<:blahaj:1336646220168433674>')).toBe('1336646220168433674');
+        });
+
+        // Der eigentliche Zweck des Fixes: Discord gibt Emojis vielerorts als Shortcode aus.
+        it.each([
+            [':cookie:', '🍪'],
+            [':wave:', '👋'],
+            [':sunny:', '☀️'],
+            [':FOUR_LEAF_CLOVER:', '🍀'],   // Groß-/Kleinschreibung egal
+            [':+1:', '👍'],                  // Shortcodes mit Sonderzeichen
+        ])('löst den Standard-Shortcode %s zu %s auf', (eingabe, erwartet) => {
+            expect(deuteEmojiEingabe(eingabe)).toBe(erwartet);
+        });
+
+        // Sonst änderte sich stillschweigend das Verhalten bestehender Zuordnungen.
+        it('lässt bei Namensgleichheit das Server-Emoji gewinnen', () => {
+            expect(deuteEmojiEingabe(':blahaj:')).toBe('555');
+        });
+
+        it('lehnt einen Shortcode ab, den weder Server noch Tabelle kennen', () => {
+            expect(deuteEmojiEingabe(':voellig_erfunden:')).toBeNull();
+        });
+
+        // Die Längengrenze gilt weiterhin - nur eben nicht mehr für die :name:-Formen.
+        it('lehnt langen Fließtext weiterhin ab', () => {
+            expect(deuteEmojiEingabe('das ist ein ganzer satz und kein emoji')).toBeNull();
+        });
+
+        // Ein vertippter Tabelleneintrag würde klaglos gespeichert und erst Wochen später beim
+        // Gruß an message.react scheitern - hier fällt er sofort auf. Der Round-Trip prüft jeden
+        // Wert mit genau den Regeln, nach denen auch eine Direkteingabe beurteilt wird.
+        it('jeder Tabellen-Eintrag ist ein Emoji, das die Eingabe-Prüfung besteht', () => {
+            for (const [shortcode, zeichen] of Object.entries(EMOJI_SHORTCODES)) {
+                expect(deuteEmojiEingabe(zeichen), `Eintrag :${shortcode}:`).toBe(zeichen);
+            }
+        });
+
+        // Die abgeleiteten Vorgaben sind das, was jemand beim Korrigieren am ehesten nachtippt -
+        // die Tabelle behauptet im Kommentar, sie alle zu kennen.
+        it('kennt für jedes Pool-Emoji einen Shortcode', () => {
+            const bekannt = new Set(Object.values(EMOJI_SHORTCODES));
+            for (const zeichen of GRUSS_EMOJIS) {
+                expect(bekannt, `Pool-Emoji ${zeichen}`).toContain(zeichen);
+            }
         });
 
         it('lehnt ein Server-Emoji ab, das es nicht gibt', () => {

@@ -12,6 +12,7 @@ import drachenService from '../services/drachen.service.js';
 import eventService from '../services/event.service.js';
 import pingPongService from '../services/pingPong.service.js';
 import {ableiteEmoji, GRUSS_EMOJIS} from '../handlers/greeting.handler.js';
+import {EMOJI_SHORTCODES} from '../data/emoji-shortcodes.js';
 
 // Sammelt die auf /config bearbeitbaren Admin-Einstellungen als strukturierte Daten fuers
 // Web-Rendering. Jedes Feld traegt seinen aktuellen Wert UND seinen Zustand (siehe FeldStatus) -
@@ -387,15 +388,19 @@ const NUR_EMOJI_TEILE = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\p{Re
 const ECHTES_EMOJI = /[\p{Extended_Pictographic}\p{Regional_Indicator}⃣]/u;
 
 // Deutet die Eingabe des Textfelds und gibt zurück, was in Redis landen soll (Unicode-Zeichen ODER
-// Custom-Emoji-ID) - oder null, wenn es kein brauchbares Emoji ist. Drei akzeptierte Formen:
-//   1. `:name:`        - Server-Emoji über seinen Namen (wird zur ID aufgelöst)
-//   2. `<:name:id>`    - was Discord beim Kopieren eines Server-Emojis einfügt
-//   3. das Emoji selbst - beliebiges Unicode-Emoji, auch zusammengesetzt
+// Custom-Emoji-ID) - oder null, wenn es kein brauchbares Emoji ist. Vier akzeptierte Formen:
+//   1. `<:name:id>`    - was Discord beim Kopieren eines Server-Emojis einfügt
+//   2. `:name:`        - Server-Emoji über seinen Namen (wird zur ID aufgelöst)
+//   3. `:name:`        - Shortcode eines Standard-Emojis (`:cookie:` → 🍪), NUR als Fallback
+//   4. das Emoji selbst - beliebiges Unicode-Emoji, auch zusammengesetzt
 // Server-Emojis werden gegen die Guild geprüft: eine erfundene ID würde beim Gruß an message.react
 // scheitern, das soll hier auffallen und nicht später stillschweigend.
+//
+// REIHENFOLGE 2 VOR 3 IST ABSICHT: heißt ein Server-Emoji wie ein Standard-Shortcode, gewinnt das
+// Server-Emoji. Andersherum änderte sich stillschweigend das Verhalten bestehender Zuordnungen.
 export function deuteEmojiEingabe(eingabe: string): string | null {
     const text = eingabe.trim();
-    if (!text || text.length > MAX_EMOJI_LAENGE) {
+    if (!text) {
         return null;
     }
 
@@ -405,11 +410,22 @@ export function deuteEmojiEingabe(eingabe: string): string | null {
         return guild?.emojis.cache.has(alsMarkup[2]) ? alsMarkup[2] : null;
     }
 
-    const alsName = /^:([a-zA-Z0-9_]{2,32}):$/.exec(text);
+    // `+`/`-` zusätzlich erlaubt: Discord-Shortcodes wie `:+1:` tragen sie. Für Server-Emojis
+    // ist das folgenlos (deren Namen dürfen sie ohnehin nicht enthalten, die Suche geht dann leer aus).
+    const alsName = /^:([a-zA-Z0-9_+-]{2,32}):$/.exec(text);
     if (alsName) {
-        return guild?.emojis.cache.find(emoji => emoji.name === alsName[1])?.id ?? null;
+        const serverEmoji = guild?.emojis.cache.find(emoji => emoji.name === alsName[1])?.id;
+        return serverEmoji ?? EMOJI_SHORTCODES[alsName[1].toLowerCase()] ?? null;
     }
 
+    // Die Längengrenze gilt NUR hier: sie soll ein einzelnes Unicode-Emoji von Fließtext trennen.
+    // Vor 2026-08-01 stand sie ganz oben und traf damit auch die Formen 1-3 - `<:name:id>` mit einer
+    // echten Snowflake (17-19 Ziffern) ist IMMER länger als 16 Zeichen und wurde deshalb ausnahmslos
+    // abgelehnt, obwohl die Doku sie als unterstützt führte. Aufgefallen ist es nie, weil der Test
+    // eine dreistellige Fantasie-ID benutzte; er nimmt jetzt eine echte.
+    if (text.length > MAX_EMOJI_LAENGE) {
+        return null;
+    }
     return NUR_EMOJI_TEILE.test(text) && ECHTES_EMOJI.test(text) ? text : null;
 }
 
