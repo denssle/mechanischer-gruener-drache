@@ -33,6 +33,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Steht bewusst vor allem anderen: braucht keine config.json und ist der billigste
+      # Check, faellt also am schnellsten. War bis 2026-08-04 gar nicht Teil des Workflows -
+      # dadurch landete ein ungenutzter Import auf main, ohne dass die CI etwas gemerkt hat.
+      - name: Lint
+        run: npm run lint
+
       - name: Create dummy config
         run: echo '{"BOT_TOKEN":"test","CLIENT_ID":"test","GUILD_ID":"test","TWITCH_WEBHOOK_SECRET":"test-secret","TWITCH_CLIENT_ID":"test","TWITCH_CLIENT_SECRET":"test"}' > config.json
 
