@@ -51,6 +51,7 @@ import pingPongHandler, {
     entscheideTaktik,
     formatAnsage,
     formatSerie,
+    MIN_SERIE,
     randomDuellFlavor,
     spieleDuell,
     TAKTIK_AKTIONEN
@@ -480,17 +481,22 @@ describe('PingPongHandler', () => {
 
         // Eine "Serie" von 1 hat jede Person mit einem einzigen Sieg - das wären dieselben
         // Karteileichen wie die 0-Punkte-Einträge in der Bestenliste.
-        it('lässt Rekorde unter der Mindestserie weg', async () => {
+        // Die Grenze ist EINSCHLIESSEND (>= MIN_SERIE): eine Serie von genau 2 gehört in die
+        // Liste, nur die 1 fliegt raus. Der Leer-Text sagt das auch so ("mindestens 2") - er
+        // behauptete zwischenzeitlich "über 2" und war damit um eins daneben.
+        it('nimmt eine Serie von genau der Mindestlänge auf und lässt nur kürzere weg', async () => {
             vi.mocked(redisService.getSortedSet).mockResolvedValue([
-                {value: 'user-a', score: 3},
-                {value: 'user-b', score: 1},
+                {value: 'user-a', score: MIN_SERIE},
+                {value: 'user-b', score: MIN_SERIE - 1},
             ] as any);
             vi.mocked(userService.getUser).mockResolvedValue({displayName: 'Tirsis'} as any);
 
             const inter = interaction();
             await pingPongHandler.handleSerienrekorde(inter);
 
-            expect(inter.reply.mock.calls[0][0].content).not.toContain('2.');
+            const content = inter.reply.mock.calls[0][0].content;
+            expect(content).toContain(`1. 🌞 Tirsis - **${MIN_SERIE}** Siege in Folge`);
+            expect(content).not.toContain('2.');
         });
 
         it('meldet eine leere Rangliste, statt eine leere Liste zu posten', async () => {

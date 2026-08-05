@@ -85,8 +85,10 @@ export function formatAnsage(istAnsageDuell: boolean, herausfordererId: string, 
 
 // Siegesserie: laufender Zähler pro User (hoch bei Sieg, weg bei Niederlage) plus die längste
 // je erreichte Serie als persönlicher Rekord. Erwähnt wird sie erst ab MIN_SERIE - eine "Serie"
-// von einem einzelnen Duell ist keine.
-const MIN_SERIE = 2;
+// von einem einzelnen Duell ist keine. Dieselbe Schwelle filtert `/pingpong serienrekorde`
+// (einschließend: eine Serie von genau MIN_SERIE gehört in die Liste) - exportiert, damit der
+// Test die Grenze an derselben Zahl prüft, statt sie abzuschreiben.
+export const MIN_SERIE = 2;
 
 // Abschluss-Zeilen fürs Duell, aus Sicht des Siegers formuliert (der Handler setzt die Namen davor).
 // Exportiert + getestet, damit die Auswahl abgesichert ist.
@@ -550,7 +552,7 @@ class PingPongHandler {
 
             if (rekorde.length === 0) {
                 return interaction.reply({
-                    content: `${ueberschrift}\nNoch keine Serie über ${MIN_SERIE} Siege – da ist die Bestmarke frei.`,
+                    content: `${ueberschrift}\nNoch keine Serie von mindestens ${MIN_SERIE} Siegen – da ist die Bestmarke frei.`,
                     allowedMentions: {parse: []},
                 });
             }
