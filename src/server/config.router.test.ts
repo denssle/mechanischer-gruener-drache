@@ -1009,6 +1009,46 @@ describe('config.router', () => {
 
             expect(settings.speichereMorgengrussEmoji).toHaveBeenCalledWith('m1', '555');
         });
+
+        // Der Zurück-Link jeder Absage muss auf die Emoji-Liste zeigen, nicht auf /config: wer hier
+        // scheitert, hat auf der Unterseite gearbeitet und will genau dorthin zurück.
+        it.each([
+            ['fehlendes CSRF-Token', {mitglied: 'm1', emoji: '🦊'}],
+            ['unbekanntes Mitglied', {_csrf: createCsrfToken('12345'), mitglied: 'fremd', emoji: '🦊'}],
+            ['verworfenes Emoji', {_csrf: createCsrfToken('12345'), mitglied: 'm1', emoji: 'ungueltig'}],
+        ])('führt bei %s zurück auf die Emoji-Liste', async (_fall, body) => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussEmojiSpeichern(anfrage(body as Record<string, string>), res);
+
+            expect(res.send.mock.calls[0][0]).toContain('href="/config/morgengruss-emojis"');
+        });
+
+        // Eine abgelehnte Eingabe ist kein Rechteproblem - "Kein Zugriff" widerspräche dem Text
+        // darunter ("Das ist kein Emoji, das ich setzen kann").
+        it('betitelt eine abgelehnte Eingabe nicht als fehlenden Zugriff', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussEmojiSpeichern(
+                anfrage({_csrf: createCsrfToken('12345'), mitglied: 'm1', emoji: 'ungueltig'}), res
+            );
+
+            const html = res.send.mock.calls[0][0] as string;
+            expect(html).toContain('Eingabe nicht übernommen');
+            expect(html).not.toContain('Kein Zugriff');
+        });
+
+        // Ein ungültiges CSRF-Token ist dagegen sehr wohl ein Zugriffsproblem.
+        it('betitelt ein fehlendes CSRF-Token weiterhin als fehlenden Zugriff', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleMorgengrussEmojiSpeichern(anfrage({mitglied: 'm1', emoji: '🦊'}), res);
+
+            expect(res.send.mock.calls[0][0]).toContain('Kein Zugriff');
+        });
     });
 
     // Im Geburtstags-Bereich gibt es bewusst NUR den Kanal - die Daten tragen die Leute selbst ein.

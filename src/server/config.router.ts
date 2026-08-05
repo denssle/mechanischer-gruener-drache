@@ -417,8 +417,10 @@ export function renderMorgengrussEmojis(
 // Die Emoji-Übersicht liegt seit 2026-07-26 auf einer EIGENEN Seite (/config/morgengruss-emojis),
 // nicht mehr im Morgengruß-Bereich: die Tabelle wächst mit der Mitgliederzahl und hat /config sonst
 // dominiert. Muster wie /config/logs. Hier steht nur noch der Link dorthin.
+export const EMOJI_SEITE = '/config/morgengruss-emojis';
+
 export function renderMorgengrussEmojiLink(anzahl: number): string {
-    return `<p class="feld-hinweis"><a href="/config/morgengruss-emojis">Persönliche Emojis ansehen und ändern</a>
+    return `<p class="feld-hinweis"><a href="${EMOJI_SEITE}">Persönliche Emojis ansehen und ändern</a>
     (${anzahl} ${anzahl === 1 ? 'Person' : 'Personen'})</p>`;
 }
 
@@ -619,10 +621,32 @@ const NOT_CONFIGURED_BODY = `<h1>Anmeldung nicht verfügbar</h1>
     <p>Der Discord-Login ist auf diesem Server noch nicht konfiguriert
     (<code>DISCORD_CLIENT_SECRET</code> und <code>CONFIG_SESSION_SECRET</code> fehlen).</p>`;
 
-function forbiddenBody(grund: string): string {
-    return `<h1>Kein Zugriff</h1>
+// Gemeinsame Fehlerseite. Zwei Parameter, die vorher fest verdrahtet waren:
+// - `ueberschrift`, weil "Kein Zugriff" nur für 403 stimmt. Bei einer abgelehnten EINGABE (400) hat
+//   die Person ja Zugriff, nur der Wert war unbrauchbar - die Überschrift widersprach dann dem Text
+//   darunter ("Das ist kein Emoji, das ich setzen kann").
+// - `zurueck` als Ziel des Zurück-Links: standardmäßig die Hauptseite, für Fehler aus einer
+//   Unterseite (z.B. der Emoji-Liste) deren eigener Pfad - sonst landet man nach einem abgelehnten
+//   Formular an einer ganz anderen Stelle als der, an der man gearbeitet hat.
+function fehlerBody(ueberschrift: string, grund: string, zurueck: string): string {
+    return `<h1>${ueberschrift}</h1>
     <p>${grund}</p>
-    <p><a class="logout" href="/config">Zurück</a></p>`;
+    <p><a class="logout" href="${zurueck}">Zurück</a></p>`;
+}
+
+// 403: fehlende Rechte, ungültiges CSRF-Token, abgelehnte Anmeldung.
+function forbiddenBody(grund: string, zurueck = '/config'): string {
+    return fehlerBody('Kein Zugriff', grund, zurueck);
+}
+
+// 400: die Anfrage kam von einer berechtigten Person, der Wert war aber unbrauchbar.
+function eingabeFehlerBody(grund: string, zurueck = '/config'): string {
+    return fehlerBody('Eingabe nicht übernommen', grund, zurueck);
+}
+
+// 500: bei uns schiefgegangen, nicht bei der bedienenden Person.
+function internerFehlerBody(grund: string): string {
+    return fehlerBody('Da ist etwas schiefgegangen', grund, '/config');
 }
 
 // Admin-Pruefung ueber den eigenen Bot: nur wer auf der konfigurierten Guild Administrator ist,
@@ -789,13 +813,13 @@ export async function handleKanalSpeichern(req: Request, res: Response): Promise
 
     const feld = typeof body.feld === 'string' ? body.feld : '';
     if (!istKanalFeld(feld)) {
-        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannte Einstellung.')));
+        res.status(400).type('html').send(renderPage(eingabeFehlerBody('Unbekannte Einstellung.')));
         return;
     }
 
     const kanalId = typeof body.kanal === 'string' ? body.kanal : '';
     if (!istGueltigerTextKanal(kanalId)) {
-        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannter Kanal – bitte einen Kanal aus der Liste wählen.')));
+        res.status(400).type('html').send(renderPage(eingabeFehlerBody('Unbekannter Kanal – bitte einen Kanal aus der Liste wählen.')));
         return;
     }
 
@@ -818,7 +842,7 @@ export async function handleRolleSpeichern(req: Request, res: Response): Promise
 
     const feld = typeof body.feld === 'string' ? body.feld : '';
     if (!istRollenFeld(feld)) {
-        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannte Einstellung.')));
+        res.status(400).type('html').send(renderPage(eingabeFehlerBody('Unbekannte Einstellung.')));
         return;
     }
 
@@ -830,7 +854,7 @@ export async function handleRolleSpeichern(req: Request, res: Response): Promise
     }
 
     if (!istGueltigeRolle(rolleId)) {
-        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannte Rolle – bitte eine Rolle aus der Liste wählen.')));
+        res.status(400).type('html').send(renderPage(eingabeFehlerBody('Unbekannte Rolle – bitte eine Rolle aus der Liste wählen.')));
         return;
     }
 
@@ -862,11 +886,11 @@ export async function handleEventSpeichern(req: Request, res: Response): Promise
 
     const timestamp = parseIsoDateTime(datum, uhrzeit);
     if (timestamp === null) {
-        res.status(400).type('html').send(renderPage(forbiddenBody('Ungültiges Datum oder ungültige Uhrzeit.')));
+        res.status(400).type('html').send(renderPage(eingabeFehlerBody('Ungültiges Datum oder ungültige Uhrzeit.')));
         return;
     }
     if (timestamp <= Date.now()) {
-        res.status(400).type('html').send(renderPage(forbiddenBody('Das Datum liegt in der Vergangenheit.')));
+        res.status(400).type('html').send(renderPage(eingabeFehlerBody('Das Datum liegt in der Vergangenheit.')));
         return;
     }
 
@@ -889,14 +913,14 @@ export async function handleSportSpeichern(req: Request, res: Response): Promise
     const aktion = typeof body.aktion === 'string' ? body.aktion : '';
     const kilometer = Number(typeof body.kilometer === 'string' ? body.kilometer : NaN);
     if (!Number.isFinite(kilometer) || kilometer < 0) {
-        res.status(400).type('html').send(renderPage(forbiddenBody('Ungültige Kilometerangabe.')));
+        res.status(400).type('html').send(renderPage(eingabeFehlerBody('Ungültige Kilometerangabe.')));
         return;
     }
 
     if (aktion === 'kilometer-setzen') {
         const mitglied = typeof body.mitglied === 'string' ? body.mitglied : '';
         if (!istGueltigesMitglied(mitglied)) {
-            res.status(400).type('html').send(renderPage(forbiddenBody('Unbekanntes Mitglied.')));
+            res.status(400).type('html').send(renderPage(eingabeFehlerBody('Unbekanntes Mitglied.')));
             return;
         }
         await speichereKilometer(mitglied, kilometer);
@@ -907,7 +931,7 @@ export async function handleSportSpeichern(req: Request, res: Response): Promise
     } else if (aktion === 'meilenstein-entfernen') {
         await entferneMeilenstein(kilometer);
     } else {
-        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekannte Aktion.')));
+        res.status(400).type('html').send(renderPage(eingabeFehlerBody('Unbekannte Aktion.')));
         return;
     }
 
@@ -943,14 +967,18 @@ export async function handleMorgengrussEmojiSpeichern(req: Request, res: Respons
     const body = (req.body ?? {}) as Record<string, unknown>;
     const token = typeof body._csrf === 'string' ? body._csrf : undefined;
 
+    // Jede Absage führt hier zurück auf die Emoji-Liste, nicht auf /config: wer hier scheitert, hat
+    // auf der Unterseite gearbeitet und will genau dorthin zurück.
     if (!verifyCsrfToken(userId, token)) {
-        res.status(403).type('html').send(renderPage(forbiddenBody('Ungültiges oder fehlendes CSRF-Token.')));
+        res.status(403).type('html').send(renderPage(
+            forbiddenBody('Ungültiges oder fehlendes CSRF-Token.', EMOJI_SEITE)
+        ));
         return;
     }
 
     const mitglied = typeof body.mitglied === 'string' ? body.mitglied : '';
     if (!istGueltigesMitglied(mitglied)) {
-        res.status(400).type('html').send(renderPage(forbiddenBody('Unbekanntes Mitglied.')));
+        res.status(400).type('html').send(renderPage(eingabeFehlerBody('Unbekanntes Mitglied.', EMOJI_SEITE)));
         return;
     }
 
@@ -959,9 +987,10 @@ export async function handleMorgengrussEmojiSpeichern(req: Request, res: Respons
     // Text würde beim Gruß sonst still an message.react scheitern.
     const wert = deuteEmojiEingabe(typeof body.emoji === 'string' ? body.emoji : '');
     if (wert === null) {
-        res.status(400).type('html').send(renderPage(forbiddenBody(
+        res.status(400).type('html').send(renderPage(eingabeFehlerBody(
             'Das ist kein Emoji, das ich setzen kann. Erlaubt sind ein einzelnes Emoji ' +
-            '(z. B. 🍪) oder ein Server-Emoji als <code>:name:</code>.'
+            '(z. B. 🍪) oder ein Server-Emoji als <code>:name:</code>.',
+            EMOJI_SEITE
         )));
         return;
     }
@@ -969,7 +998,7 @@ export async function handleMorgengrussEmojiSpeichern(req: Request, res: Respons
     await speichereMorgengrussEmoji(mitglied, wert);
     // Zurück auf die ausgelagerte Seite (nicht auf /config), damit man dort bleibt, wo man
     // gearbeitet hat - Post/Redirect/Get wie überall.
-    res.redirect('/config/morgengruss-emojis?gespeichert=1');
+    res.redirect(`${EMOJI_SEITE}?gespeichert=1`);
 }
 
 // Morgengruß: stößt den Historien-Scan an (früher /morgengruss lernen). CSRF zuerst, dann scannen -
@@ -1085,7 +1114,7 @@ function fangeFehler(handler: AsyncHandler, kontext: string, meldung: string) {
         handler(req, res).catch((error) => {
             console.error(`${kontext}:`, error);
             if (!res.headersSent) {
-                res.status(500).type('html').send(renderPage(forbiddenBody(meldung)));
+                res.status(500).type('html').send(renderPage(internerFehlerBody(meldung)));
             }
         });
     };
@@ -1097,7 +1126,7 @@ function geschuetzt(req: Request, res: Response, next: () => void): void {
     requireConfigAuth(req, res, next).catch((error) => {
         console.error('Fehler in requireConfigAuth:', error);
         if (!res.headersSent) {
-            res.status(500).type('html').send(renderPage(forbiddenBody('Interner Fehler bei der Anmeldung.')));
+            res.status(500).type('html').send(renderPage(internerFehlerBody('Interner Fehler bei der Anmeldung.')));
         }
     });
 }
@@ -1127,7 +1156,7 @@ configRouter.get('/config/callback',
     fangeFehler(handleCallback, 'Fehler im Config-OAuth-Callback', 'Interner Fehler bei der Anmeldung.'));
 // Reines Lesen (GET) - kein Body-Parser, kein CSRF noetig.
 configRouter.get('/config/logs', geschuetzt, handleLogs);
-configRouter.get('/config/morgengruss-emojis', geschuetzt,
+configRouter.get(EMOJI_SEITE, geschuetzt,
     fangeFehler(handleMorgengrussEmojiSeite, 'Fehler beim Rendern der Morgengruß-Emoji-Seite', 'Interner Fehler.'));
 // POST statt GET (seit 2026-07-28): ein GET-Logout war per <img src=".../config/logout"> von
 // fremden Seiten ausloesbar (nur ein Aergernis, aber alle anderen Aktionen sind sauber POST).
