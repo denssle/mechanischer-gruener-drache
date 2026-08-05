@@ -18,7 +18,7 @@ vi.mock('../client.js', () => ({
 }));
 
 import redisService from './redis.service.js';
-import commands from '../commands/index.js';
+import commands, {NUR_ADMIN_BEFEHLE as NUR_ADMIN} from '../commands/index.js';
 import tippService, {
     TIPPS,
     NETTIGKEITEN,
@@ -180,9 +180,6 @@ describe('tipp.service', () => {
         });
     });
 });
-
-// Reine Admin-Werkzeuge: die stehen weder in /hilfe noch in den Tipps (siehe CLAUDE.md).
-const NUR_ADMIN = ['diagnose', 'rollenbutton'];
 
 const alleBefehle = (): string[] => (commands as {data: {name: string}}[]).map((c) => c.data.name);
 

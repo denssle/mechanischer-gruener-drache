@@ -17,6 +17,15 @@ import anstupser from "./anstupser.command.js";
 import geburtstag from "./geburtstag.command.js";
 import beobachten from "./beobachten.command.js";
 
+// Reine Admin-Werkzeuge: stehen bewusst weder in /hilfe noch in den Tipps - wer sie braucht,
+// weiß von ihnen. Die Liste steht hier statt in den Tests, weil sie eine Aussage über die
+// Befehle ist und nicht über deren Prüfung: hilfe.handler.test.ts und tipp.service.test.ts
+// leiten ihre Erwartungen daraus ab, und beide müssen dieselbe Ausnahme kennen.
+// Sie lässt sich (noch) nicht aus den Command-Definitionen ableiten - die Admin-Prüfung sitzt
+// im jeweiligen Handler (`interaction.memberPermissions`), nicht als
+// setDefaultMemberPermissions am SlashCommandBuilder.
+export const NUR_ADMIN_BEFEHLE = ['diagnose', 'rollenbutton'];
+
 export default [
     ping,
     version,

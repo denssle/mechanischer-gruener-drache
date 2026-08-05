@@ -9,10 +9,7 @@ vi.mock('../client.js', () => ({
 }));
 
 import hilfeHandler, { HELP_TEXT } from './hilfe.handler.js';
-import commands from '../commands/index.js';
-
-// Reine Admin-Werkzeuge: bewusst nicht in der öffentlichen Übersicht (siehe CLAUDE.md).
-const NUR_ADMIN = ['diagnose', 'rollenbutton'];
+import commands, { NUR_ADMIN_BEFEHLE as NUR_ADMIN } from '../commands/index.js';
 
 // Aus der Command-Registrierung abgeleitet statt gepflegt: ein Befehl ist "flach", wenn er keinen
 // Subcommand (und keine Subcommand-Gruppe) hat - dann kann er kein eigenes `hilfe` tragen, weil
@@ -63,6 +60,13 @@ describe('HilfeHandler', () => {
     // Entscheidung bleibt und nicht als Versehen durchrutscht.
     it.each(NUR_ADMIN)('lässt den Admin-Befehl /%s bewusst aus der Übersicht', (name) => {
         expect(HELP_TEXT).not.toContain(`/${name}`);
+    });
+
+    // Die Ausnahmeliste selbst prüft sonst niemand: ein Tippfehler darin (oder ein inzwischen
+    // umbenannter/entfernter Befehl) würde einen echten Befehl NICHT mehr ausnehmen, und der
+    // Eintrag stünde als stille Karteileiche da - in BEIDEN abgeleiteten Tests, die sie nutzen.
+    it.each(NUR_ADMIN)('nennt mit /%s einen Befehl, den es wirklich gibt', (name) => {
+        expect((commands as {data: {name: string}}[]).map(c => c.data.name)).toContain(name);
     });
 
     // Gruppen-Befehle erklären sich über ihr eigenes `hilfe` - die Übersicht muss darauf verweisen.
