@@ -35,6 +35,12 @@ const KEYS = {
     ruhmeshalle: 'PING_PONG:RUHMESHALLE',
     // Rolle des amtierenden Champions (über /config gesetzt, optional).
     championRolle: 'PING_PONG:CHAMPION_ROLE',
+    // Die persönlichen Serien-Rekorde nochmal als Sorted Set. Quelle bleibt der Einzelkey
+    // PING_PONG_KEYS.rekord (den liest das Duell), hier liegen sie nur ranglistenfähig - über
+    // Einzelkeys ließe sich nicht sortieren, ohne per SCAN über den halben Keyspace zu laufen.
+    // Anders als der Score wird das hier vom Season-Reset NIE angefasst: ein Rekord ist eine
+    // persönliche Bestmarke, keine Saisonleistung.
+    rekordBestenliste: 'PING_PONG:REKORD_HIGHSCORE',
 };
 
 class PingPongService {
@@ -92,6 +98,21 @@ class PingPongService {
 
         // YYYY-MM sortiert als String genauso wie chronologisch.
         return eintraege.sort((a, b) => b.monat.localeCompare(a.monat));
+    }
+
+    // Schreibt den persönlichen Serien-Rekord in die Rangliste. Bewusst zAdd (setzen) statt
+    // zIncrBy: der Rekord IST der Wert, er wird nicht aufsummiert. Wird bei jedem Sieg mit dem
+    // aktuellen Stand aufgerufen, nicht nur bei einem neuen Rekord - dadurch wandern die
+    // Bestandsrekorde nach und nach von allein hier herein, ohne Migrationsskript und ohne SCAN
+    // über `PING_PONG:REKORD:*`. Wer nie wieder spielt, fehlt in der Liste; das ist bei einer
+    // Bestenliste kein Verlust.
+    async setRekordBestenliste(userId: string, rekord: number): Promise<void> {
+        await redisService.setSortedSet(KEYS.rekordBestenliste, userId, rekord);
+    }
+
+    // Top 10, absteigend (getSortedSet ist genau dafür da und hart auf 10 begrenzt).
+    async getRekordBestenliste(): Promise<{value: string; score: number}[]> {
+        return redisService.getSortedSet(KEYS.rekordBestenliste);
     }
 }
 

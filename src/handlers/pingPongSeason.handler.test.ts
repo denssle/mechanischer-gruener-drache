@@ -7,6 +7,8 @@ vi.mock("../services/redis.service.js", () => ({
         set: vi.fn(),
         delete: vi.fn(),
         getSortedSetAll: vi.fn(),
+        // Nur für die Gegenprobe, dass der Reset die Rekord-Rangliste nicht anfasst.
+        removeFromSortedSet: vi.fn(),
     },
     REDIS_KEYS: {
         PING_PONG: "PING_PONG"
@@ -178,6 +180,11 @@ describe('PingPongSeasonHandler', () => {
             const geloescht = vi.mocked(redisService.delete).mock.calls.map(([key]) => key);
             expect(geloescht).not.toContain('PING_PONG:SERIE:user-1');
             expect(geloescht).not.toContain('PING_PONG:REKORD:user-1');
+            // Auch die Rekord-Rangliste ist keine Saisonleistung: sie sammelt persönliche
+            // Bestmarken und überdauert den Monatswechsel wie der Einzelkey daneben.
+            expect(geloescht).not.toContain('PING_PONG:REKORD_HIGHSCORE');
+            expect(vi.mocked(redisService.removeFromSortedSet).mock.calls.map(([key]) => key))
+                .not.toContain('PING_PONG:REKORD_HIGHSCORE');
         });
 
         it('holt einen verpassten Monatswechsel nach (Bot war aus)', async () => {
