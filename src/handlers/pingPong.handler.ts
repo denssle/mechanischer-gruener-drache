@@ -9,7 +9,7 @@ import {
 import redisService from "../services/redis.service.js";
 import userService from "../services/user.service.js";
 import {formatMonat, monatsSchluessel} from "./pingPongSeason.handler.js";
-import {PING_PONG_KEYS} from "../services/pingPong.service.js";
+import pingPongService, {PING_PONG_KEYS} from "../services/pingPong.service.js";
 // Nur für das persönliche Morgengruß-Emoji in der Bestenliste. greeting.handler nutzt client
 // ausschließlich in Methodenkörpern - die Zirkular-Import-Falle greift also nicht.
 import greetingHandler, {emojiFuerNachricht} from "./greeting.handler.js";
@@ -442,6 +442,12 @@ class PingPongHandler {
             await redisService.set(PING_PONG_KEYS.rekord(siegerId), serie.toString());
         }
 
+        // Rangliste bewusst bei JEDEM Sieg mitschreiben, nicht nur bei einem neuen Rekord: das
+        // Sorted Set kam später dazu als die Einzelkeys, und so wandern die Bestandsrekorde nach
+        // und nach von allein hinein, statt eine einmalige Migration per SCAN zu brauchen.
+        // zAdd setzt den Wert, mehrfach mit demselben Rekord zu schreiben ist also folgenlos.
+        await pingPongService.setRekordBestenliste(siegerId, Math.max(serie, bisherigerRekord));
+
         return {siegerId, verliererId, serie, istNeuerRekord: istNeuerRekord && serie >= MIN_SERIE, beendeteSerie};
     }
 
@@ -532,6 +538,51 @@ class PingPongHandler {
         }
     }
 
+    // Die längsten je erreichten Siegesserien - anders als die Bestenliste NICHT saisonal: der
+    // Rekord überdauert sowohl die abgerissene Serie als auch den monatlichen Reset.
+    async handleSerienrekorde(interaction: ChatInputCommandInteraction) {
+        try {
+            // Rekorde unter MIN_SERIE raus: eine "Serie" von 1 hat jede Person, die je ein Duell
+            // gewonnen hat - das wären dieselben Karteileichen wie die 0-Punkte-Einträge in der
+            // Bestenliste. Erzählt wird eine Serie ohnehin erst ab 2 (siehe formatSerie).
+            const rekorde = (await pingPongService.getRekordBestenliste()).filter(eintrag => eintrag.score >= MIN_SERIE);
+            const ueberschrift = '**Längste Siegesserien**';
+
+            if (rekorde.length === 0) {
+                return interaction.reply({
+                    content: `${ueberschrift}\nNoch keine Serie über ${MIN_SERIE} Siege – da ist die Bestmarke frei.`,
+                    allowedMentions: {parse: []},
+                });
+            }
+
+            const users = await Promise.all(rekorde.map(item => userService.getUser(item.value)));
+            const emojis = await greetingHandler.holePersoenlicheEmojis(rekorde.map(item => item.value));
+
+            const message = rekorde
+                .map((item, index) => {
+                    const displayName = users[index]?.displayName ?? item.value;
+                    const emoji = emojiFuerNachricht(emojis[item.value], interaction.guild, item.value);
+                    return `${index + 1}. ${emoji} ${displayName} - **${item.score}** Siege in Folge`;
+                })
+                .join('\n');
+
+            // allowedMentions ist PFLICHT wie in der Bestenliste nebenan: die Zeilen tragen den
+            // selbst gewählten `displayName`, ein Name wie `<@…>` würde sonst bei jedem Aufruf
+            // jemanden anpingen.
+            return interaction.reply({
+                content: `${ueberschrift}\n${message}\n`
+                    + `Die Bestmarke bleibt vom Monatswechsel unberührt – anders als die Punkte in \`/pingpong bestenliste\`.`,
+                allowedMentions: {parse: []},
+            });
+        } catch (error) {
+            console.error('Fehler beim Abrufen der Ping-Pong-Serienrekorde:', error);
+            return interaction.reply({
+                content: 'Die Serienrekorde konnten nicht abgerufen werden.',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+    }
+
     async handleHilfe(interaction: ChatInputCommandInteraction) {
         return interaction.reply(
             `**Ping-Pong-Befehle**\n\n` +
@@ -543,6 +594,7 @@ class PingPongHandler {
             + `Lupfer schlägt Konter, Konter schlägt Schmetterball (bei gleicher Wahl entscheidet der Ballwechsel)\n` +
             `**/pingpong bestenliste** – Die Top 10 der laufenden Season, mit laufender Siegesserie\n` +
             `**/pingpong ruhmeshalle** – Die Champions der vergangenen Monate\n` +
+            `**/pingpong serienrekorde** – Die längsten je erreichten Siegesserien (übersteht den Reset)\n` +
             `**/pingpong hilfe** – Zeigt diese Übersicht\n\n` +
             `**Seasons:** Die Punkte laufen monatsweise. Am Monatsende bekommt Platz eins die `
             + `Champion-Rolle (der bisherige Champion gibt sie ab) und einen Eintrag in der Ruhmeshalle, `

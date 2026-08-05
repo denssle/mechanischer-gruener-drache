@@ -8,6 +8,9 @@ vi.mock('./redis.service.js', () => ({
         hashFieldExists: vi.fn(async () => false),
         setHashField: vi.fn(),
         getHashAll: vi.fn(),
+        setSortedSet: vi.fn(),
+        getSortedSet: vi.fn(),
+        incrementSortedSet: vi.fn(),
     },
     REDIS_KEYS: {PING_PONG: 'PING_PONG'}
 }));
@@ -101,5 +104,23 @@ describe('pingPongService', () => {
     it('kommt mit einer leeren Ruhmeshalle klar', async () => {
         vi.mocked(redisService.getHashAll).mockResolvedValue({});
         expect(await pingPongService.getRuhmeshalle()).toEqual([]);
+    });
+
+    describe('Serien-Rekord-Rangliste', () => {
+        // zAdd (setzen), nicht zIncrBy: der Rekord IST der Wert und wird nicht aufsummiert -
+        // sonst stünde nach dem zweiten Schreiben die Summe beider Serien in der Liste.
+        it('setzt den Rekord, statt ihn aufzusummieren', async () => {
+            await pingPongService.setRekordBestenliste('user-1', 6);
+
+            expect(redisService.setSortedSet).toHaveBeenCalledWith('PING_PONG:REKORD_HIGHSCORE', 'user-1', 6);
+            expect(redisService.incrementSortedSet).not.toHaveBeenCalled();
+        });
+
+        it('liest die Rangliste aus dem eigenen Sorted Set', async () => {
+            vi.mocked(redisService.getSortedSet).mockResolvedValue([{value: 'user-1', score: 6}] as any);
+
+            expect(await pingPongService.getRekordBestenliste()).toEqual([{value: 'user-1', score: 6}]);
+            expect(redisService.getSortedSet).toHaveBeenCalledWith('PING_PONG:REKORD_HIGHSCORE');
+        });
     });
 });

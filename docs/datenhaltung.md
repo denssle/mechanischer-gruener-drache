@@ -37,6 +37,7 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `PING_PONG:CHAMPION_ROLE` | Admin-Konfiguration: Rolle des amtierenden Champions | bis zum Überschreiben | Auszeichnung am Monatswechsel |
 | `PING_PONG:COOLDOWN:<userId>` | Marker, dass gerade herausgefordert wurde | 30 Sekunden (TTL) | Anti-Spam |
 | `PING_PONG:SERIE:<userId>`, `PING_PONG:REKORD:<userId>` | Laufende Siegesserie (bei Niederlage gelöscht) und längste je erreichte Serie | dauerhaft | Duell-Ergebnis, `/pingpong bestenliste` |
+| `PING_PONG:REKORD_HIGHSCORE` (Sorted Set) | Dieselben Serien-Rekorde nochmal ranglistenfähig (Quelle bleibt `PING_PONG:REKORD:<userId>`) | dauerhaft, **nicht** vom Season-Reset betroffen | `/pingpong serienrekorde` |
 | `TIPP:COOLDOWN:<userId>` | Marker, dass die Person heute schon einen Tipp gesehen hat | 24 Stunden (TTL) | gelegentliche Tipps/Nettigkeiten |
 | `TIPP:USED_COMMANDS:<userId>` | Set der Slash-Command-**Namen**, die die Person je benutzt hat (keine Argumente, keine Inhalte, keine Zeitpunkte) | dauerhaft | Tipps nur zu noch nie benutzten Befehlen |
 | `ANSTUPSER:ABOS` (Set) | Discord-User-IDs, die den täglichen 13:37-Anstupser abonniert haben – **Opt-in**, nur die ID | bis zur Abmeldung (`/anstupser aus`) | tägliche Anstupser-DM |

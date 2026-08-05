@@ -43,6 +43,9 @@ export default {
             .setName('ruhmeshalle')
             .setDescription('Zeigt die Champions der vergangenen Seasons'))
         .addSubcommand(sub => sub
+            .setName('serienrekorde')
+            .setDescription('Zeigt die laengsten je erreichten Siegesserien'))
+        .addSubcommand(sub => sub
             .setName('hilfe')
             .setDescription('Zeigt alle verfügbaren Ping-Pong-Befehle')),
 
@@ -60,6 +63,8 @@ export default {
                 return pingPongHandler.handlePingPongHighscore(interaction);
             case 'ruhmeshalle':
                 return pingPongSeasonHandler.handleRuhmeshalle(interaction);
+            case 'serienrekorde':
+                return pingPongHandler.handleSerienrekorde(interaction);
             case 'hilfe':
                 return pingPongHandler.handleHilfe(interaction);
         }
