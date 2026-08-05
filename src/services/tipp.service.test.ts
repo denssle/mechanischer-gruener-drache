@@ -6,10 +6,19 @@ vi.mock('./redis.service.js', () => ({
         setWithExpiry: vi.fn(),
         addToSet: vi.fn(),
         getSetMembers: vi.fn(),
-    }
+    },
+    // Braucht pingPong.service beim Import - der hängt über commands/index.js mit drin.
+    REDIS_KEYS: {PING_PONG: 'PING_PONG'}
+}));
+
+// Nötig für den abgeleiteten Test unten: commands/index.js zieht sämtliche Handler hoch, ohne
+// diesen Mock greift die dokumentierte Zirkular-Import-Falle (siehe hilfe.handler.test.ts).
+vi.mock('../client.js', () => ({
+    default: {commands: new Map(), on: vi.fn(), once: vi.fn(), channels: {fetch: vi.fn()}, guilds: {cache: new Map()}}
 }));
 
 import redisService from './redis.service.js';
+import commands from '../commands/index.js';
 import tippService, {
     TIPPS,
     NETTIGKEITEN,
@@ -169,5 +178,44 @@ describe('tipp.service', () => {
         it('hat genug Nettigkeiten, dass sich so schnell nichts wiederholt', () => {
             expect(NETTIGKEITEN.length).toBeGreaterThanOrEqual(100);
         });
+    });
+});
+
+// Reine Admin-Werkzeuge: die stehen weder in /hilfe noch in den Tipps (siehe CLAUDE.md).
+const NUR_ADMIN = ['diagnose', 'rollenbutton'];
+
+const alleBefehle = (): string[] => (commands as {data: {name: string}}[]).map((c) => c.data.name);
+
+const beworbeneBefehle = (): string[] => alleBefehle().filter((name) => !NUR_ADMIN.includes(name));
+
+// Abgeleitet aus der Command-Registrierung statt gepflegt - dieselbe Begründung wie beim
+// HELP_TEXT-Test: eine handgepflegte Liste bliebe grün, wenn jemand einen Befehl hinzufügt und
+// die Tipps vergisst, also genau in dem Fall, den der Test abfangen soll. Genau das ist zwischen
+// dem 26. und 31.07.2026 viermal passiert (/rollenspiel, /anstupser, /geburtstag, /beobachten).
+// Der Fehler ist hier besonders leise: randomTipp bewirbt nur die noch UNBENUTZTEN Befehle - ein
+// Befehl ohne Tipp wird also ausgerechnet von der Funktion nie genannt, die ihn auffindbar
+// machen soll, und niemand vermisst eine Zeile, die es nie gab.
+describe('TIPPS decken den Befehlsbestand ab', () => {
+    it.each(beworbeneBefehle())('hat einen Tipp für /%s', (name) => {
+        expect(ALLE_TIPP_BEFEHLE).toContain(name);
+    });
+
+    // Gegenprobe zur Ableitung: findet der Test überhaupt Befehle? Ohne das würde eine kaputte
+    // Ableitung (leeres Array) als "alles grün" durchgehen - it.each([]) läuft nie.
+    it('findet überhaupt Befehle zum Prüfen', () => {
+        expect(beworbeneBefehle().length).toBeGreaterThanOrEqual(15);
+    });
+
+    // Gegenrichtung: ein Tipp zu einem Befehl, den es nicht mehr gibt, würde für etwas werben,
+    // das beim Aufruf als "unbekannter Befehl" endet - und der "schon benutzt"-Filter könnte ihn
+    // nie ausblenden, weil der Name nie im Set landet.
+    it.each(ALLE_TIPP_BEFEHLE)('bewirbt mit /%s keinen Befehl, den es nicht mehr gibt', (name) => {
+        expect(alleBefehle()).toContain(name);
+    });
+
+    // Admin-Befehle bleiben bewusst draußen - hier festgehalten, damit die Ausnahme eine
+    // Entscheidung bleibt und nicht als Lücke durchgeht.
+    it.each(NUR_ADMIN)('lässt den Admin-Befehl /%s bewusst ohne Tipp', (name) => {
+        expect(ALLE_TIPP_BEFEHLE).not.toContain(name);
     });
 });
