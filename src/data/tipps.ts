@@ -24,4 +24,9 @@ export const TIPPS: Tipp[] = [
     {befehl: 'twitch', text: 'Tipp: Mit `/twitch verknuepfen` sagt der Server Bescheid, wenn du live gehst.'},
     {befehl: 'blahaj', text: 'Tipp: `/blahaj` rechnet dir Euro-Beträge in Blåhajs um.'},
     {befehl: 'hilfe', text: 'Tipp: `/hilfe` zeigt dir alle Befehle auf einen Blick.'},
+    {befehl: 'rollenspiel', text: 'Tipp: Mit `/rollenspiel suche` meldest du dich als suchend – `/rollenspiel suchende` zeigt, wer sonst noch Lust hat.'},
+    {befehl: 'anstupser', text: 'Tipp: `/anstupser an` schickt dir täglich um 13:37 eine kurze Nachricht per DM – und `/anstupser aus` wieder ab.'},
+    {befehl: 'geburtstag', text: 'Tipp: Mit `/geburtstag setzen` hinterlegst du deinen Geburtstag; das Jahr ist freiwillig, ohne es nennt der Glückwunsch kein Alter.'},
+    {befehl: 'beobachten', text: 'Tipp: `/beobachten hinzufuegen` meldet dir per DM, wenn jemand im Spiel online geht – sofern er sich mit `/charakter beobachtbar` dafür freigegeben hat.'},
+    {befehl: 'version', text: 'Tipp: `/version` verrät dir, welcher Stand des Bots gerade läuft.'},
 ];
