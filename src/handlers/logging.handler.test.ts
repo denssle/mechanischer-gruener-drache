@@ -28,7 +28,7 @@ vi.mock('../client.js', () => ({
 import memberService from '../services/member.service.js';
 import loggingService from '../services/logging.service.js';
 import client from '../client.js';
-import loggingHandler, { kuerzeFuerDiscord, DISCORD_MAX_LENGTH, formatMitgliedsdauer, formatAusfuehrer, formatRechteAenderung, beschreibeAuditEintrag } from './logging.handler.js';
+import loggingHandler, { alsZitat, kuerzeFuerDiscord, DISCORD_MAX_LENGTH, formatMitgliedsdauer, formatAusfuehrer, formatRechteAenderung, beschreibeAuditEintrag } from './logging.handler.js';
 
 // Baut eine Guild, deren Audit-Log die übergebenen Einträge kennt. Ohne Einträge verhält sie
 // sich wie ein Server, auf dem gerade nichts protokolliert wurde.
@@ -183,6 +183,20 @@ describe('kuerzeFuerDiscord', () => {
     });
 });
 
+describe('alsZitat', () => {
+    it('setzt ein Zitat-Präfix vor eine einzelne Zeile', () => {
+        expect(alsZitat('Hallo Welt')).toBe('> Hallo Welt');
+    });
+
+    it('setzt es vor JEDE Zeile - genau dafür ist es da (mehrzeilige Nachrichten abgrenzen)', () => {
+        expect(alsZitat('Erste\nZweite\nDritte')).toBe('> Erste\n> Zweite\n> Dritte');
+    });
+
+    it('lässt Leerzeilen als Zitatzeile stehen, statt die Abgrenzung dort aufzureißen', () => {
+        expect(alsZitat('Oben\n\nUnten')).toBe('> Oben\n> \n> Unten');
+    });
+});
+
 const mockMessage = (overrides = {}) => ({
     id: 'message-1',
     guild: { id: 'guild-1' },
@@ -275,7 +289,7 @@ describe('LoggingHandler', () => {
 
             expect(client.channels.fetch).toHaveBeenCalledWith('log-channel-1');
             expect(send).toHaveBeenCalledWith(expect.stringContaining('User#0001'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Geheime Nachricht'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('> Geheime Nachricht'));
             expect(send).toHaveBeenCalledWith(expect.stringContaining('<#source-channel>'));
         });
 
@@ -302,8 +316,9 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleMessageDelete(message as any);
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Alte Nachricht'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Anhänge: bild.png'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('> Alte Nachricht'));
+            // Die Anhang-Zeile ist kein Nachrichteninhalt und bleibt deshalb außerhalb des Zitats.
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('\nAnhänge: bild.png'));
             expect(send).toHaveBeenCalledWith(expect.stringContaining('User#0001'));
         });
 
@@ -390,8 +405,8 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Vorher: Alter Text'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Nachher: Neuer Text'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('**Vorher:**\n> Alter Text'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('**Nachher:**\n> Neuer Text'));
             // Für die nächste Bearbeitung ist der neue Stand der alte.
             expect(loggingService.cacheMessage).toHaveBeenCalledWith('message-1', {
                 authorTag: 'User#0001', content: 'Neuer Text', attachments: [],

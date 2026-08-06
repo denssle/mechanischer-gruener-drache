@@ -9,6 +9,14 @@ function formatAttachments(attachments: string[]): string {
     return attachments.length ? `\nAnhänge: ${attachments.join(', ')}` : '';
 }
 
+// Vorher/Nachher einer bearbeiteten Nachricht standen früher als bloßes "Vorher: …" direkt im
+// Fließtext - bei mehrzeiligem Inhalt war nicht mehr zu sehen, wo der eine Stand endet und der
+// nächste beginnt. Jede Zeile bekommt deshalb ein Discord-Zitat-Präfix (`>` je Zeile, nicht `>>>`,
+// das würde den Rest der Nachricht verschlucken).
+export function alsZitat(text: string): string {
+    return text.split('\n').map(zeile => `> ${zeile}`).join('\n');
+}
+
 // Discord lehnt Nachrichten über 2000 Zeichen mit Fehler 50035 ("Invalid Form Body") ab. Log-Posts
 // aus dynamischem Inhalt (v.a. eine gelöschte/bearbeitete lange Nachricht) können das überschreiten;
 // dann wird der Post zwar vom try/catch gefangen, aber der Log-Eintrag geht verloren. Deshalb hier
@@ -181,7 +189,7 @@ class LoggingHandler {
             );
 
             await this.sendeLog(logChannel,
-                `🗑️ **Nachricht gelöscht** – ${author} in <#${message.channelId}>\n${content}${attachments}`
+                `🗑️ **Nachricht gelöscht** – ${author} in <#${message.channelId}>\n${alsZitat(content)}${attachments}`
             );
 
             // Gelöscht ist gelöscht - den Inhalt danach nicht länger als nötig vorhalten.
@@ -212,8 +220,8 @@ class LoggingHandler {
 
             await this.sendeLog(logChannel,
                 `✏️ **Nachricht bearbeitet** – ${author} in <#${newMessage.channelId}>\n` +
-                `Vorher: ${oldContent === null ? '*nicht verfügbar*' : (oldContent || '*kein Text*')}\n` +
-                `Nachher: ${newContent === null ? '*nicht verfügbar*' : (newContent || '*kein Text*')}`
+                `**Vorher:**\n${alsZitat(oldContent === null ? '*nicht verfügbar*' : (oldContent || '*kein Text*'))}\n` +
+                `**Nachher:**\n${alsZitat(newContent === null ? '*nicht verfügbar*' : (newContent || '*kein Text*'))}`
             );
 
             // Ab jetzt ist der neue Stand der "alte" für die nächste Bearbeitung.
