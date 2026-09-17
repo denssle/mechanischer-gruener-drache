@@ -6,6 +6,7 @@ const KEYS = {
     entry: (id: string) => `SPORT:ENTRY:${id}`,
     userEntries: (userId: string) => `SPORT:USER:${userId}`,
     highscore: 'SPORT:HIGHSCORE',
+    minutes: 'SPORT:MINUTEN',
     milestones: 'SPORT:MILESTONES',
     announcementChannel: 'SPORT:ANNOUNCEMENT_CHANNEL',
     lastDailyPost: 'SPORT:LAST_DAILY_POST',
@@ -14,18 +15,23 @@ const KEYS = {
 const DUMMY_USER_ID = 'LEGACY_KILOMETERS';
 
 class SportService {
-    async addEntry(userId: string, activity: SportActivity, kilometers: number): Promise<SportEntry> {
+    async addEntry(userId: string, activity: SportActivity, kilometers: number, minutes?: number): Promise<SportEntry> {
         const entry: SportEntry = {
             id: randomUUID(),
             userId,
             activity,
             kilometers,
+            minutes,
             createdAt: new Date().toISOString(),
         };
 
         await redisService.set(KEYS.entry(entry.id), JSON.stringify(entry));
         await redisService.addToList(KEYS.userEntries(userId), entry.id);
         await redisService.incrementSortedSet(KEYS.highscore, userId, kilometers);
+
+        if (minutes !== undefined) {
+            await redisService.incrementSortedSet(KEYS.minutes, userId, minutes);
+        }
 
         return entry;
     }
@@ -41,10 +47,14 @@ class SportService {
         await redisService.removeFromList(KEYS.userEntries(userId), entryId);
         await redisService.incrementSortedSet(KEYS.highscore, userId, -entry.kilometers);
 
+        if (entry.minutes !== undefined) {
+            await redisService.incrementSortedSet(KEYS.minutes, userId, -entry.minutes);
+        }
+
         return true;
     }
 
-    async editEntry(userId: string, entryId: string, newKilometers: number): Promise<SportEntry | null> {
+    async editEntry(userId: string, entryId: string, newKilometers: number, newMinutes?: number): Promise<SportEntry | null> {
         const entryString = await redisService.get(KEYS.entry(entryId));
         if (!entryString) return null;
 
@@ -52,22 +62,32 @@ class SportService {
         if (entry.userId !== userId) return null;
 
         const diff = newKilometers - entry.kilometers;
+        const minutesDiff =
+            newMinutes !== undefined
+                ? newMinutes - (entry.minutes ?? 0)
+                : 0;
+
         entry.kilometers = newKilometers;
+        entry.minutes = newMinutes ?? entry.minutes;
 
         await redisService.set(KEYS.entry(entryId), JSON.stringify(entry));
         await redisService.incrementSortedSet(KEYS.highscore, userId, diff);
+
+        if (minutesDiff !== 0) {
+            await redisService.incrementSortedSet(KEYS.minutes, userId, minutesDiff);
+        }
 
         return entry;
     }
 
     // Korrigiert den zuletzt eingetragenen Eintrag des Users. Die Eintrags-Liste ist per rPush
     // gefüllt, der letzte Listeneintrag ist also der neueste. null = der User hat noch nichts eingetragen.
-    async editLastEntry(userId: string, newKilometers: number): Promise<SportEntry | null> {
+    async editLastEntry(userId: string, newKilometers: number, newMinutes?: number): Promise<SportEntry | null> {
         const entryIds = await redisService.getList(KEYS.userEntries(userId));
         const lastId = entryIds?.at(-1);
         if (!lastId) return null;
 
-        return this.editEntry(userId, lastId, newKilometers);
+        return this.editEntry(userId, lastId, newKilometers, newMinutes);
     }
 
     // Löscht den zuletzt eingetragenen Eintrag des Users (siehe editLastEntry). Gibt den
@@ -107,6 +127,11 @@ class SportService {
 
     async getGesamtKilometer(): Promise<number> {
         const alle = await redisService.getSortedSetAll(KEYS.highscore);
+        return alle.reduce((sum, item) => sum + item.score, 0);
+    }
+
+    async getGesamtMinuten(): Promise<number> {
+        const alle = await redisService.getSortedSetAll(KEYS.minutes);
         return alle.reduce((sum, item) => sum + item.score, 0);
     }
 

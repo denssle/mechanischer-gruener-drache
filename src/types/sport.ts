@@ -3,6 +3,7 @@ export interface SportEntry {
     userId: string;
     activity: string;
     kilometers: number;
+    minutes?: number;
     createdAt: string;
 }
 
@@ -12,6 +13,7 @@ export const SportActivities = {
     schwimmen: '🏊 Schwimmen',
     wandern: '🚶 Wandern',
     skifahren: '⛷️ Skifahren',
+    krafttraining: '💪 Krafttraining',
 } as const;
 
 export type SportActivity = keyof typeof SportActivities;

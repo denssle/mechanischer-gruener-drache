@@ -51,6 +51,43 @@ describe('SportService', () => {
             );
         });
 
+        it('aktualisiert die Minutensumme um die Differenz', async () => {
+            const entry = mockEntry({ kilometers: 10, minutes: 30 });
+            vi.mocked(redisService.get).mockResolvedValue(JSON.stringify(entry));
+
+            const result = await sportService.editEntry(
+                'user-123',
+                'test-id-123',
+                10,
+                45
+            );
+
+            expect(result?.minutes).toBe(45);
+            expect(redisService.incrementSortedSet).toHaveBeenCalledWith(
+                'SPORT:MINUTEN',
+                'user-123',
+                15
+            );
+        });
+
+        it('behält vorhandene Aktivitätsminuten, wenn beim Bearbeiten keine angegeben werden', async () => {
+            const entry = mockEntry({ kilometers: 10, minutes: 30 });
+            vi.mocked(redisService.get).mockResolvedValue(JSON.stringify(entry));
+
+            const result = await sportService.editEntry(
+                'user-123',
+                'test-id-123',
+                15
+            );
+
+            expect(result?.minutes).toBe(30);
+            expect(redisService.incrementSortedSet).not.toHaveBeenCalledWith(
+                'SPORT:MINUTEN',
+                'user-123',
+                expect.any(Number)
+            );
+        });
+
         it('gibt null zurück wenn der Eintrag nicht existiert', async () => {
             vi.mocked(redisService.get).mockResolvedValue(null);
 
@@ -68,6 +105,20 @@ describe('SportService', () => {
 
             expect(result).toBeNull();
             expect(redisService.incrementSortedSet).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('getGesamtMinuten', () => {
+        it('summiert die Aktivitätsminuten aller User', async () => {
+            vi.mocked(redisService.getSortedSetAll).mockResolvedValue([
+                { value: 'user-1', score: 30 },
+                { value: 'user-2', score: 45 },
+            ] as any);
+
+            const gesamt = await sportService.getGesamtMinuten();
+
+            expect(redisService.getSortedSetAll).toHaveBeenCalledWith('SPORT:MINUTEN');
+            expect(gesamt).toBe(75);
         });
     });
 
@@ -152,6 +203,17 @@ describe('SportService', () => {
             expect(redisService.addToList).toHaveBeenCalledWith('SPORT:USER:user-123', entry.id);
             expect(redisService.incrementSortedSet).toHaveBeenCalledWith('SPORT:HIGHSCORE', 'user-123', 10);
         });
+
+        it('speichert Aktivitätsminuten und erhöht die Minutensumme', async () => {
+            const entry = await sportService.addEntry('user-123', 'krafttraining', 0, 45);
+
+            expect(entry.minutes).toBe(45);
+            expect(redisService.incrementSortedSet).toHaveBeenCalledWith(
+                'SPORT:MINUTEN',
+                'user-123',
+                45
+            );
+        });
     });
 
     describe('deleteEntry', () => {
@@ -162,6 +224,41 @@ describe('SportService', () => {
 
             expect(result).toBe(false);
             expect(redisService.incrementSortedSet).not.toHaveBeenCalled();
+        });
+
+        it('zieht beim Löschen auch die Aktivitätsminuten ab', async () => {
+            const entry = mockEntry({ kilometers: 0, minutes: 45 });
+            vi.mocked(redisService.get).mockResolvedValue(JSON.stringify(entry));
+
+            const result = await sportService.deleteEntry('user-123', 'test-id-123');
+
+            expect(result).toBe(true);
+            expect(redisService.incrementSortedSet).toHaveBeenCalledWith(
+                'SPORT:MINUTEN',
+                'user-123',
+                -45
+            );
+        });
+
+        it('löscht bestehende Einträge ohne Aktivitätsminuten weiterhin korrekt', async () => {
+            const entry = mockEntry({ kilometers: 10 });
+            delete (entry as Partial<SportEntry>).minutes;
+
+            vi.mocked(redisService.get).mockResolvedValue(JSON.stringify(entry));
+
+            const result = await sportService.deleteEntry('user-123', 'test-id-123');
+
+            expect(result).toBe(true);
+            expect(redisService.incrementSortedSet).toHaveBeenCalledWith(
+                'SPORT:HIGHSCORE',
+                'user-123',
+                -10
+            );
+            expect(redisService.incrementSortedSet).not.toHaveBeenCalledWith(
+                'SPORT:MINUTEN',
+                'user-123',
+                expect.any(Number)
+            );
         });
 
         it('gibt false zurück wenn der Eintrag einem anderen User gehört', async () => {

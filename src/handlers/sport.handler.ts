@@ -48,6 +48,7 @@ const AKTIVITAET_PATTERNS: Record<SportActivity, RegExp> = {
     schwimmen: /\b(schwimm|geschwommen|schwomm)/i,
     wandern: /\b(wander|gewandert)/i,
     skifahren: /\b(ski|langlauf)/i,
+    krafttraining: /\b(krafttraining|kraftsport|hantel|gewichtheben)/i,
 };
 
 // Zieht die erste Kilometer-Angabe aus einem Text: "+12 km", "+12km", "+12,5 km", "+12 Kilometer".

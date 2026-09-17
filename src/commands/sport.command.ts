@@ -18,6 +18,7 @@ export default {
                     {name: '🏊 Schwimmen', value: 'schwimmen'},
                     {name: '🚶 Wandern', value: 'wandern'},
                     {name: '⛷️ Skifahren', value: 'skifahren'},
+                    {name: '💪 Krafttraining', value: 'krafttraining'},
                 ))
             .addNumberOption(option => option
                 .setName('kilometer')

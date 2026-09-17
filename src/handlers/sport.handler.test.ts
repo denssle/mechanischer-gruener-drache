@@ -167,6 +167,7 @@ describe('SportHandler', () => {
             ['12 km geschwommen', 'schwimmen'],
             ['12 km gewandert', 'wandern'],
             ['12 km Ski', 'skifahren'],
+            ['+10 km Krafttraining', 'krafttraining'],
         ])('erkennt in "%s" die Aktivität %s', (text, erwartet) => {
             expect(erkenneAktivitaet(text)).toBe(erwartet);
         });
@@ -181,6 +182,10 @@ describe('SportHandler', () => {
             ['ich bin gerade 12 km unterwegs gewesen'],
         ])('verwechselt "%s" nicht mit Radfahren', (text) => {
             expect(erkenneAktivitaet(text)).toBe(DEFAULT_AKTIVITAET);
+        });
+
+        it('verwechselt "Kraftfahrzeug" nicht mit Krafttraining', () => {
+            expect(erkenneAktivitaet('Kraftfahrzeug')).toBe(DEFAULT_AKTIVITAET);
         });
     });
 
