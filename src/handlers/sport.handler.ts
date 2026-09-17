@@ -22,7 +22,7 @@ export const BESTAETIGUNGS_REAKTION = '✅';
 // Lokales Datum als YYYY-MM-DD (Host läuft auf Europe/Berlin, wie beim Event-Feature).
 // Bewusst aus den lokalen Datumsteilen gebaut statt toISOString(), das in UTC umrechnet und
 // dadurch um Mitternacht auf den falschen Tag fallen würde. Dient als Tagesmarker für die
-// tägliche Kilometerstand-Meldung (Doppelpost-Schutz).
+// tägliche Aktivitätsstand-Meldung (Doppelpost-Schutz).
 export function formatTag(date: Date): string {
     const jahr = date.getFullYear();
     const monat = String(date.getMonth() + 1).padStart(2, '0');
@@ -64,6 +64,20 @@ export function parseKilometer(text: string): number | null {
     const value = parseFloat(match[1].replace(',', '.'));
     return Number.isFinite(value) && value > 0 ? value : null;
 }
+// Zieht die erste Minuten-Angabe aus einem Text: "+45 min", "+45min", "+45,5 min", "+45 Minuten".
+// Wie bei den Kilometern ist das "+" PFLICHT: ohne den Marker könnten beiläufig erwähnte Zeiten
+// ("ich trainiere seit 45 Minuten") versehentlich als Aktivität eingetragen werden.
+// Bewusst nur die ERSTE Minuten-Angabe, damit eine versehentliche Mehrfachnennung nicht doppelt zählt.
+// Minuten werden unabhängig von Kilometern erfasst - eine Nachricht kann daher nur Minuten
+// oder sowohl Kilometer als auch Minuten enthalten.
+// Exportiert + getestet.
+export function parseMinuten(text: string): number | null {
+    const match = /\+\s*(\d+(?:[.,]\d+)?)\s*(?:min\b|minuten\b)/i.exec(text);
+    if (!match) return null;
+
+    const value = parseFloat(match[1].replace(',', '.'));
+    return Number.isFinite(value) && value > 0 ? value : null;
+}
 
 // Rät die Aktivität anhand von Schlüsselwörtern; ohne Treffer DEFAULT_AKTIVITAET. Exportiert + getestet.
 export function erkenneAktivitaet(text: string): SportActivity {
@@ -81,23 +95,23 @@ export function erkenneAktivitaet(text: string): SportActivity {
 // nicht einlöst (siehe Regression in sport.handler.test.ts).
 export const SPORT_HILFE =
     `**Sport-Befehle**\n\n` +
-    `**/sport eintragen** – Neue sportliche Aktivität eintragen\n` +
+    `**/sport eintragen** – Neue sportliche Aktivität mit Kilometern, Aktivitätsminuten oder beidem eintragen\n` +
     `**/sport loeschen** – Deinen letzten Eintrag löschen\n` +
-    `**/sport bearbeiten** – Kilometer deines letzten Eintrags korrigieren\n` +
-    `**/sport gesamt** – Gesamtkilometer aller Sportler\n` +
+    `**/sport bearbeiten** – Kilometer und/oder Aktivitätsminuten deines letzten Eintrags korrigieren\n` +
+    `**/sport gesamt** – Gesamtkilometer und Aktivitätsminuten aller Sportler\n` +
     `**/sport statistik** – Deine persönliche Übersicht pro Aktivität\n` +
     `**/sport meilenstein setzen** – Einen Meilenstein für die gemeinsame Gesamtdistanz anlegen\n` +
     `**/sport hilfe** – Zeigt diese Übersicht\n\n` +
-    `Im Sport-Kanal genügt auch eine normale Nachricht: Wer „+12 km gelaufen" schreibt, ` +
-    `bekommt den Eintrag automatisch – erkennbar an der Reaktion ${BESTAETIGUNGS_REAKTION} ` +
-    `an der Nachricht. Das „+" vor den Kilometern ist nötig; vergessen? Nachricht einfach ` +
-    `bearbeiten, das zählt auch. Ohne erkennbare Sportart wird Laufen angenommen.`;
+    `Im Sport-Kanal genügt auch eine normale Nachricht: „+12 km gelaufen", „+45 min Krafttraining" ` +
+    `oder „+10 km +60 min Radfahren" werden automatisch eingetragen – erkennbar an der Reaktion ` +
+    `${BESTAETIGUNGS_REAKTION} an der Nachricht. Das „+" vor Kilometern und Aktivitätsminuten ist nötig; ` +
+    `vergessen? Nachricht einfach bearbeiten, das zählt auch. Ohne erkennbare Sportart wird Laufen angenommen.`;
 
 class SportHandler {
-    // Auto-Listener: erfasst Kilometer aus normalen Chat-Nachrichten - aber NUR im konfigurierten
+    // Auto-Listener: erfasst Kilometer und Aktivitätsminuten aus normalen Chat-Nachrichten - aber NUR im konfigurierten
     // Sport-Kanal (anders als der serverweite Blåhaj-Listener). Serverweit würde jedes beiläufige
     // "noch 3 km bis zum Bahnhof" die gemeinsame Gesamtdistanz verfälschen; zusätzlich muss die
-    // Angabe seit 2026-07-14 mit "+" markiert sein (siehe parseKilometer).
+    // Angaben müssen seit 2026-07-14 mit "+" markiert sein (siehe parseKilometer/parseMinuten).
     // Bot-Nachrichten werden ignoriert (die frühere Antwort enthielt "12 km" und hätte sich selbst
     // getriggert - bleibt als Schutz bestehen, falls je wieder geantwortet wird).
     //
@@ -107,7 +121,7 @@ class SportHandler {
     // Discord an einem Interaction-Token, den eine normale Chat-Nachricht nicht hat. Die Reaktion
     // ist der geräuschloseste Weg, der bleibt; die neue Gesamtdistanz nennt dafür /sport gesamt.
     async handleMessage(message: OmitPartialGroupDMChannel<Message<boolean>>): Promise<void> {
-        await this.erfasseKilometerAusNachricht(message);
+        await this.erfasseSportAusNachricht(message);
     }
 
     // Auch BEARBEITETE Nachrichten werden erfasst: seit das "+" Pflicht ist, ist "Marker vergessen,
@@ -124,28 +138,39 @@ class SportHandler {
         // Nicht (mehr) gecachte Nachrichten kommen partial rein - ohne fetch() wären content und
         // reactions leer, die Erfassung würde also nie greifen bzw. die Quittung nicht sehen.
         const vollstaendig = message.partial ? await message.fetch() : message;
-        await this.erfasseKilometerAusNachricht(vollstaendig);
+        await this.erfasseSportAusNachricht(vollstaendig);
     }
 
     // Gemeinsamer Kern von handleMessage/handleMessageUpdate.
     // Bot-Nachrichten werden ignoriert (die frühere Antwort enthielt "12 km" und hätte sich selbst
     // getriggert - bleibt als Schutz bestehen, falls je wieder geantwortet wird).
-    private async erfasseKilometerAusNachricht(message: Message): Promise<void> {
+    private async erfasseSportAusNachricht(message: Message): Promise<void> {
         if (message.author.bot) return;
 
         const kanalId = await sportService.getAnnouncementChannel();
         if (!kanalId || message.channelId !== kanalId) return;
 
         const kilometer = parseKilometer(message.content);
-        if (kilometer === null) return;
+        const minuten = parseMinuten(message.content);
+
+        if (kilometer === null && minuten === null) return;
 
         if (this.hatBereitsQuittung(message)) return;
 
         const aktivitaet = erkenneAktivitaet(message.content);
-        await sportService.addEntry(message.author.id, aktivitaet, kilometer);
+
+        await sportService.addEntry(
+            message.author.id,
+            aktivitaet,
+            kilometer ?? 0,
+            minuten ?? undefined
+        );
 
         await message.react(BESTAETIGUNGS_REAKTION);
-        await this.announceReachedMilestones();
+
+        if (kilometer !== null) {
+            await this.announceReachedMilestones();
+        }
     }
 
     // Hat der Bot diese Nachricht schon quittiert? `me` = "diese Reaktion stammt (auch) von mir" -
@@ -156,19 +181,35 @@ class SportHandler {
 
     async handleEintragen(interaction: ChatInputCommandInteraction) {
         const aktivitaet = interaction.options.getString('aktivitaet', true) as SportActivity;
-        const kilometer = interaction.options.getNumber('kilometer', true);
+        const kilometer = interaction.options.getNumber('kilometer');
+        const minuten = interaction.options.getNumber('minuten');
 
-        await sportService.addEntry(interaction.user.id, aktivitaet, kilometer);
+        if ((kilometer === null || kilometer === 0) &&
+            (minuten === null || minuten === 0)) {
+            return interaction.reply({
+                content: 'Bitte gib Kilometer, Minuten oder beides an.',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        await sportService.addEntry(interaction.user.id, aktivitaet, kilometer ?? 0, minuten ?? undefined);
         const aktivitaetLabel = SportActivities[aktivitaet];
 
         // Direkt nach dem Eintrag die neue gemeinsame Gesamtdistanz zeigen - passt zum
         // kooperativen Design (jeder Eintrag zahlt sichtbar auf die Gruppensumme ein).
         const gesamtKilometer = await sportService.getGesamtKilometer();
+        const gesamtMinuten = await sportService.getGesamtMinuten();
 
         // Persönlicher: der eintragende User steht mit Name + Profilbild oben im Embed. Die Antwort
         // ist seit 2026-07-14 ephemer (User-Wunsch: nur die eintragende Person sieht sie), das Embed
         // bleibt trotzdem - der Meilenstein bleibt der einzige Sport-Post, den alle im Kanal sehen.
         // Die Eintrags-ID braucht seit 2026-07-13 niemand mehr, deshalb kein Footer.
+
+        const leistung = [
+            kilometer !== null ? `${kilometer} km` : null,
+            minuten !== null ? `${minuten} min` : null,
+        ].filter(Boolean).join(' · ');
+
         const embed = new EmbedBuilder()
             .setColor(0x57F287)
             .setAuthor({
@@ -176,11 +217,13 @@ class SportHandler {
                 iconURL: interaction.user.displayAvatarURL(),
             })
             .setDescription(
-                `${aktivitaetLabel} – **${kilometer} km**, gemeinsam schon **${rundeKilometer(gesamtKilometer)} km**.`
+                `${aktivitaetLabel} – **${leistung}**, gemeinsam schon **${rundeKilometer(gesamtKilometer)} km** und **${gesamtMinuten} Aktivitätsminuten**.`
             );
 
         await interaction.reply({embeds: [embed], flags: MessageFlags.Ephemeral});
-        await this.announceReachedMilestones();
+        if (kilometer !== null) {
+            await this.announceReachedMilestones();
+        }
     }
 
     async handleLoeschen(interaction: ChatInputCommandInteraction) {
@@ -190,27 +233,55 @@ class SportHandler {
             return interaction.reply('Du hast keinen Eintrag, den ich löschen könnte.');
         }
 
-        // Nennt Aktivität + Distanz, damit sichtbar ist, was tatsächlich gelöscht wurde.
+        // Nennt Aktivität + Leistung, damit sichtbar ist, was tatsächlich gelöscht wurde.
         const aktivitaetLabel = SportActivities[entry.activity as SportActivity];
+
+        const leistung = [
+            entry.kilometers > 0 ? `${entry.kilometers} km` : null,
+            entry.minutes !== undefined ? `${entry.minutes} min` : null,
+        ].filter(Boolean).join(' · ');
+
         return interaction.reply(
-            `Letzter Eintrag gelöscht: ${aktivitaetLabel} – **${entry.kilometers} km**.`
+            `Letzter Eintrag gelöscht: ${aktivitaetLabel} – **${leistung}**.`
         );
     }
 
     async handleBearbeiten(interaction: ChatInputCommandInteraction) {
-        const kilometer = interaction.options.getNumber('kilometer', true);
+        const kilometer = interaction.options.getNumber('kilometer');
+        const minuten = interaction.options.getNumber('minuten');
 
-        const entry = await sportService.editLastEntry(interaction.user.id, kilometer);
+        if (kilometer === null && minuten === null) {
+            return interaction.reply({
+                content: 'Bitte gib Kilometer, Minuten oder beides an.',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        const entry = await sportService.editLastEntry(
+            interaction.user.id,
+            kilometer ?? undefined,
+            minuten ?? undefined
+        );
 
         if (!entry) {
-            return interaction.reply('Du hast noch keinen Eintrag, den ich korrigieren könnte.');
+            return interaction.reply(
+                'Du hast noch keinen Eintrag, den ich korrigieren könnte.'
+            );
         }
 
         const aktivitaetLabel = SportActivities[entry.activity as SportActivity];
+
+        const leistung = [
+            entry.kilometers > 0 ? `${entry.kilometers} km` : null,
+            entry.minutes !== undefined ? `${entry.minutes} min` : null,
+        ].filter(Boolean).join(' · ');
+
         await interaction.reply(
-            `Letzter Eintrag korrigiert: ${aktivitaetLabel} – jetzt **${kilometer} km**.`
+            `Letzter Eintrag korrigiert: ${aktivitaetLabel} – jetzt **${leistung}**.`
         );
-        await this.announceReachedMilestones();
+        if (kilometer !== null) {
+            await this.announceReachedMilestones();
+        }
     }
 
     async handleStatistik(interaction: ChatInputCommandInteraction) {
@@ -221,21 +292,34 @@ class SportHandler {
         }
 
         const gesamtKilometer = entries.reduce((sum, e) => sum + e.kilometers, 0);
+        const gesamtMinuten = entries.reduce((sum, e) => sum + (e.minutes ?? 0), 0);
 
         const proAktivitaet = entries.reduce((acc, e) => {
-            acc[e.activity] = (acc[e.activity] ?? 0) + e.kilometers;
+            const bisher = acc[e.activity] ?? { kilometers: 0, minutes: 0 };
+
+            bisher.kilometers += e.kilometers;
+            bisher.minutes += e.minutes ?? 0;
+
+            acc[e.activity] = bisher;
             return acc;
-        }, {} as Record<string, number>);
+        }, {} as Record<string, { kilometers: number; minutes: number }>);
 
         const aktivitaetsListe = Object.entries(proAktivitaet)
-            .sort(([, a], [, b]) => b - a)
-            .map(([key, km]) => `${SportActivities[key as SportActivity]} – ${km} km`)
+            .sort(([, a], [, b]) => b.kilometers - a.kilometers)
+            .map(([key, werte]) => {
+                const leistung = [
+                    werte.kilometers > 0 ? `${werte.kilometers} km` : null,
+                    werte.minutes > 0 ? `${werte.minutes} min` : null,
+                ].filter(Boolean).join(' · ');
+
+                return `${SportActivities[key as SportActivity]} – ${leistung}`;
+            })
             .join('\n');
 
         return interaction.reply(
             `**Deine Statistik**\n\n` +
             `${aktivitaetsListe}\n\n` +
-            `Gesamt: **${gesamtKilometer} km**`
+            `Gesamt: **${gesamtKilometer} km** und **${gesamtMinuten} Aktivitätsminuten**`
         );
     }
 
@@ -245,9 +329,10 @@ class SportHandler {
 
     async handleGesamt(interaction: ChatInputCommandInteraction) {
         const gesamtKilometer = await sportService.getGesamtKilometer();
+        const gesamtMinuten = await sportService.getGesamtMinuten();
 
         return interaction.reply(
-            `Zusammen habt ihr bereits **${rundeKilometer(gesamtKilometer)} km** zurückgelegt!`
+            `Zusammen habt ihr bereits **${rundeKilometer(gesamtKilometer)} km** und **${gesamtMinuten} Aktivitätsminuten** gesammelt!`
         );
     }
 
@@ -292,7 +377,7 @@ class SportHandler {
     }
 
     // Holt den konfigurierten Ankündigungskanal oder null (kein Kanal gesetzt bzw. nicht abrufbar).
-    // Geteilt von der Meilenstein-Ankündigung und der täglichen Kilometerstand-Meldung.
+    // Geteilt von der Meilenstein-Ankündigung und der täglichen Aktivitätsstand-Meldung.
     private async holeAnkuendigungskanal(): Promise<TextChannel | null> {
         const channelId = await sportService.getAnnouncementChannel();
         if (!channelId) {
@@ -307,10 +392,10 @@ class SportHandler {
         return channel;
     }
 
-    // Beim Start einmal aufrufen: Ist noch nie ein Kilometerstand gepostet worden (frischer Deploy),
+    // Beim Start einmal aufrufen: Ist noch nie ein Aktivitätsstand gepostet worden (frischer Deploy),
     // wird der Tagesmarker ohne Post auf heute gesetzt. So kommt die erste Meldung erst zur nächsten
     // Mitternacht statt direkt beim Deploy. Ist der Marker bereits gesetzt (auch von einem früheren
-    // Tag), bleibt er unangetastet - die Ausfall-Nachholung in posteTaeglichenKilometerstand greift dann.
+    // Tag), bleibt er unangetastet - die Ausfall-Nachholung in posteTaeglichenAktivitaetsstand greift dann.
     async initTaeglicherPost(): Promise<void> {
         try {
             const letzterTag = await sportService.getLastDailyPostDay();
@@ -318,16 +403,16 @@ class SportHandler {
                 await sportService.setLastDailyPostDay(formatTag(new Date()));
             }
         } catch (error) {
-            console.error('Fehler beim Initialisieren des täglichen Kilometerstand-Posts:', error);
+            console.error('Fehler beim Posten des täglichen Aktivitätsstands:', error);
         }
     }
 
-    // Postet den gemeinsamen Kilometerstand einmal pro Tag in den Ankündigungskanal. Idempotent über
+    // Postet den gemeinsamen Aktivitätsstand einmal pro Tag in den Ankündigungskanal. Idempotent über
     // den Tagesmarker: heute schon gepostet -> nichts. War der Bot um Mitternacht aus, wird beim ersten
     // Lauf des neuen Tages nachgeholt. Der Marker wird NUR nach erfolgreichem Post gesetzt - ohne
     // abrufbaren Kanal bleibt er stehen, damit die Meldung nachgeholt wird, sobald ein Kanal existiert.
     // Bewusst fehlertolerant (wie die Meilenstein-Ankündigung).
-    async posteTaeglichenKilometerstand(): Promise<void> {
+    async posteTaeglichenAktivitaetsstand(): Promise<void> {
         try {
             const heute = formatTag(new Date());
             const letzterTag = await sportService.getLastDailyPostDay();
@@ -341,7 +426,12 @@ class SportHandler {
             }
 
             const gesamtKilometer = await sportService.getGesamtKilometer();
-            await channel.send(`Kilometerstand um Mitternacht: gemeinsam **${rundeKilometer(gesamtKilometer)} km**.`);
+            const gesamtMinuten = await sportService.getGesamtMinuten();
+
+            await channel.send(
+                `Aktivitätsstand um Mitternacht: gemeinsam **${rundeKilometer(gesamtKilometer)} km** und **${gesamtMinuten} Aktivitätsminuten**.`
+            );
+
             await sportService.setLastDailyPostDay(heute);
         } catch (error) {
             console.error('Fehler beim Posten des täglichen Kilometerstands:', error);

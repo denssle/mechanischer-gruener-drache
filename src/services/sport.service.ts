@@ -54,27 +54,45 @@ class SportService {
         return true;
     }
 
-    async editEntry(userId: string, entryId: string, newKilometers: number, newMinutes?: number): Promise<SportEntry | null> {
+    // Vorher hieß es sinngemäß: Setze Kilometer auf den neuen Wert,
+    // jetzt heißt es: Wenn neue Kilometer vorhanden sind, setze sie - ansonsten behalte die alten;
+    // damit funktionieren jetzt beide Werte nach demselben Prinzip.
+    async editEntry(userId: string, entryId: string, newKilometers?: number, newMinutes?: number): Promise<SportEntry | null> {
         const entryString = await redisService.get(KEYS.entry(entryId));
         if (!entryString) return null;
 
         const entry: SportEntry = JSON.parse(entryString);
         if (entry.userId !== userId) return null;
 
-        const diff = newKilometers - entry.kilometers;
+        const kilometerDiff =
+            newKilometers !== undefined
+                ? newKilometers - entry.kilometers
+                : 0;
+
         const minutesDiff =
             newMinutes !== undefined
                 ? newMinutes - (entry.minutes ?? 0)
                 : 0;
 
-        entry.kilometers = newKilometers;
+        entry.kilometers = newKilometers ?? entry.kilometers;
         entry.minutes = newMinutes ?? entry.minutes;
 
         await redisService.set(KEYS.entry(entryId), JSON.stringify(entry));
-        await redisService.incrementSortedSet(KEYS.highscore, userId, diff);
+
+        if (kilometerDiff !== 0) {
+            await redisService.incrementSortedSet(
+                KEYS.highscore,
+                userId,
+                kilometerDiff
+            );
+        }
 
         if (minutesDiff !== 0) {
-            await redisService.incrementSortedSet(KEYS.minutes, userId, minutesDiff);
+            await redisService.incrementSortedSet(
+                KEYS.minutes,
+                userId,
+                minutesDiff
+            );
         }
 
         return entry;
@@ -82,7 +100,7 @@ class SportService {
 
     // Korrigiert den zuletzt eingetragenen Eintrag des Users. Die Eintrags-Liste ist per rPush
     // gefüllt, der letzte Listeneintrag ist also der neueste. null = der User hat noch nichts eingetragen.
-    async editLastEntry(userId: string, newKilometers: number, newMinutes?: number): Promise<SportEntry | null> {
+    async editLastEntry(userId: string, newKilometers?: number, newMinutes?: number): Promise<SportEntry | null> {
         const entryIds = await redisService.getList(KEYS.userEntries(userId));
         const lastId = entryIds?.at(-1);
         if (!lastId) return null;

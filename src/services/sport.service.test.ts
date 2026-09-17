@@ -88,6 +88,59 @@ describe('SportService', () => {
             );
         });
 
+        it('behält die Kilometer bei, wenn nur Aktivitätsminuten geändert werden', async () => {
+            const entry = mockEntry({ kilometers: 10, minutes: 30 });
+            vi.mocked(redisService.get).mockResolvedValue(JSON.stringify(entry));
+
+            const result = await sportService.editEntry(
+                'user-123',
+                'test-id-123',
+                undefined,
+                45
+            );
+
+            expect(result?.kilometers).toBe(10);
+            expect(result?.minutes).toBe(45);
+
+            expect(redisService.incrementSortedSet).not.toHaveBeenCalledWith(
+                'SPORT:HIGHSCORE',
+                'user-123',
+                expect.any(Number)
+            );
+
+            expect(redisService.incrementSortedSet).toHaveBeenCalledWith(
+                'SPORT:MINUTEN',
+                'user-123',
+                15
+            );
+        });
+
+        it('behält vorhandene Aktivitätsminuten, wenn keine neuen Minuten angegeben werden', async () => {
+            const entry = mockEntry({ kilometers: 10, minutes: 30 });
+            vi.mocked(redisService.get).mockResolvedValue(JSON.stringify(entry));
+
+            const result = await sportService.editEntry(
+                'user-123',
+                'test-id-123',
+                12
+            );
+
+            expect(result?.kilometers).toBe(12);
+            expect(result?.minutes).toBe(30);
+
+            expect(redisService.incrementSortedSet).toHaveBeenCalledWith(
+                'SPORT:HIGHSCORE',
+                'user-123',
+                2
+            );
+
+            expect(redisService.incrementSortedSet).not.toHaveBeenCalledWith(
+                'SPORT:MINUTEN',
+                'user-123',
+                expect.any(Number)
+            );
+        });
+
         it('gibt null zurück wenn der Eintrag nicht existiert', async () => {
             vi.mocked(redisService.get).mockResolvedValue(null);
 
