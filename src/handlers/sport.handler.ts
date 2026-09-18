@@ -39,6 +39,12 @@ export function rundeKilometer(km: number): number {
     return Math.round(km);
 }
 
+// Aktivitätsminuten werden wie Kilometer nur für die Anzeige gerundet.
+// Der gespeicherte Wert bleibt exakt, damit Nachkommastellen bei der Summierung erhalten bleiben.
+export function rundeMinuten(minuten: number): number {
+    return Math.round(minuten);
+}
+
 // Schlüsselwörter je Aktivität für den Auto-Listener. Bewusst am WORTANFANG verankert (\b) statt
 // als simples includes: "rad" steckt sonst in "Grad" ("12 km bei 30 Grad") und "gerad" in "gerade"
 // ("ich bin gerade 12 km") - beides würde fälschlich als Radfahren eingetragen.
@@ -206,7 +212,7 @@ class SportHandler {
         // Die Eintrags-ID braucht seit 2026-07-13 niemand mehr, deshalb kein Footer.
 
         const leistung = [
-            kilometer !== null ? `${kilometer} km` : null,
+            kilometer !== null && kilometer > 0 ? `${kilometer} km` : null,
             minuten !== null ? `${minuten} min` : null,
         ].filter(Boolean).join(' · ');
 
@@ -217,7 +223,7 @@ class SportHandler {
                 iconURL: interaction.user.displayAvatarURL(),
             })
             .setDescription(
-                `${aktivitaetLabel} – **${leistung}**, gemeinsam schon **${rundeKilometer(gesamtKilometer)} km** und **${gesamtMinuten} Aktivitätsminuten**.`
+                `${aktivitaetLabel} – **${leistung}**, gemeinsam schon **${rundeKilometer(gesamtKilometer)} km** und **${rundeMinuten(gesamtMinuten)} Aktivitätsminuten**.`
             );
 
         await interaction.reply({embeds: [embed], flags: MessageFlags.Ephemeral});
@@ -309,7 +315,7 @@ class SportHandler {
             .map(([key, werte]) => {
                 const leistung = [
                     werte.kilometers > 0 ? `${werte.kilometers} km` : null,
-                    werte.minutes > 0 ? `${werte.minutes} min` : null,
+                    werte.minutes > 0 ? `${rundeMinuten(werte.minutes)} min` : null,
                 ].filter(Boolean).join(' · ');
 
                 return `${SportActivities[key as SportActivity]} – ${leistung}`;
@@ -319,7 +325,7 @@ class SportHandler {
         return interaction.reply(
             `**Deine Statistik**\n\n` +
             `${aktivitaetsListe}\n\n` +
-            `Gesamt: **${gesamtKilometer} km** und **${gesamtMinuten} Aktivitätsminuten**`
+            `Gesamt: **${gesamtKilometer} km** und **${rundeMinuten(gesamtMinuten)} Aktivitätsminuten**`
         );
     }
 
@@ -332,7 +338,7 @@ class SportHandler {
         const gesamtMinuten = await sportService.getGesamtMinuten();
 
         return interaction.reply(
-            `Zusammen habt ihr bereits **${rundeKilometer(gesamtKilometer)} km** und **${gesamtMinuten} Aktivitätsminuten** gesammelt!`
+            `Zusammen habt ihr bereits **${rundeKilometer(gesamtKilometer)} km** und **${rundeMinuten(gesamtMinuten)} Aktivitätsminuten** gesammelt!`
         );
     }
 
@@ -403,7 +409,7 @@ class SportHandler {
                 await sportService.setLastDailyPostDay(formatTag(new Date()));
             }
         } catch (error) {
-            console.error('Fehler beim Posten des täglichen Aktivitätsstands:', error);
+            console.error('Fehler beim Initialisieren des täglichen Aktivitätsstand-Posts:', error);
         }
     }
 
@@ -429,12 +435,12 @@ class SportHandler {
             const gesamtMinuten = await sportService.getGesamtMinuten();
 
             await channel.send(
-                `Aktivitätsstand um Mitternacht: gemeinsam **${rundeKilometer(gesamtKilometer)} km** und **${gesamtMinuten} Aktivitätsminuten**.`
+                `Aktivitätsstand um Mitternacht: gemeinsam **${rundeKilometer(gesamtKilometer)} km** und **${rundeMinuten(gesamtMinuten)} Aktivitätsminuten**.`
             );
 
             await sportService.setLastDailyPostDay(heute);
         } catch (error) {
-            console.error('Fehler beim Posten des täglichen Kilometerstands:', error);
+            console.error('Fehler beim Posten des täglichen Aktivitätsstands:', error);
         }
     }
 }

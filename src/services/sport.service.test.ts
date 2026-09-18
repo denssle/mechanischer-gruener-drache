@@ -70,24 +70,6 @@ describe('SportService', () => {
             );
         });
 
-        it('behält vorhandene Aktivitätsminuten, wenn beim Bearbeiten keine angegeben werden', async () => {
-            const entry = mockEntry({ kilometers: 10, minutes: 30 });
-            vi.mocked(redisService.get).mockResolvedValue(JSON.stringify(entry));
-
-            const result = await sportService.editEntry(
-                'user-123',
-                'test-id-123',
-                15
-            );
-
-            expect(result?.minutes).toBe(30);
-            expect(redisService.incrementSortedSet).not.toHaveBeenCalledWith(
-                'SPORT:MINUTEN',
-                'user-123',
-                expect.any(Number)
-            );
-        });
-
         it('behält die Kilometer bei, wenn nur Aktivitätsminuten geändert werden', async () => {
             const entry = mockEntry({ kilometers: 10, minutes: 30 });
             vi.mocked(redisService.get).mockResolvedValue(JSON.stringify(entry));

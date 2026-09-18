@@ -36,7 +36,7 @@ vi.mock('../client.js', () => ({
 
 import sportService from '../services/sport.service.js';
 import client from '../client.js';
-import sportHandler, { parseKilometer, parseMinuten, erkenneAktivitaet, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, formatTag, rundeKilometer, SPORT_HILFE } from './sport.handler.js';
+import sportHandler, { parseKilometer, parseMinuten, erkenneAktivitaet, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, formatTag, rundeKilometer, rundeMinuten, SPORT_HILFE } from './sport.handler.js';
 import { HELP_TEXT } from './hilfe.handler.js';
 
 const mockEntry = (overrides = {}) => ({
@@ -982,6 +982,14 @@ describe('SportHandler', () => {
             expect(rundeKilometer(249.4)).toBe(249);
             expect(rundeKilometer(249.5)).toBe(250);
             expect(rundeKilometer(1000)).toBe(1000);
+        });
+    });
+
+    describe('rundeMinuten', () => {
+        it('rundet Aktivitätsminuten für die Anzeige auf ganze Minuten', () => {
+            expect(rundeMinuten(45.4)).toBe(45);
+            expect(rundeMinuten(45.5)).toBe(46);
+            expect(rundeMinuten(90.30000000000001)).toBe(90);
         });
     });
 
