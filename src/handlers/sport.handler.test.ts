@@ -291,19 +291,16 @@ describe('SportHandler', () => {
             }
         });
 
-        it('jedes Minuten-Beispiel in SPORT_HILFE wird vom Parser auch wirklich erkannt', () => {
+        it.each([
+            ['HELP_TEXT (/hilfe)', HELP_TEXT],
+            ['SPORT_HILFE (/sport hilfe)', SPORT_HILFE],
+        ])('jedes Minuten-Beispiel in %s wird vom Parser auch wirklich erkannt', (_name, text) => {
             // Alle in „…" zitierten Beispiele, die eine Minuten-Angabe enthalten.
-            const beispiele = [
-                ...SPORT_HILFE.matchAll(/„([^"„]*\d[^"„]*(?:min|minuten)[^"„]*)"/gi),
-            ].map(m => m[1]);
+            const beispiele = [...text.matchAll(/„([^"„]*\d[^"„]*(?:min|minuten)[^"„]*)"/gi)].map(m => m[1]);
 
             expect(beispiele.length).toBeGreaterThan(0);
-
             for (const beispiel of beispiele) {
-                expect(
-                    parseMinuten(beispiel),
-                    `Beispiel "${beispiel}" wird nicht erkannt`
-                ).not.toBeNull();
+                expect(parseMinuten(beispiel), `Beispiel "${beispiel}" wird nicht erkannt`).not.toBeNull();
             }
         });
 
@@ -931,50 +928,70 @@ describe('SportHandler', () => {
             expect(reply).toContain('Radfahren – 20 km');
             expect(reply).toContain('Gesamt: **35 km**');
         });
-    });
 
-    it('gruppiert und summiert Kilometer und Aktivitätsminuten pro Aktivität', async () => {
-        vi.mocked(sportService.getUserEntries).mockResolvedValue([
-            mockEntry({ activity: 'laufen', kilometers: 10, minutes: 30 }),
-            mockEntry({ activity: 'laufen', kilometers: 5, minutes: 20 }),
-            mockEntry({ activity: 'radfahren', kilometers: 20, minutes: 60 }),
-        ]);
+        it('gruppiert und summiert Kilometer und Aktivitätsminuten pro Aktivität', async () => {
+            vi.mocked(sportService.getUserEntries).mockResolvedValue([
+                mockEntry({ activity: 'laufen', kilometers: 10, minutes: 30 }),
+                mockEntry({ activity: 'laufen', kilometers: 5, minutes: 20 }),
+                mockEntry({ activity: 'radfahren', kilometers: 20, minutes: 60 }),
+            ]);
 
-        const interaction = {
-            user: { id: 'user-123' },
-            reply: vi.fn(),
-        } as any;
+            const interaction = {
+                user: { id: 'user-123' },
+                reply: vi.fn(),
+            } as any;
 
-        await sportHandler.handleStatistik(interaction);
+            await sportHandler.handleStatistik(interaction);
 
-        const reply = (interaction.reply as any).mock.calls[0][0] as string;
+            const reply = (interaction.reply as any).mock.calls[0][0] as string;
 
-        expect(reply).toContain('Laufen – 15 km · 50 min');
-        expect(reply).toContain('Radfahren – 20 km · 60 min');
-        expect(reply).toContain('Gesamt: **35 km** und **110 Aktivitätsminuten**');
-    });
+            expect(reply).toContain('Laufen – 15 km · 50 min');
+            expect(reply).toContain('Radfahren – 20 km · 60 min');
+            expect(reply).toContain('Gesamt: **35 km** und **110 Aktivitätsminuten**');
+        });
 
-    it('zeigt eine reine Minuten-Aktivität ohne 0 km an', async () => {
-        vi.mocked(sportService.getUserEntries).mockResolvedValue([
-            mockEntry({
-                activity: 'krafttraining',
-                kilometers: 0,
-                minutes: 45,
-            }),
-        ]);
+        it('bereinigt Fließkomma-Reste in der persönlichen Kilometerstatistik', async () => {
+            vi.mocked(sportService.getUserEntries).mockResolvedValue([
+                mockEntry({ activity: 'laufen', kilometers: 1.1 }),
+                mockEntry({ activity: 'laufen', kilometers: 2.2 }),
+            ]);
 
-        const interaction = {
-            user: { id: 'user-123' },
-            reply: vi.fn(),
-        } as any;
+            const interaction = {
+                user: { id: 'user-123' },
+                reply: vi.fn(),
+            } as any;
 
-        await sportHandler.handleStatistik(interaction);
+            await sportHandler.handleStatistik(interaction);
 
-        const reply = (interaction.reply as any).mock.calls[0][0] as string;
+            const reply = (interaction.reply as any).mock.calls[0][0] as string;
 
-        expect(reply).toContain('Krafttraining – 45 min');
-        expect(reply).not.toContain('Krafttraining – 0 km');
-        expect(reply).toContain('45 Aktivitätsminuten');
+            expect(reply).toContain('Laufen – 3.3 km');
+            expect(reply).toContain('Gesamt: **3.3 km**');
+            expect(reply).not.toContain('3.3000000000000003');
+        });
+
+        it('zeigt eine reine Minuten-Aktivität ohne 0 km an', async () => {
+            vi.mocked(sportService.getUserEntries).mockResolvedValue([
+                mockEntry({
+                    activity: 'krafttraining',
+                    kilometers: 0,
+                    minutes: 45,
+                }),
+            ]);
+
+            const interaction = {
+                user: { id: 'user-123' },
+                reply: vi.fn(),
+            } as any;
+
+            await sportHandler.handleStatistik(interaction);
+
+            const reply = (interaction.reply as any).mock.calls[0][0] as string;
+
+            expect(reply).toContain('Krafttraining – 45 min');
+            expect(reply).not.toContain('Krafttraining – 0 km');
+            expect(reply).toContain('45 Aktivitätsminuten');
+        });
     });
 
     describe('rundeKilometer', () => {

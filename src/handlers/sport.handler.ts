@@ -39,6 +39,12 @@ export function rundeKilometer(km: number): number {
     return Math.round(km);
 }
 
+// Persönliche Kilometerwerte behalten ihre Nachkommastellen.
+// Es werden nur Fließkomma-Artefakte wie 3.3000000000000003 entfernt.
+export function bereinigeKilometer(km: number): number {
+    return Math.round(km * 100) / 100;
+}
+
 // Aktivitätsminuten werden wie Kilometer nur für die Anzeige gerundet.
 // Der gespeicherte Wert bleibt exakt, damit Nachkommastellen bei der Summierung erhalten bleiben.
 export function rundeMinuten(minuten: number): number {
@@ -314,7 +320,7 @@ class SportHandler {
             .sort(([, a], [, b]) => b.kilometers - a.kilometers)
             .map(([key, werte]) => {
                 const leistung = [
-                    werte.kilometers > 0 ? `${werte.kilometers} km` : null,
+                    werte.kilometers > 0 ? `${bereinigeKilometer(werte.kilometers)} km` : null,
                     werte.minutes > 0 ? `${rundeMinuten(werte.minutes)} min` : null,
                 ].filter(Boolean).join(' · ');
 
@@ -325,7 +331,7 @@ class SportHandler {
         return interaction.reply(
             `**Deine Statistik**\n\n` +
             `${aktivitaetsListe}\n\n` +
-            `Gesamt: **${gesamtKilometer} km** und **${rundeMinuten(gesamtMinuten)} Aktivitätsminuten**`
+            `Gesamt: **${bereinigeKilometer(gesamtKilometer)} km** und **${rundeMinuten(gesamtMinuten)} Aktivitätsminuten**`
         );
     }
 
