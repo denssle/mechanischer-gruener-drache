@@ -23,18 +23,28 @@ export default {
             .addNumberOption(option => option
                 .setName('kilometer')
                 .setDescription('Anzahl der Kilometer')
-                .setRequired(true)
+                .setRequired(false)
+                .setMinValue(0))
+            .addNumberOption(option => option
+                .setName('minuten')
+                .setDescription('Dauer der Aktivität in Minuten')
+                .setRequired(false)
                 .setMinValue(0)))
         .addSubcommand(sub => sub
             .setName('loeschen')
             .setDescription('Deinen letzten Eintrag löschen'))
         .addSubcommand(sub => sub
             .setName('bearbeiten')
-            .setDescription('Kilometer deines letzten Eintrags korrigieren')
+            .setDescription('Deinen letzten Eintrag korrigieren')
             .addNumberOption(option => option
                 .setName('kilometer')
                 .setDescription('Neue Kilometeranzahl')
-                .setRequired(true)
+                .setRequired(false)
+                .setMinValue(0))
+            .addNumberOption(option => option
+                .setName('minuten')
+                .setDescription('Neue Aktivitätsdauer in Minuten')
+                .setRequired(false)
                 .setMinValue(0)))
         .addSubcommand(sub => sub
             .setName('statistik')

@@ -60,6 +60,40 @@ describe('sport.command', () => {
         }
     });
 
+    it('bietet beim Eintragen Kilometer und Minuten optional an', () => {
+        const command = sportCommand.data.toJSON();
+        const eintragen = command.options?.find(option => option.name === 'eintragen');
+
+        expect(eintragen).toBeDefined();
+
+        if (!eintragen || !('options' in eintragen)) {
+            throw new Error('Subcommand "eintragen" hat keine Optionen');
+        }
+
+        const kilometer = eintragen.options?.find(option => option.name === 'kilometer');
+        const minuten = eintragen.options?.find(option => option.name === 'minuten');
+
+        expect(kilometer?.required).toBe(false);
+        expect(minuten?.required).toBe(false);
+    });
+
+    it('bietet beim Bearbeiten Kilometer und Minuten optional an', () => {
+        const command = sportCommand.data.toJSON();
+        const bearbeiten = command.options?.find(option => option.name === 'bearbeiten');
+
+        expect(bearbeiten).toBeDefined();
+
+        if (!bearbeiten || !('options' in bearbeiten)) {
+            throw new Error('Subcommand "bearbeiten" hat keine Optionen');
+        }
+
+        const kilometer = bearbeiten.options?.find(option => option.name === 'kilometer');
+        const minuten = bearbeiten.options?.find(option => option.name === 'minuten');
+
+        expect(kilometer?.required).toBe(false);
+        expect(minuten?.required).toBe(false);
+    });
+
     it('registriert alle im SlashCommandBuilder definierten Top-Level-Optionen auch im Dispatch', () => {
         const definedOptions = sportCommand.data.options.map((option) => option.toJSON().name);
         const dispatchedOptions = [

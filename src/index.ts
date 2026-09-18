@@ -143,8 +143,8 @@ client.once(Events.ClientReady, async () => {
         // Erst nach der Redis-Verbindung: verhindert einen Überraschungs-Post beim ersten Deploy.
         await sportHandler.initTaeglicherPost();
         setInterval(() => {
-            sportHandler.posteTaeglichenKilometerstand().catch((error) => {
-                console.error('Fehler im täglichen Kilometerstand-Post:', error);
+            sportHandler.posteTaeglichenAktivitaetsstand().catch((error) => {
+                console.error('Fehler im täglichen Aktivitätsstand-Post:', error);
             });
             // Prüft selbst auf 13:37 und den eigenen Tagesmarker; holt einen verpassten Tag
             // bewusst NICHT nach (ein Anstupser um 15 Uhr wäre sinnlos).
