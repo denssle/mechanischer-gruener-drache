@@ -227,6 +227,87 @@ describe('SportService', () => {
         });
     });
 
+    describe('getIndexedEntries', () => {
+        it('gibt alle Einträge aus dem globalen Index zurück', async () => {
+            const entry1 = mockEntry({
+                id: 'entry-1',
+                kilometers: 5,
+            });
+            const entry2 = mockEntry({
+                id: 'entry-2',
+                kilometers: 10,
+            });
+
+            vi.mocked(redisService.getList).mockResolvedValue([
+                'entry-1',
+                'entry-2',
+            ]);
+
+            vi.mocked(redisService.get)
+                .mockResolvedValueOnce(JSON.stringify(entry1))
+                .mockResolvedValueOnce(JSON.stringify(entry2));
+
+            const result = await sportService.getIndexedEntries();
+
+            expect(redisService.getList).toHaveBeenCalledWith('SPORT:ENTRIES');
+            expect(result).toEqual([entry1, entry2]);
+        });
+
+        it('filtert fehlende Einträge aus dem globalen Index heraus', async () => {
+            const entry = mockEntry({ id: 'entry-1' });
+
+            vi.mocked(redisService.getList).mockResolvedValue([
+                'entry-1',
+                'fehlt-in-redis',
+            ]);
+
+            vi.mocked(redisService.get)
+                .mockResolvedValueOnce(JSON.stringify(entry))
+                .mockResolvedValueOnce(null);
+
+            const result = await sportService.getIndexedEntries();
+
+            expect(result).toEqual([entry]);
+        });
+    });
+
+    describe('getEntriesSince', () => {
+        it('gibt nur Einträge ab dem angegebenen Startzeitpunkt zurück', async () => {
+            const vorher = mockEntry({
+                id: 'vorher',
+                createdAt: '2026-09-30T23:59:59.000Z',
+            });
+            const genauZumStart = mockEntry({
+                id: 'start',
+                createdAt: '2026-10-01T00:00:00.000Z',
+            });
+            const danach = mockEntry({
+                id: 'danach',
+                createdAt: '2026-10-02T12:00:00.000Z',
+            });
+
+            vi.mocked(redisService.getList).mockResolvedValue([
+                'vorher',
+                'start',
+                'danach',
+            ]);
+
+            vi.mocked(redisService.get)
+                .mockResolvedValueOnce(JSON.stringify(vorher))
+                .mockResolvedValueOnce(JSON.stringify(genauZumStart))
+                .mockResolvedValueOnce(JSON.stringify(danach));
+
+            const result = await sportService.getEntriesSince(
+                new Date('2026-10-01T00:00:00.000Z')
+            );
+
+            expect(result).toEqual([
+                genauZumStart,
+                danach,
+            ]);
+        });
+    });
+
     describe('addEntry', () => {
         it('speichert den Eintrag, verknüpft ihn mit dem User und erhöht die Bestenliste', async () => {
             const entry = await sportService.addEntry('user-123', 'laufen', 10);
@@ -236,6 +317,7 @@ describe('SportService', () => {
             expect(entry.kilometers).toBe(10);
             expect(redisService.set).toHaveBeenCalledWith(`SPORT:ENTRY:${entry.id}`, JSON.stringify(entry));
             expect(redisService.addToList).toHaveBeenCalledWith('SPORT:USER:user-123', entry.id);
+            expect(redisService.addToList).toHaveBeenCalledWith('SPORT:ENTRIES', entry.id);
             expect(redisService.incrementSortedSet).toHaveBeenCalledWith('SPORT:HIGHSCORE', 'user-123', 10);
         });
 
@@ -272,6 +354,11 @@ describe('SportService', () => {
                 'SPORT:MINUTEN',
                 'user-123',
                 -45
+            );
+
+            expect(redisService.removeFromList).toHaveBeenCalledWith(
+                'SPORT:ENTRIES',
+                'test-id-123'
             );
         });
 
