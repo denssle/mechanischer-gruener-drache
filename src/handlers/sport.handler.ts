@@ -8,7 +8,7 @@ import {
     TextChannel
 } from 'discord.js';
 import sportService from '../services/sport.service.js';
-import {SportActivities, SportActivity} from '../types/sport.js';
+import { ErkannteSportLeistung, SportActivities, SportActivity, istDistanzAktivitaet, istMinutenAktivitaet,} from '../types/sport.js';
 import client from '../client.js';
 
 // Ohne Schlüsselwort im Text wird Laufen angenommen (bewusst: lieber ein Eintrag mit der
@@ -76,6 +76,7 @@ export function parseKilometer(text: string): number | null {
     const value = parseFloat(match[1].replace(',', '.'));
     return Number.isFinite(value) && value > 0 ? value : null;
 }
+
 // Zieht die erste Minuten-Angabe aus einem Text: "+45 min", "+45min", "+45,5 min", "+45 Minuten".
 // Wie bei den Kilometern ist das "+" PFLICHT: ohne den Marker könnten beiläufig erwähnte Zeiten
 // ("ich trainiere seit 45 Minuten") versehentlich als Aktivität eingetragen werden.
@@ -100,6 +101,48 @@ export function erkenneAktivitaet(text: string): SportActivity {
     }
 
     return DEFAULT_AKTIVITAET;
+}
+
+export function erkenneSportLeistungen(text: string): ErkannteSportLeistung[] {
+    const leistungen: ErkannteSportLeistung[] = [];
+
+    const matches = [...text.matchAll(
+        /\+\s*(\d+(?:[.,]\d+)?)\s*(km\b|kilometer\b|min\b|minuten\b)/gi
+    )];
+
+    for (let i = 0; i < matches.length; i++) {
+        const match = matches[i];
+        const wert = parseFloat(match[1].replace(',', '.'));
+        const einheit = match[2].toLowerCase();
+
+        if (!Number.isFinite(wert) || wert <= 0) continue;
+
+        const start = match.index;
+        const ende = matches[i + 1]?.index ?? text.length;
+        const abschnitt = text.slice(start, ende);
+
+        const aktivitaet = erkenneAktivitaet(abschnitt);
+
+        if (einheit === 'km' || einheit === 'kilometer') {
+            if (!istDistanzAktivitaet(aktivitaet)) continue;
+
+            leistungen.push({
+                aktivitaet,
+                kilometer: wert,
+            });
+        }
+
+        if (einheit === 'min' || einheit === 'minuten') {
+            if (!istMinutenAktivitaet(aktivitaet)) continue;
+
+            leistungen.push({
+                aktivitaet,
+                minuten: wert,
+            });
+        }
+    }
+
+    return leistungen;
 }
 
 // Exportiert wie CHARAKTER_HELP/SPIELWELT_HELP, damit ein Test die km-Beispiele darin gegen den
@@ -162,25 +205,24 @@ class SportHandler {
         const kanalId = await sportService.getAnnouncementChannel();
         if (!kanalId || message.channelId !== kanalId) return;
 
-        const kilometer = parseKilometer(message.content);
-        const minuten = parseMinuten(message.content);
+        const leistungen = erkenneSportLeistungen(message.content);
 
-        if (kilometer === null && minuten === null) return;
+        if (leistungen.length === 0) return;
 
         if (this.hatBereitsQuittung(message)) return;
 
-        const aktivitaet = erkenneAktivitaet(message.content);
-
-        await sportService.addEntry(
-            message.author.id,
-            aktivitaet,
-            kilometer ?? 0,
-            minuten ?? undefined
-        );
+        for (const leistung of leistungen) {
+            await sportService.addEntry(
+                message.author.id,
+                leistung.aktivitaet,
+                leistung.kilometer ?? 0,
+                leistung.minuten
+            );
+        }
 
         await message.react(BESTAETIGUNGS_REAKTION);
 
-        if (kilometer !== null) {
+        if (leistungen.some(leistung => leistung.kilometer !== undefined)) {
             await this.announceReachedMilestones();
         }
     }
@@ -200,6 +242,20 @@ class SportHandler {
             (minuten === null || minuten === 0)) {
             return interaction.reply({
                 content: 'Bitte gib Kilometer, Minuten oder beides an.',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        if (istDistanzAktivitaet(aktivitaet) && minuten !== null && minuten > 0) {
+            return interaction.reply({
+                content: 'Distanzaktivitäten können nur mit Kilometern eingetragen werden.',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        if (istMinutenAktivitaet(aktivitaet) && kilometer !== null && kilometer > 0) {
+            return interaction.reply({
+                content: 'Minutenaktivitäten können nur mit Aktivitätsminuten eingetragen werden.',
                 flags: MessageFlags.Ephemeral,
             });
         }
@@ -265,6 +321,31 @@ class SportHandler {
         if (kilometer === null && minuten === null) {
             return interaction.reply({
                 content: 'Bitte gib Kilometer, Minuten oder beides an.',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        const entries = await sportService.getUserEntries(interaction.user.id);
+        const letzterEintrag = entries.at(-1);
+
+        if (!letzterEintrag) {
+            return interaction.reply(
+                'Du hast noch keinen Eintrag, den ich korrigieren könnte.'
+            );
+        }
+
+        const aktivitaet = letzterEintrag.activity as SportActivity;
+
+        if (istDistanzAktivitaet(aktivitaet) && minuten !== null) {
+            return interaction.reply({
+                content: 'Distanzaktivitäten können nur mit Kilometern bearbeitet werden.',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        if (istMinutenAktivitaet(aktivitaet) && kilometer !== null) {
+            return interaction.reply({
+                content: 'Minutenaktivitäten können nur mit Aktivitätsminuten bearbeitet werden.',
                 flags: MessageFlags.Ephemeral,
             });
         }
