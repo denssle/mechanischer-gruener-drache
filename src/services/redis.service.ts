@@ -53,6 +53,10 @@ class RedisService {
         return this.#client.zRangeWithScores(key, 0, -1);
     }
 
+    getSortedSetByScore(key: string, min: number, max: number) {
+        return this.#client.zRangeByScore(key, min, max);
+    }
+
     async delete(key: string): Promise<void> {
         await this.#client.del(key);
     }
