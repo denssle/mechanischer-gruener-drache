@@ -15,7 +15,7 @@ export const HELP_TEXT =
     `\`/twitch verknuepfen\` – deinen Kanal hinterlegen; der Server wird benachrichtigt, wenn du live gehst\n\n` +
     `**Sport** (Details: \`/sport hilfe\`)\n` +
     `\`/sport eintragen\` – km/Minuten eintragen · \`/sport gesamt\` – Gesamtsumme · \`/sport statistik\` – deine Übersicht\n` +
-    `Sport: „+12 km gelaufen", „+45 min Krafttraining", kombiniert: „+12 km Laufen +45 min Krafttraining".\n\n` +
+    `Im Sport-Kanal: „+12 km gelaufen", „+45 min Krafttraining" – „+" ist Pflicht.\n\n` +
     `**Event** (Details: \`/event hilfe\`)\n` +
     `\`/event countdown\` – wie lange noch bis zum nächsten Community-Event?\n\n` +
     `**Spiel & Spaß**\n` +

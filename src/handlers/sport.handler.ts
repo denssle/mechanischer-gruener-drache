@@ -92,15 +92,23 @@ export function parseMinuten(text: string): number | null {
     return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-// Rät die Aktivität anhand von Schlüsselwörtern; ohne Treffer DEFAULT_AKTIVITAET. Exportiert + getestet.
-export function erkenneAktivitaet(text: string): SportActivity {
+// Erkennt die Aktivität anhand von Schlüsselwörtern.
+// Optional kann die Suche auf bestimmte Sportarten eingeschränkt werden.
+// Ohne Treffer: DEFAULT_AKTIVITAET bei normaler Suche, null bei eingeschränkter Suche.
+export function erkenneAktivitaet(
+    text: string,
+    erlaubteAktivitaeten?: SportActivity[]
+): SportActivity | null {
     for (const [aktivitaet, pattern] of Object.entries(AKTIVITAET_PATTERNS) as [SportActivity, RegExp][]) {
-        if (pattern.test(text)) {
+        if (
+            (!erlaubteAktivitaeten || erlaubteAktivitaeten.includes(aktivitaet)) &&
+            pattern.test(text)
+        ) {
             return aktivitaet;
         }
     }
 
-    return DEFAULT_AKTIVITAET;
+    return erlaubteAktivitaeten ? null : DEFAULT_AKTIVITAET;
 }
 
 export function erkenneSportLeistungen(text: string): ErkannteSportLeistung[] {
@@ -117,26 +125,45 @@ export function erkenneSportLeistungen(text: string): ErkannteSportLeistung[] {
 
         if (!Number.isFinite(wert) || wert <= 0) continue;
 
-        const start = match.index;
+        // Der Suchbereich umfasst auch Text vor der Angabe, damit sowohl
+        // "Radfahren +30 km" als auch "+30 km Radfahren" erkannt werden.
+        const start = i === 0
+            ? 0
+            : matches[i - 1].index + matches[i - 1][0].length;
+
         const ende = matches[i + 1]?.index ?? text.length;
         const abschnitt = text.slice(start, ende);
 
-        const aktivitaet = erkenneAktivitaet(abschnitt);
+        const istKilometer = einheit === 'km' || einheit === 'kilometer';
+        const erlaubteAktivitaeten = (Object.keys(SportActivities) as SportActivity[])
+            .filter(aktivitaet =>
+                istKilometer
+                    ? istDistanzAktivitaet(aktivitaet)
+                    : istMinutenAktivitaet(aktivitaet)
+            );
 
-        if (einheit === 'km' || einheit === 'kilometer') {
-            if (!istDistanzAktivitaet(aktivitaet)) continue;
+        const passendeAktivitaet =
+            erkenneAktivitaet(abschnitt, erlaubteAktivitaeten);
 
-            leistungen.push({
-                aktivitaet,
-                kilometer: wert,
-            });
+        const erkannteAktivitaet = erkenneAktivitaet(abschnitt);
+
+        // Wird ausdrücklich eine Sportart genannt, die nicht zur Einheit passt,
+        // ist die Angabe widersprüchlich und die gesamte Nachricht ungültig.
+        if (
+            !passendeAktivitaet &&
+            erkannteAktivitaet !== DEFAULT_AKTIVITAET
+        ) {
+            return [];
         }
 
-        if (einheit === 'min' || einheit === 'minuten') {
-            if (!istMinutenAktivitaet(aktivitaet)) continue;
-
+        if (istKilometer) {
             leistungen.push({
-                aktivitaet,
+                aktivitaet: passendeAktivitaet ?? DEFAULT_AKTIVITAET,
+                kilometer: wert,
+            });
+        } else {
+            leistungen.push({
+                aktivitaet: passendeAktivitaet ?? 'krafttraining',
                 minuten: wert,
             });
         }
@@ -158,7 +185,7 @@ export const SPORT_HILFE =
     `**/sport meilenstein setzen** – Einen Meilenstein für die gemeinsame Gesamtdistanz anlegen\n` +
     `**/sport hilfe** – Zeigt diese Übersicht\n\n` +
     `Im Sport-Kanal genügt auch eine normale Nachricht: „+12 km gelaufen", „+45 min Krafttraining" ` +
-    `oder „+10 km +60 min Radfahren" werden automatisch eingetragen – erkennbar an der Reaktion ` +
+    `oder „+10 km Radfahren +60 min Krafttraining" werden automatisch eingetragen – erkennbar an der Reaktion ` +
     `${BESTAETIGUNGS_REAKTION} an der Nachricht. Das „+" vor Kilometern und Aktivitätsminuten ist nötig; ` +
     `vergessen? Nachricht einfach bearbeiten, das zählt auch. Ohne erkennbare Sportart wird Laufen angenommen.`;
 
@@ -336,14 +363,14 @@ class SportHandler {
 
         const aktivitaet = letzterEintrag.activity as SportActivity;
 
-        if (istDistanzAktivitaet(aktivitaet) && minuten !== null) {
+        if (istDistanzAktivitaet(aktivitaet) && minuten !== null && minuten > 0) {
             return interaction.reply({
                 content: 'Distanzaktivitäten können nur mit Kilometern bearbeitet werden.',
                 flags: MessageFlags.Ephemeral,
             });
         }
 
-        if (istMinutenAktivitaet(aktivitaet) && kilometer !== null) {
+        if (istMinutenAktivitaet(aktivitaet) && kilometer !== null && kilometer > 0) {
             return interaction.reply({
                 content: 'Minutenaktivitäten können nur mit Aktivitätsminuten bearbeitet werden.',
                 flags: MessageFlags.Ephemeral,

@@ -24,24 +24,21 @@ export interface ErkannteSportLeistung {
     minuten?: number;
 }
 
-export const DISTANZ_AKTIVITAETEN: SportActivity[] = [
-    'laufen',
-    'radfahren',
-    'schwimmen',
-    'wandern',
-    'skifahren',
-];
-
-export const MINUTEN_AKTIVITAETEN: SportActivity[] = [
-    'krafttraining',
-];
+export const AKTIVITAET_EINHEIT: Record<SportActivity, 'km' | 'min'> = {
+    laufen: 'km',
+    radfahren: 'km',
+    schwimmen: 'km',
+    wandern: 'km',
+    skifahren: 'km',
+    krafttraining: 'min',
+};
 
 export function istDistanzAktivitaet(aktivitaet: SportActivity): boolean {
-    return DISTANZ_AKTIVITAETEN.includes(aktivitaet);
+    return AKTIVITAET_EINHEIT[aktivitaet] === 'km';
 }
 
 export function istMinutenAktivitaet(aktivitaet: SportActivity): boolean {
-    return MINUTEN_AKTIVITAETEN.includes(aktivitaet);
+    return AKTIVITAET_EINHEIT[aktivitaet] === 'min';
 }
 
 export interface SportMilestone {
