@@ -380,19 +380,6 @@ describe('LoggingHandler', () => {
             expect(send).toHaveBeenCalledWith(expect.stringContaining('Neuer Text'));
         });
 
-        it('zeigt einen Fallback-Text wenn die alte Nachricht nicht gecacht war', async () => {
-            const send = vi.fn();
-            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
-            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
-            const oldMessage = mockMessage({ partial: true, content: null });
-            const newMessage = mockMessage({ content: 'Neuer Text' });
-
-            await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
-
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('nicht verfügbar'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Neuer Text'));
-        });
-
         it('holt den alten Inhalt aus dem Redis-Cache und schreibt den neuen Stand zurück', async () => {
             const send = vi.fn();
             vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');

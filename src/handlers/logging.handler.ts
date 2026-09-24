@@ -209,9 +209,10 @@ class LoggingHandler {
             const oldContent = oldMessage.partial ? (cached?.content ?? null) : oldMessage.content;
             const newContent = newMessage.partial ? null : newMessage.content;
 
-            // Discord feuert MessageUpdate auch ohne echte Änderung (z.B. beim Nachladen von
-            // Link-Embeds) - nur loggen, wenn sich der Text nachweislich unterscheidet.
-            if (oldContent !== null && newContent !== null && oldContent === newContent) return;
+            // Discord feuert MessageUpdate auch ohne echte Textänderung (z.B. beim Nachladen von
+            // Link-Embeds). Nur loggen, wenn alter und neuer Text bekannt sind und sich unterscheiden.
+            if (oldContent === null || newContent === null) return;
+            if (oldContent === newContent) return;
 
             const logChannel = await this.getLogChannel();
             if (!logChannel) return;
