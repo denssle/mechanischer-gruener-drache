@@ -209,6 +209,19 @@ class LoggingHandler {
             const oldContent = oldMessage.partial ? (cached?.content ?? null) : oldMessage.content;
             const newContent = newMessage.partial ? null : newMessage.content;
 
+            console.log('[MessageUpdate DEBUG]', {
+                messageId: newMessage.id,
+                channelId: newMessage.channelId,
+                oldPartial: oldMessage.partial,
+                newPartial: newMessage.partial,
+                oldContentKnown: oldContent !== null,
+                newContentKnown: newContent !== null,
+                oldEditedTimestamp: oldMessage.editedTimestamp,
+                newEditedTimestamp: newMessage.editedTimestamp,
+                oldEmbeds: oldMessage.embeds?.length,
+                newEmbeds: newMessage.embeds?.length,
+            });
+
             // Discord feuert MessageUpdate auch ohne echte Textänderung (z.B. beim Nachladen von
             // Link-Embeds). Nur loggen, wenn alter und neuer Text bekannt sind und sich unterscheiden.
             if (oldContent === null || newContent === null) return;
