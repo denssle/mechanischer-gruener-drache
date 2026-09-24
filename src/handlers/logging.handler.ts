@@ -209,23 +209,15 @@ class LoggingHandler {
             const oldContent = oldMessage.partial ? (cached?.content ?? null) : oldMessage.content;
             const newContent = newMessage.partial ? null : newMessage.content;
 
-            console.log('[MessageUpdate DEBUG]', {
-                messageId: newMessage.id,
-                channelId: newMessage.channelId,
-                oldPartial: oldMessage.partial,
-                newPartial: newMessage.partial,
-                oldContentKnown: oldContent !== null,
-                newContentKnown: newContent !== null,
-                oldEditedTimestamp: oldMessage.editedTimestamp,
-                newEditedTimestamp: newMessage.editedTimestamp,
-                oldEmbeds: oldMessage.embeds?.length,
-                newEmbeds: newMessage.embeds?.length,
-            });
-
-            // Discord feuert MessageUpdate auch ohne echte Textänderung (z.B. beim Nachladen von
-            // Link-Embeds). Nur loggen, wenn alter und neuer Text bekannt sind und sich unterscheiden.
-            if (oldContent === null || newContent === null) return;
-            if (oldContent === newContent) return;
+            // Discord feuert MessageUpdate auch ohne Bearbeitung (z.B. wenn es bei alten Link-/GIF-
+            // Nachrichten das Embed neu nachlädt). Eine echte Bearbeitung setzt immer einen neuen
+            // editedTimestamp - fehlt er oder ist er unverändert, hat niemand etwas geändert.
+            // Bewusst nicht am unbekannten alten Inhalt festgemacht: dann gingen echte Bearbeitungen
+            // von Nachrichten verloren, die älter als der Log-Speicher sind.
+            if (!newMessage.editedTimestamp) return;
+            if (newMessage.editedTimestamp === oldMessage.editedTimestamp) return;
+            // Bearbeitet, aber Text gleich (z.B. nur ein Anhang entfernt) - kein Log.
+            if (oldContent !== null && newContent !== null && oldContent === newContent) return;
 
             const logChannel = await this.getLogChannel();
             if (!logChannel) return;
