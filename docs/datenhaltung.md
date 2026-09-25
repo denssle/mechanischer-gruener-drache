@@ -29,6 +29,7 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `TWITCH:USER:*`, `TWITCH:MAPPING:*`, `TWITCH:SUBSCRIPTION:*`, `TWITCH:ALL_LINKS` | Twitch-Login ↔ Discord-User, EventSub-Subscription-IDs | bis `/twitch entfernen` (oder Revocation) | Live-Benachrichtigungen |
 | `TWITCH:NOTIFICATION_CHANNEL`, `TWITCH:NOTIFICATION_ROLE` | Admin-Konfiguration | bis zum Überschreiben | Live-Benachrichtigungen |
 | `SPORT:ENTRY:<id>`, `SPORT:USER:<userId>` | Sport-Einträge: Distanz, optionale Aktivitätsminuten, Aktivität, Datum, optionale Notiz | dauerhaft (bis `/sport loeschen`) | `/sport statistik` |
+| `SPORT:ENTRIES` | Globaler Index der Sporteintrags-IDs als Sorted Set; Erfassungszeitpunkt (`createdAt`) als Score | dauerhaft | Zeitlich begrenzte Auswertungen, insbesondere Ressourcenberechnung ab Staffel 2 |
 | `SPORT:HIGHSCORE`, `SPORT:MILESTONES`, `SPORT:ANNOUNCEMENT_CHANNEL` | Kilometer je User, Meilensteine, Ankündigungskanal | dauerhaft | `/sport gesamt`, Meilenstein-Ankündigungen |
 | `SPORT:MINUTEN` | Aktivitätsminuten je User | dauerhaft | `/sport gesamt` (ab Schritt 2) |
 | `SPORT:LAST_DAILY_POST` | Tag (YYYY-MM-DD) des zuletzt geposteten täglichen Kilometerstands | bis zum Überschreiben | Doppelpost-Schutz der Mitternachts-Meldung |

@@ -5,6 +5,7 @@ import {SportEntry, SportActivity, SportMilestone} from '../types/sport.js';
 const KEYS = {
     entry: (id: string) => `SPORT:ENTRY:${id}`,
     userEntries: (userId: string) => `SPORT:USER:${userId}`,
+    allEntries: 'SPORT:ENTRIES',
     highscore: 'SPORT:HIGHSCORE',
     minutes: 'SPORT:MINUTEN',
     milestones: 'SPORT:MILESTONES',
@@ -27,6 +28,7 @@ class SportService {
 
         await redisService.set(KEYS.entry(entry.id), JSON.stringify(entry));
         await redisService.addToList(KEYS.userEntries(userId), entry.id);
+        await redisService.setSortedSet(KEYS.allEntries, entry.id, Date.parse(entry.createdAt));
         await redisService.incrementSortedSet(KEYS.highscore, userId, kilometers);
 
         if (minutes !== undefined) {
@@ -45,6 +47,7 @@ class SportService {
 
         await redisService.delete(KEYS.entry(entryId));
         await redisService.removeFromList(KEYS.userEntries(userId), entryId);
+        await redisService.removeFromSortedSet(KEYS.allEntries, entryId);
         await redisService.incrementSortedSet(KEYS.highscore, userId, -entry.kilometers);
 
         if (entry.minutes !== undefined) {
@@ -125,18 +128,51 @@ class SportService {
         return deleted ? entry : null;
     }
 
+    private async ladeEintraege(entryIds: string[]): Promise<SportEntry[]> {
+        const entries = await Promise.all(
+            entryIds.map(async (id) => {
+                const entryString = await redisService.get(KEYS.entry(id));
+                return entryString
+                    ? JSON.parse(entryString) as SportEntry
+                    : null;
+            })
+        );
+
+        return entries.filter((entry): entry is SportEntry => entry !== null);
+    }
+
     async getUserEntries(userId: string): Promise<SportEntry[]> {
         const entryIds = await redisService.getList(KEYS.userEntries(userId));
         if (!entryIds?.length) return [];
 
-        const entries = await Promise.all(
-            entryIds.map(async (id) => {
-                const entryString = await redisService.get(KEYS.entry(id));
-                return entryString ? JSON.parse(entryString) as SportEntry : null;
-            })
+        return this.ladeEintraege(entryIds);
+    }
+
+    // Der globale Index wird bewusst nicht rückwirkend mit alten Einträgen befüllt.
+    // Er enthält nur Einträge ab seiner Einführung und bildet damit die Grundlage
+    // für zeitlich begrenzte Auswertungen wie die Ressourcenberechnung in Staffel 2.
+    async getIndexedEntries(): Promise<SportEntry[]> {
+        const entryIds = await redisService.getSortedSetByScore(
+            KEYS.allEntries,
+            -Infinity,
+            Infinity
         );
 
-        return entries.filter((e): e is SportEntry => e !== null);
+        if (!entryIds.length) return [];
+
+        return this.ladeEintraege(entryIds);
+    }
+
+    async getEntriesSince(startDate: Date): Promise<SportEntry[]> {
+        const entryIds = await redisService.getSortedSetByScore(
+            KEYS.allEntries,
+            startDate.getTime(),
+            Infinity
+        );
+
+        if (!entryIds.length) return [];
+
+        return this.ladeEintraege(entryIds);
     }
 
     async setKilometer(userId: string, kilometers: number): Promise<void> {

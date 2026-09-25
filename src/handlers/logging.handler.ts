@@ -209,8 +209,14 @@ class LoggingHandler {
             const oldContent = oldMessage.partial ? (cached?.content ?? null) : oldMessage.content;
             const newContent = newMessage.partial ? null : newMessage.content;
 
-            // Discord feuert MessageUpdate auch ohne echte Änderung (z.B. beim Nachladen von
-            // Link-Embeds) - nur loggen, wenn sich der Text nachweislich unterscheidet.
+            // Discord feuert MessageUpdate auch ohne Bearbeitung (z.B. wenn es bei alten Link-/GIF-
+            // Nachrichten das Embed neu nachlädt). Eine echte Bearbeitung setzt immer einen neuen
+            // editedTimestamp - fehlt er oder ist er unverändert, hat niemand etwas geändert.
+            // Bewusst nicht am unbekannten alten Inhalt festgemacht: dann gingen echte Bearbeitungen
+            // von Nachrichten verloren, die älter als der Log-Speicher sind.
+            if (!newMessage.editedTimestamp) return;
+            if (newMessage.editedTimestamp === oldMessage.editedTimestamp) return;
+            // Bearbeitet, aber Text gleich (z.B. nur ein Anhang entfernt) - kein Log.
             if (oldContent !== null && newContent !== null && oldContent === newContent) return;
 
             const logChannel = await this.getLogChannel();

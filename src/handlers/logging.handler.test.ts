@@ -340,6 +340,8 @@ describe('LoggingHandler', () => {
     });
 
     describe('handleMessageUpdate', () => {
+        const BEARBEITET = 1790251235911;
+
         it('ignoriert Updates außerhalb einer Guild', async () => {
             const oldMessage = mockMessage();
             const newMessage = mockMessage({ guild: null });
@@ -358,9 +360,9 @@ describe('LoggingHandler', () => {
             expect(loggingService.getLogChannel).not.toHaveBeenCalled();
         });
 
-        it('ignoriert Updates ohne Inhaltsänderung (z.B. Embed-Unfurling)', async () => {
+        it('ignoriert eine Bearbeitung ohne Textänderung', async () => {
             const oldMessage = mockMessage({ content: 'Gleicher Text' });
-            const newMessage = mockMessage({ content: 'Gleicher Text' });
+            const newMessage = mockMessage({ content: 'Gleicher Text', editedTimestamp: BEARBEITET });
 
             await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
 
@@ -372,24 +374,11 @@ describe('LoggingHandler', () => {
             vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
             vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
             const oldMessage = mockMessage({ content: 'Alter Text' });
-            const newMessage = mockMessage({ content: 'Neuer Text' });
+            const newMessage = mockMessage({ content: 'Neuer Text', editedTimestamp: BEARBEITET });
 
             await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
 
             expect(send).toHaveBeenCalledWith(expect.stringContaining('Alter Text'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Neuer Text'));
-        });
-
-        it('zeigt einen Fallback-Text wenn die alte Nachricht nicht gecacht war', async () => {
-            const send = vi.fn();
-            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
-            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
-            const oldMessage = mockMessage({ partial: true, content: null });
-            const newMessage = mockMessage({ content: 'Neuer Text' });
-
-            await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
-
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('nicht verfügbar'));
             expect(send).toHaveBeenCalledWith(expect.stringContaining('Neuer Text'));
         });
 
@@ -401,7 +390,7 @@ describe('LoggingHandler', () => {
                 authorTag: 'User#0001', content: 'Alter Text', attachments: [],
             });
             const oldMessage = mockMessage({ partial: true, content: null });
-            const newMessage = mockMessage({ content: 'Neuer Text' });
+            const newMessage = mockMessage({ content: 'Neuer Text', editedTimestamp: BEARBEITET });
 
             await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
 
@@ -418,7 +407,40 @@ describe('LoggingHandler', () => {
                 authorTag: 'User#0001', content: 'Gleicher Text', attachments: [],
             });
             const oldMessage = mockMessage({ partial: true, content: null });
-            const newMessage = mockMessage({ content: 'Gleicher Text' });
+            const newMessage = mockMessage({ content: 'Gleicher Text', editedTimestamp: BEARBEITET });
+
+            await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
+
+            expect(loggingService.getLogChannel).not.toHaveBeenCalled();
+        });
+
+        // Die beiden Fälle aus dem Prod-Log vom 2026-09-24: Discord lädt bei alten GIF-Links das
+        // Embed neu (kein editedTimestamp), eine echte Bearbeitung setzt einen.
+        it('ignoriert ein nachgeladenes Embed auf einer alten, nicht gecachten Nachricht', async () => {
+            const oldMessage = mockMessage({ partial: true, content: null, editedTimestamp: null });
+            const newMessage = mockMessage({ content: 'https://klipy.com/gifs/irgendwas', editedTimestamp: null });
+
+            await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
+
+            expect(loggingService.getLogChannel).not.toHaveBeenCalled();
+        });
+
+        it('loggt eine echte Bearbeitung auch dann, wenn der alte Stand nicht mehr bekannt ist', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+            const oldMessage = mockMessage({ partial: true, content: null, editedTimestamp: null });
+            const newMessage = mockMessage({ content: 'Neuer Text', editedTimestamp: BEARBEITET });
+
+            await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
+
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('**Vorher:**\n> *nicht verfügbar*'));
+            expect(send).toHaveBeenCalledWith(expect.stringContaining('**Nachher:**\n> Neuer Text'));
+        });
+
+        it('ignoriert ein nachgeladenes Embed auf einer früher schon bearbeiteten Nachricht', async () => {
+            const oldMessage = mockMessage({ content: 'Alter Text', editedTimestamp: BEARBEITET });
+            const newMessage = mockMessage({ content: 'Neuer Text', editedTimestamp: BEARBEITET });
 
             await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
 
@@ -428,7 +450,7 @@ describe('LoggingHandler', () => {
         it('fängt Fehler beim Loggen ab', async () => {
             vi.mocked(loggingService.getLogChannel).mockRejectedValue(new Error('Redis kaputt'));
             const oldMessage = mockMessage({ content: 'Alt' });
-            const newMessage = mockMessage({ content: 'Neu' });
+            const newMessage = mockMessage({ content: 'Neu', editedTimestamp: BEARBEITET });
 
             await expect(loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any)).resolves.not.toThrow();
         });
