@@ -145,13 +145,23 @@ export function erkenneSportLeistungen(text: string): ErkannteSportLeistung[] {
         const passendeAktivitaet =
             erkenneAktivitaet(abschnitt, erlaubteAktivitaeten);
 
-        const erkannteAktivitaet = erkenneAktivitaet(abschnitt);
+        const alleAktivitaeten = Object.keys(SportActivities) as SportActivity[];
+        const genannteAktivitaet = erkenneAktivitaet(abschnitt, alleAktivitaeten);
+
+        const hatPassendeEinheitInNachricht = matches.some(anderesMatch => {
+            const andereEinheit = anderesMatch[2].toLowerCase();
+            const andereIstKilometer =
+                andereEinheit === 'km' || andereEinheit === 'kilometer';
+
+            return andereIstKilometer !== istKilometer;
+        });
 
         // Wird ausdrücklich eine Sportart genannt, die nicht zur Einheit passt,
         // ist die Angabe widersprüchlich und die gesamte Nachricht ungültig.
         if (
             !passendeAktivitaet &&
-            erkannteAktivitaet !== DEFAULT_AKTIVITAET
+            genannteAktivitaet &&
+            !hatPassendeEinheitInNachricht
         ) {
             return [];
         }

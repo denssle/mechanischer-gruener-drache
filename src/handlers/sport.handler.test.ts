@@ -481,6 +481,20 @@ describe('SportHandler', () => {
                     { aktivitaet: 'laufen', kilometer: 5 },
                 ],
             ],
+            [
+                '+5 km und Krafttraining +30 min',
+                [
+                    { aktivitaet: 'laufen', kilometer: 5 },
+                    { aktivitaet: 'krafttraining', minuten: 30 },
+                ],
+            ],
+            [
+                '+12 km Radfahren +30 min',
+                [
+                    { aktivitaet: 'radfahren', kilometer: 12 },
+                    { aktivitaet: 'krafttraining', minuten: 30 },
+                ],
+            ],
         ])(
             'erkennt Sportleistungen aus "%s"',
             (text, erwartet) => {
@@ -492,10 +506,10 @@ describe('SportHandler', () => {
             expect(erkenneSportLeistungen('+10 km Krafttraining')).toEqual([]);
         });
 
-        it('verwirft die gesamte Nachricht bei einer widersprüchlichen Angabe', () => {
-            expect(
-                erkenneSportLeistungen('+10 km Radfahren +30 min Yoga')
-            ).toEqual([]);
+        it('verwirft Minuten mit expliziter Distanzaktivität', () => {
+            expect(erkenneSportLeistungen('+30 min Laufen')).toEqual([]);
+            expect(erkenneSportLeistungen('+45 min gelaufen')).toEqual([]);
+            expect(erkenneSportLeistungen('+30 min Radfahren')).toEqual([]);
         });
     });
 
@@ -610,12 +624,15 @@ describe('SportHandler', () => {
         it('speichert bei einer widersprüchlichen Nachricht nichts und bestätigt sie nicht', async () => {
             vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
 
-            const message = mockMessage('+10 km Krafttraining');
+            const kilometerMessage = mockMessage('+10 km Krafttraining');
+            const minutenMessage = mockMessage('+30 min Laufen');
 
-            await sportHandler.handleMessage(message);
+            await sportHandler.handleMessage(kilometerMessage);
+            await sportHandler.handleMessage(minutenMessage);
 
             expect(sportService.addEntry).not.toHaveBeenCalled();
-            expect(message.react).not.toHaveBeenCalled();
+            expect(kilometerMessage.react).not.toHaveBeenCalled();
+            expect(minutenMessage.react).not.toHaveBeenCalled();
         });
 
         // Quittiert wird nur per Reaktion: eine Antwort wäre ein Post im Kanal, den alle sehen,
