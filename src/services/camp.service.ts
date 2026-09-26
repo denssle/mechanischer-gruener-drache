@@ -8,6 +8,7 @@ const MINUTEN_PRO_VORRAT = 10;
 
 const KEYS = {
     currentLevel: 'CAMP:CURRENT_LEVEL',
+    startDate: 'CAMP:START_DATE',
 };
 
 class CampService {
@@ -18,14 +19,48 @@ class CampService {
         let minuten = 0;
 
         for (const entry of entries) {
-            kilometer += entry.kilometer ?? 0;
-            minuten += entry.minuten ?? 0;
+            kilometer += entry.kilometers ?? 0;
+            minuten += entry.minutes ?? 0;
         }
 
         return {
             baumaterial: kilometer / KILOMETER_PRO_BAUMATERIAL,
             vorraete: minuten / MINUTEN_PRO_VORRAT,
         };
+    }
+
+    async getCampStartDate(): Promise<Date | null> {
+        const value = await redisService.get(KEYS.startDate);
+
+        if (value === null) {
+            return null;
+        }
+
+        return new Date(value);
+    }
+
+    async setCampStartDate(date: Date): Promise<void> {
+        await redisService.set(KEYS.startDate, date.toISOString());
+    }
+
+    async initialisiereCamp(startDate: Date): Promise<void> {
+        const vorhandenesStartDate = await this.getCampStartDate();
+
+        if (vorhandenesStartDate !== null) {
+            return;
+        }
+
+        await this.setCampStartDate(startDate);
+    }
+
+    async pruefeCampFortschrittSeitStart(): Promise<CampStufe[]> {
+        const startDate = await this.getCampStartDate();
+
+        if (startDate === null) {
+            return [];
+        }
+
+        return this.pruefeCampFortschritt(startDate);
     }
 
     async getCurrentLevel(): Promise<number> {
@@ -81,9 +116,10 @@ class CampService {
         );
     }
 
-    async pruefeCampFortschritt(startDate: Date): Promise<void> {
+    async pruefeCampFortschritt(startDate: Date): Promise<CampStufe[]> {
         const insgesamt = await this.getCampRessourcen(startDate);
         let currentLevel = await this.getCurrentLevel();
+        const abgeschlosseneStufen: CampStufe[] = [];
 
         while (true) {
             const verbraucht = this.getVerbrauchteRessourcen(currentLevel);
@@ -94,9 +130,11 @@ class CampService {
                 break;
             }
 
+            abgeschlosseneStufen.push(naechsteStufe!);
             currentLevel++;
-            await this.setCurrentLevel(currentLevel);
         }
+
+        return abgeschlosseneStufen;
     }
 
     async getCampFortschritt(startDate: Date): Promise<CampFortschritt> {
@@ -111,6 +149,16 @@ class CampService {
             insgesamt,
             naechsteStufe: naechsteStufe,
         };
+    }
+
+    async getCampFortschrittSeitStart(): Promise<CampFortschritt | null> {
+        const startDate = await this.getCampStartDate();
+
+        if (startDate === null) {
+            return null;
+        }
+
+        return this.getCampFortschritt(startDate);
     }
 }
 

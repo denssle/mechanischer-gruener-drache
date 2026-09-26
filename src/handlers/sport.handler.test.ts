@@ -26,6 +26,12 @@ vi.mock('../services/sport.service.js', () => ({
     }
 }));
 
+vi.mock('./camp.handler.js', () => ({
+    default: {
+        pruefeFortschritt: vi.fn(),
+    },
+}));
+
 vi.mock('../client.js', () => ({
     default: {
         channels: {
@@ -38,6 +44,7 @@ import sportService from '../services/sport.service.js';
 import client from '../client.js';
 import sportHandler, { parseKilometer, parseMinuten, erkenneAktivitaet, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, formatTag, rundeKilometer, rundeMinuten, SPORT_HILFE } from './sport.handler.js';
 import { HELP_TEXT } from './hilfe.handler.js';
+import campHandler from './camp.handler.js';
 
 const mockEntry = (overrides = {}) => ({
     id: 'entry-1',
@@ -129,8 +136,44 @@ describe('SportHandler', () => {
                 45
             );
 
+            expect(campHandler.pruefeFortschritt).toHaveBeenCalledOnce();
+
             const embed = interaction.reply.mock.calls[0][0].embeds[0];
             expect(embed.toJSON().description).toContain('45 min');
+        });
+
+        it('bestätigt den Slash-Command auch wenn die Camp-Prüfung fehlschlägt', async () => {
+            vi.mocked(sportService.addEntry).mockResolvedValue(
+                mockEntry({kilometers: 0, minutes: 45})
+            );
+            vi.mocked(sportService.getGesamtKilometer).mockResolvedValue(250);
+            vi.mocked(campHandler.pruefeFortschritt).mockRejectedValueOnce(
+                new Error('Camp-Prüfung fehlgeschlagen')
+            );
+
+            const interaction = {
+                user: {
+                    id: 'user-123',
+                    displayName: 'Testläufer',
+                    displayAvatarURL: vi.fn().mockReturnValue('https://cdn/avatar.png'),
+                },
+                options: {
+                    getString: vi.fn().mockReturnValue('krafttraining'),
+                    getNumber: vi.fn((name: string) => {
+                        if (name === 'kilometer') return null;
+                        if (name === 'minuten') return 45;
+                        return null;
+                    }),
+                },
+                reply: vi.fn(),
+            } as any;
+
+            await expect(
+                sportHandler.handleEintragen(interaction)
+            ).resolves.not.toThrow();
+
+            expect(sportService.addEntry).toHaveBeenCalled();
+            expect(interaction.reply).toHaveBeenCalled();
         });
 
         // Kilometer und Minuten zusammen speichern.
@@ -414,6 +457,27 @@ describe('SportHandler', () => {
                 0,
                 45
             );
+
+            expect(campHandler.pruefeFortschritt).toHaveBeenCalledOnce();
+        });
+
+        it('bestätigt den Sporteintrag auch wenn die Camp-Prüfung fehlschlägt', async () => {
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
+            vi.mocked(sportService.addEntry).mockResolvedValue(
+                mockEntry({ activity: 'krafttraining', kilometers: 0, minutes: 45 })
+            );
+            vi.mocked(campHandler.pruefeFortschritt).mockRejectedValueOnce(
+                new Error('Camp-Prüfung fehlgeschlagen')
+            );
+
+            const message = mockMessage('+45 min Krafttraining');
+
+            await expect(
+                sportHandler.handleMessage(message)
+            ).resolves.not.toThrow();
+
+            expect(sportService.addEntry).toHaveBeenCalled();
+            expect(message.react).toHaveBeenCalledWith(BESTAETIGUNGS_REAKTION);
         });
 
         it('prüft bei einer reinen Minuten-Angabe keine Kilometer-Meilensteine', async () => {

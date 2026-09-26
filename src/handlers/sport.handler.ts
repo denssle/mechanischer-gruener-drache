@@ -10,6 +10,7 @@ import {
 import sportService from '../services/sport.service.js';
 import {SportActivities, SportActivity} from '../types/sport.js';
 import client from '../client.js';
+import campHandler from './camp.handler.js';
 
 // Ohne Schlüsselwort im Text wird Laufen angenommen (bewusst: lieber ein Eintrag mit der
 // häufigsten Aktivität als gar keiner - die Distanz zählt fürs kooperative Gesamtziel).
@@ -178,6 +179,12 @@ class SportHandler {
             minuten ?? undefined
         );
 
+        try {
+            await campHandler.pruefeFortschritt();
+        } catch (error) {
+            console.error('Fehler bei der Camp-Fortschrittsprüfung:', error);
+        }
+
         await message.react(BESTAETIGUNGS_REAKTION);
 
         if (kilometer !== null) {
@@ -204,7 +211,21 @@ class SportHandler {
             });
         }
 
-        await sportService.addEntry(interaction.user.id, aktivitaet, kilometer ?? 0, minuten ?? undefined);
+        await sportService.addEntry(
+            interaction.user.id,
+            aktivitaet,
+            kilometer ?? 0,
+            minuten ?? undefined
+        );
+
+        // Ein Fehler im Camp-System darf einen bereits gespeicherten Sporteintrag
+        // nicht als fehlgeschlagen erscheinen lassen.
+        try {
+            await campHandler.pruefeFortschritt();
+        } catch (error) {
+            console.error('Fehler bei der Camp-Fortschrittsprüfung:', error);
+        }
+
         const aktivitaetLabel = SportActivities[aktivitaet];
 
         // Direkt nach dem Eintrag die neue gemeinsame Gesamtdistanz zeigen - passt zum
