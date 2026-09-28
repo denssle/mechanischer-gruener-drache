@@ -40,6 +40,21 @@ export default {
             .setName('rundlauf')
             .setDescription('Rundlauf (Chinesisch) fuer mehrere: wer den Ball nicht zurueckbringt, fliegt raus'))
         .addSubcommand(sub => sub
+            .setName('doppel')
+            .setDescription('Doppel zu viert: mit Partner feste Teams, ohne Partner lost der Bot die Teams aus')
+            .addUserOption(option => option
+                .setName('partner')
+                .setDescription('Dein fester Partner – leer lassen für ausgeloste Teams')
+                .setRequired(false))
+            .addUserOption(option => option
+                .setName('gegner1')
+                .setDescription('Optional: ein Gegner (nur mit Partner), sonst tritt jemand per Button bei')
+                .setRequired(false))
+            .addUserOption(option => option
+                .setName('gegner2')
+                .setDescription('Optional: der zweite Gegner (nur mit Partner)')
+                .setRequired(false)))
+        .addSubcommand(sub => sub
             .setName('bestenliste')
             .setDescription('Zeigt die Ping-Pong-Bestenliste'))
         .addSubcommand(sub => sub
@@ -64,6 +79,8 @@ export default {
                 return pingPongHandler.handleTaktikduell(interaction);
             case 'rundlauf':
                 return pingPongHandler.handleRundlauf(interaction);
+            case 'doppel':
+                return pingPongHandler.handleDoppel(interaction);
             case 'bestenliste':
                 return pingPongHandler.handlePingPongHighscore(interaction);
             case 'ruhmeshalle':

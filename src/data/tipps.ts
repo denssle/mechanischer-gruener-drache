@@ -21,6 +21,7 @@ export const TIPPS: Tipp[] = [
     {befehl: 'pingpong', text: 'Tipp: `/pingpong herausfordern` fordert jemanden zum Duell – Sieg bringt einen Punkt, Niederlage kostet einen.'},
     {befehl: 'pingpong', text: 'Tipp: `/pingpong bestenliste` zeigt, wer im Ping-Pong gerade vorn liegt.'},
     {befehl: 'pingpong', text: 'Tipp: `/pingpong rundlauf` eröffnet einen Rundlauf – ab drei Leuten fliegt reihum einer raus, bis zwei das Finale ausspielen.'},
+    {befehl: 'pingpong', text: 'Tipp: `/pingpong doppel` bringt vier an die Platte – mit `partner` als festes Team, ohne lost der Bot die Teams aus.'},
     {befehl: 'event', text: 'Tipp: `/event countdown` verrät dir, wie lange es noch bis zum nächsten Treffen dauert.'},
     {befehl: 'twitch', text: 'Tipp: Mit `/twitch verknuepfen` sagt der Server Bescheid, wenn du live gehst.'},
     {befehl: 'blahaj', text: 'Tipp: `/blahaj` rechnet dir Euro-Beträge in Blåhajs um.'},

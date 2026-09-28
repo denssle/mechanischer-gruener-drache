@@ -17,6 +17,9 @@ export const PING_PONG_KEYS = {
     cooldown: (userId: string) => `PING_PONG:COOLDOWN:${userId}`,
     serie: (userId: string) => `PING_PONG:SERIE:${userId}`,
     rekord: (userId: string) => `PING_PONG:REKORD:${userId}`,
+    // Kurzlebiger Lock je Doppel-Lobby: das Doppel startet von selbst, sobald vier dabei sind -
+    // klicken zwei gleichzeitig, darf trotzdem nur EIN Match ausgetragen werden.
+    doppelStart: (messageId: string) => `PING_PONG:DOPPEL_START:${messageId}`,
 };
 
 export interface RuhmeshalleEintrag {
