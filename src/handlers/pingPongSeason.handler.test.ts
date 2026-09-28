@@ -185,6 +185,12 @@ describe('PingPongSeasonHandler', () => {
             expect(geloescht).not.toContain('PING_PONG:REKORD_HIGHSCORE');
             expect(vi.mocked(redisService.removeFromSortedSet).mock.calls.map(([key]) => key))
                 .not.toContain('PING_PONG:REKORD_HIGHSCORE');
+            // Das Spiegelbild genauso: Pechsträhne, Pech-Rekord und deren Rangliste bleiben.
+            expect(geloescht).not.toContain('PING_PONG:PECHSTRAEHNE:user-1');
+            expect(geloescht).not.toContain('PING_PONG:PECHREKORD:user-1');
+            expect(geloescht).not.toContain('PING_PONG:PECHREKORD_HIGHSCORE');
+            expect(vi.mocked(redisService.removeFromSortedSet).mock.calls.map(([key]) => key))
+                .not.toContain('PING_PONG:PECHREKORD_HIGHSCORE');
         });
 
         it('holt einen verpassten Monatswechsel nach (Bot war aus)', async () => {

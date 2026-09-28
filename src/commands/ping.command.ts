@@ -64,6 +64,9 @@ export default {
             .setName('serienrekorde')
             .setDescription('Zeigt die laengsten je erreichten Siegesserien'))
         .addSubcommand(sub => sub
+            .setName('pechstraehnen')
+            .setDescription('Zeigt die laengsten je erlittenen Niederlagenserien'))
+        .addSubcommand(sub => sub
             .setName('hilfe')
             .setDescription('Zeigt alle verfügbaren Ping-Pong-Befehle')),
 
@@ -87,6 +90,8 @@ export default {
                 return pingPongSeasonHandler.handleRuhmeshalle(interaction);
             case 'serienrekorde':
                 return pingPongHandler.handleSerienrekorde(interaction);
+            case 'pechstraehnen':
+                return pingPongHandler.handlePechstraehnen(interaction);
             case 'hilfe':
                 return pingPongHandler.handleHilfe(interaction);
         }

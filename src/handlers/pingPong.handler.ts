@@ -127,12 +127,23 @@ export interface SerienStand {
     serie: number;
     istNeuerRekord: boolean;
     beendeteSerie: number;
+    // Das Spiegelbild für die Niederlagen: die laufende Pechsträhne des Verlierers, ob sie sein
+    // bisher längste ist, und die Pechsträhne, die der Sieger mit diesem Sieg beendet hat.
+    pechstraehne: number;
+    istNeuerPechRekord: boolean;
+    beendetePechstraehne: number;
 }
 
 // Baut die Serien-Zeile fürs Duell-Ergebnis - oder null, wenn es nichts zu erzählen gibt
 // (erster Sieg des Siegers, Verlierer hatte auch nichts laufen). Exportiert + getestet.
-export function formatSerie({siegerId, verliererId, serie, istNeuerRekord, beendeteSerie}: SerienStand): string | null {
+export function formatSerie({siegerId, verliererId, serie, istNeuerRekord, beendeteSerie,
+                                pechstraehne, istNeuerPechRekord, beendetePechstraehne}: SerienStand): string | null {
     const saetze: string[] = [];
+
+    // Zuerst die gute Nachricht des Siegers: ein Sieg nach langer Durststrecke ist erzählenswert.
+    if (beendetePechstraehne >= MIN_SERIE) {
+        saetze.push(`<@${siegerId}> beendet eine Pechsträhne von **${beendetePechstraehne} Niederlagen**.`);
+    }
 
     if (serie >= MIN_SERIE) {
         saetze.push(`<@${siegerId}> ist jetzt **${serie} Duelle in Folge** ungeschlagen.`);
@@ -143,6 +154,13 @@ export function formatSerie({siegerId, verliererId, serie, istNeuerRekord, beend
 
     if (beendeteSerie >= MIN_SERIE) {
         saetze.push(`Die Serie von <@${verliererId}> endet nach **${beendeteSerie} Siegen**.`);
+    }
+
+    if (pechstraehne >= MIN_SERIE) {
+        saetze.push(`<@${verliererId}> hat jetzt **${pechstraehne} Duelle in Folge** verloren.`);
+        if (istNeuerPechRekord) {
+            saetze.push('So lang war die Pechsträhne noch nie.');
+        }
     }
 
     return saetze.length > 0 ? saetze.join(' ') : null;
@@ -1063,30 +1081,60 @@ class PingPongHandler {
         };
     }
 
-    // Schreibt die Siegesserie beider Seiten fort: der Sieger zählt hoch (INCR legt den Key bei
-    // Bedarf selbst an), die Serie des Verlierers ist beendet und wird gelöscht. Den Rekord halten
-    // wir separat, damit er die abgerissene Serie überdauert.
+    // Schreibt Siegesserie und Pechsträhne beider Seiten fort - zwei Spiegelbilder: der Sieger zählt
+    // seine Siegesserie hoch und beendet seine Pechsträhne, der Verlierer umgekehrt. Die Rekorde
+    // halten wir jeweils separat, damit sie die abgerissene Serie überdauern.
     async verarbeiteSerie(siegerId: string, verliererId: string): Promise<SerienStand> {
-        const beendeteSerie = this.convertScoreToNumber(await redisService.get(PING_PONG_KEYS.serie(verliererId)) ?? 0);
-        if (beendeteSerie > 0) {
-            await redisService.delete(PING_PONG_KEYS.serie(verliererId));
-        }
+        const beendeteSerie = await this.beendeSerie(PING_PONG_KEYS.serie(verliererId));
+        const beendetePechstraehne = await this.beendeSerie(PING_PONG_KEYS.pechstraehne(siegerId));
 
-        const serie = await redisService.increment(PING_PONG_KEYS.serie(siegerId));
-        const bisherigerRekord = this.convertScoreToNumber(await redisService.get(PING_PONG_KEYS.rekord(siegerId)) ?? 0);
-        const istNeuerRekord = serie > bisherigerRekord;
+        const sieg = await this.zaehleSerieHoch(PING_PONG_KEYS.serie(siegerId), PING_PONG_KEYS.rekord(siegerId),
+            rekord => pingPongService.setRekordBestenliste(siegerId, rekord));
+        const pech = await this.zaehleSerieHoch(PING_PONG_KEYS.pechstraehne(verliererId),
+            PING_PONG_KEYS.pechRekord(verliererId),
+            rekord => pingPongService.setPechRekordBestenliste(verliererId, rekord));
+
+        return {
+            siegerId,
+            verliererId,
+            serie: sieg.stand,
+            istNeuerRekord: sieg.istNeuerRekord,
+            beendeteSerie,
+            pechstraehne: pech.stand,
+            istNeuerPechRekord: pech.istNeuerRekord,
+            beendetePechstraehne,
+        };
+    }
+
+    // Löscht eine laufende Serie und liefert, wie lang sie war (0 = es lief keine).
+    async beendeSerie(serieKey: string): Promise<number> {
+        const laenge = this.convertScoreToNumber(await redisService.get(serieKey) ?? 0);
+        if (laenge > 0) {
+            await redisService.delete(serieKey);
+        }
+        return laenge;
+    }
+
+    // Zählt eine Serie hoch (INCR legt den Key bei Bedarf selbst an) und schreibt Rekord und Rangliste
+    // fort - für Siege und Niederlagen derselbe Ablauf. `istNeuerRekord` erst ab MIN_SERIE: ein
+    // "Rekord" von einem einzigen Spiel wäre Lärm (gespeichert wird die 1 trotzdem).
+    async zaehleSerieHoch(serieKey: string, rekordKey: string, schreibeRangliste: (rekord: number) => Promise<void>)
+        : Promise<{stand: number, istNeuerRekord: boolean}> {
+        const stand = await redisService.increment(serieKey);
+        const bisherigerRekord = this.convertScoreToNumber(await redisService.get(rekordKey) ?? 0);
+        const istNeuerRekord = stand > bisherigerRekord;
 
         if (istNeuerRekord) {
-            await redisService.set(PING_PONG_KEYS.rekord(siegerId), serie.toString());
+            await redisService.set(rekordKey, stand.toString());
         }
 
-        // Rangliste bewusst bei JEDEM Sieg mitschreiben, nicht nur bei einem neuen Rekord: das
-        // Sorted Set kam später dazu als die Einzelkeys, und so wandern die Bestandsrekorde nach
-        // und nach von allein hinein, statt eine einmalige Migration per SCAN zu brauchen.
-        // zAdd setzt den Wert, mehrfach mit demselben Rekord zu schreiben ist also folgenlos.
-        await pingPongService.setRekordBestenliste(siegerId, Math.max(serie, bisherigerRekord));
+        // Rangliste bewusst bei JEDEM Spiel mitschreiben, nicht nur bei einem neuen Rekord: das
+        // Sorted Set der Siegesserien kam später dazu als die Einzelkeys, und so wandern die
+        // Bestandsrekorde nach und nach von allein hinein, statt eine einmalige Migration per SCAN zu
+        // brauchen. zAdd setzt den Wert, mehrfach mit demselben Rekord zu schreiben ist also folgenlos.
+        await schreibeRangliste(Math.max(stand, bisherigerRekord));
 
-        return {siegerId, verliererId, serie, istNeuerRekord: istNeuerRekord && serie >= MIN_SERIE, beendeteSerie};
+        return {stand, istNeuerRekord: istNeuerRekord && stand >= MIN_SERIE};
     }
 
     async getSerie(userId: string): Promise<number> {
@@ -1179,16 +1227,43 @@ class PingPongHandler {
     // Die längsten je erreichten Siegesserien - anders als die Bestenliste NICHT saisonal: der
     // Rekord überdauert sowohl die abgerissene Serie als auch den monatlichen Reset.
     async handleSerienrekorde(interaction: ChatInputCommandInteraction) {
+        return this.zeigeSerienRangliste(interaction, {
+            lade: () => pingPongService.getRekordBestenliste(),
+            ueberschrift: '**Längste Siegesserien**',
+            leer: `Noch keine Serie von mindestens ${MIN_SERIE} Siegen – da ist die Bestmarke frei.`,
+            einheit: 'Siege in Folge',
+            fehler: 'Die Serienrekorde konnten nicht abgerufen werden.',
+        });
+    }
+
+    // Das Spiegelbild: die längsten je erlittenen Niederlagenserien, ebenfalls ohne Reset.
+    async handlePechstraehnen(interaction: ChatInputCommandInteraction) {
+        return this.zeigeSerienRangliste(interaction, {
+            lade: () => pingPongService.getPechRekordBestenliste(),
+            ueberschrift: '**Längste Pechsträhnen**',
+            leer: `Noch niemand hat ${MIN_SERIE} Duelle in Folge verloren – bemerkenswert.`,
+            einheit: 'Niederlagen in Folge',
+            fehler: 'Die Pechsträhnen konnten nicht abgerufen werden.',
+        });
+    }
+
+    // Gemeinsame Anzeige beider Serien-Ranglisten (Siege und Niederlagen).
+    async zeigeSerienRangliste(interaction: ChatInputCommandInteraction, liste: {
+        lade: () => Promise<{value: string; score: number}[]>,
+        ueberschrift: string,
+        leer: string,
+        einheit: string,
+        fehler: string,
+    }) {
         try {
             // Rekorde unter MIN_SERIE raus: eine "Serie" von 1 hat jede Person, die je ein Duell
-            // gewonnen hat - das wären dieselben Karteileichen wie die 0-Punkte-Einträge in der
+            // gespielt hat - das wären dieselben Karteileichen wie die 0-Punkte-Einträge in der
             // Bestenliste. Erzählt wird eine Serie ohnehin erst ab 2 (siehe formatSerie).
-            const rekorde = (await pingPongService.getRekordBestenliste()).filter(eintrag => eintrag.score >= MIN_SERIE);
-            const ueberschrift = '**Längste Siegesserien**';
+            const rekorde = (await liste.lade()).filter(eintrag => eintrag.score >= MIN_SERIE);
 
             if (rekorde.length === 0) {
                 return interaction.reply({
-                    content: `${ueberschrift}\nNoch keine Serie von mindestens ${MIN_SERIE} Siegen – da ist die Bestmarke frei.`,
+                    content: `${liste.ueberschrift}\n${liste.leer}`,
                     allowedMentions: {parse: []},
                 });
             }
@@ -1200,22 +1275,21 @@ class PingPongHandler {
                 .map((item, index) => {
                     const displayName = users[index]?.displayName ?? item.value;
                     const emoji = emojiFuerNachricht(emojis[item.value], interaction.guild, item.value);
-                    return `${index + 1}. ${emoji} ${displayName} - **${item.score}** Siege in Folge`;
+                    return `${index + 1}. ${emoji} ${displayName} - **${item.score}** ${liste.einheit}`;
                 })
                 .join('\n');
 
-            // allowedMentions ist PFLICHT wie in der Bestenliste nebenan: die Zeilen tragen den
-            // selbst gewählten `displayName`, ein Name wie `<@…>` würde sonst bei jedem Aufruf
-            // jemanden anpingen.
+            // allowedMentions ist PFLICHT wie in der Bestenliste: die Zeilen tragen den selbst
+            // gewählten `displayName`, ein Name wie `<@…>` würde sonst bei jedem Aufruf jemanden anpingen.
             return interaction.reply({
-                content: `${ueberschrift}\n${message}\n`
+                content: `${liste.ueberschrift}\n${message}\n`
                     + `Die Bestmarke bleibt vom Monatswechsel unberührt – anders als die Punkte in \`/pingpong bestenliste\`.`,
                 allowedMentions: {parse: []},
             });
         } catch (error) {
-            console.error('Fehler beim Abrufen der Ping-Pong-Serienrekorde:', error);
+            console.error(`Fehler beim Abrufen der Ping-Pong-Rangliste (${liste.einheit}):`, error);
             return interaction.reply({
-                content: 'Die Serienrekorde konnten nicht abgerufen werden.',
+                content: liste.fehler,
                 flags: MessageFlags.Ephemeral,
             });
         }
@@ -1240,7 +1314,8 @@ class PingPongHandler {
             + `Punkte und Siegesserie pro Kopf wie im Duell\n` +
             `**/pingpong bestenliste** – Die Top 10 der laufenden Season, mit laufender Siegesserie\n` +
             `**/pingpong ruhmeshalle** – Die Champions der vergangenen Monate\n` +
-            `**/pingpong serienrekorde** – Die längsten je erreichten Siegesserien (übersteht den Reset)\n` +
+            `**/pingpong serienrekorde** · **/pingpong pechstraehnen** – Die längsten je erreichten Sieges- `
+            + `bzw. Niederlagenserien (übersteht den Reset)\n` +
             `**/pingpong hilfe** – Zeigt diese Übersicht\n\n` +
             `**Seasons:** Die Punkte laufen monatsweise. Am Monatsende bekommt Platz eins die `
             + `Champion-Rolle (der bisherige Champion gibt sie ab) und einen Eintrag in der Ruhmeshalle, `
