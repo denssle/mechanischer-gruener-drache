@@ -21,6 +21,7 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
         await pingPongHandler.handleDuellButton(interaction);
         await pingPongHandler.handleTaktikButton(interaction);
         await pingPongHandler.handleRundlaufButton(interaction);
+        await pingPongHandler.handleDoppelButton(interaction);
         return;
     }
 

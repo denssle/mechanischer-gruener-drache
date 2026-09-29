@@ -10,6 +10,7 @@ vi.mock("../services/redis.service.js", () => ({
         getTimeToLive: vi.fn(),
         getSortedSetAll: vi.fn(),
         setWithExpiry: vi.fn(),
+        setIfAbsent: vi.fn(),
         increment: vi.fn(),
         delete: vi.fn(),
     },
@@ -49,6 +50,9 @@ import greetingHandler from "./greeting.handler.js";
 import pingPongHandler, {
     DUELL_FLAVORS,
     entscheideTaktik,
+    formatDoppelZeilen,
+    loseTeams,
+    parseDoppelLobby,
     formatAnsage,
     formatDelta,
     formatSerie,
@@ -75,6 +79,8 @@ describe('PingPongHandler', () => {
         vi.mocked(redisService.getTimeToLive).mockResolvedValue(-2);
         // Standard: erste Siegesserie (INCR auf einem noch nicht existierenden Key gibt 1).
         vi.mocked(redisService.increment).mockResolvedValue(1);
+        // Standard: der Doppel-Start-Lock ist frei.
+        vi.mocked(redisService.setIfAbsent).mockResolvedValue(true);
     });
 
     describe('Flavor-Text', () => {
@@ -1139,6 +1145,329 @@ describe('PingPongHandler', () => {
                 await pingPongHandler.handleRundlaufButton(interaction);
 
                 expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
+            });
+        });
+    });
+    describe('Doppel', () => {
+        const user = (id: string, bot = false) => ({id, bot});
+
+        const mockCommand = (userId: string, optionen: Record<string, {id: string, bot: boolean} | null> = {}) => ({
+            user: {id: userId},
+            options: {getUser: vi.fn((name: string) => optionen[name] ?? null)},
+            reply: vi.fn().mockResolvedValue(undefined),
+        } as any);
+
+        const mockButton = (customId: string, userId: string, inhalt: string) => ({
+            customId,
+            user: {id: userId},
+            message: {id: 'msg-1', content: inhalt},
+            update: vi.fn(),
+            reply: vi.fn().mockResolvedValue(undefined),
+            replied: false,
+        } as any);
+
+        const festerInhalt = (team1: string[], team2: string[], ausstehend: string[]) =>
+            pingPongHandler.baueFestenDoppelText('111', {team1, team2, ausstehend});
+        const offenerInhalt = (teilnehmer: string[]) =>
+            pingPongHandler.baueOffenenDoppelText('111', teilnehmer);
+
+        const scoresInRedis = (scores: Record<string, string>) => {
+            vi.mocked(redisService.get).mockImplementation(async (key: string) => scores[key] ?? null as any);
+            vi.mocked(redisService.set).mockImplementation(async (_key: string, value: string) => value as any);
+        };
+
+        describe('formatDoppelZeilen / parseDoppelLobby', () => {
+            it('liest die Lobby zurück, die formatDoppelZeilen geschrieben hat', () => {
+                const lobby = {team1: ['1', '2'], team2: ['3'], ausstehend: ['2', '3']};
+                expect(parseDoppelLobby(formatDoppelZeilen(lobby))).toEqual(lobby);
+            });
+
+            // Der Eröffner und der Partner stehen auch im Text darüber - nur die Marker-Zeilen zählen.
+            it('ignoriert Mentions außerhalb der Zustandszeilen', () => {
+                expect(parseDoppelLobby(festerInhalt(['111', '222'], [], []))).toEqual({
+                    team1: ['111', '222'], team2: [], ausstehend: [],
+                });
+            });
+
+            it('zeigt die freien Gegner-Plätze an', () => {
+                expect(formatDoppelZeilen({team1: ['1', '2'], team2: [], ausstehend: []})).toContain('noch 2 Plätze frei');
+                expect(formatDoppelZeilen({team1: ['1', '2'], team2: ['3'], ausstehend: []})).toContain('noch 1 Platz frei');
+            });
+        });
+
+        describe('loseTeams', () => {
+            it('teilt vier Leute in zwei Zweierteams, jeden genau einmal', () => {
+                const [team1, team2] = loseTeams(['a', 'b', 'c', 'd']);
+
+                expect(team1).toHaveLength(2);
+                expect(team2).toHaveLength(2);
+                expect([...team1, ...team2].sort()).toEqual(['a', 'b', 'c', 'd']);
+            });
+        });
+
+        describe('handleDoppel', () => {
+            it('eröffnet ohne Partner eine offene Lobby mit dem Eröffner', async () => {
+                const interaction = mockCommand('111');
+
+                await pingPongHandler.handleDoppel(interaction);
+
+                const antwort = interaction.reply.mock.calls[0][0];
+                expect(parseTeilnehmer(antwort.content)).toEqual(['111']);
+                expect(antwort.components[0].components[0].data.custom_id).toBe('pingpong-doppel:dabei:111:offen');
+            });
+
+            it('eröffnet mit Partner und Gegnern eine feste Lobby, in der alle noch zusagen müssen', async () => {
+                const interaction = mockCommand('111', {partner: user('222'), gegner1: user('333'), gegner2: user('444')});
+
+                await pingPongHandler.handleDoppel(interaction);
+
+                const antwort = interaction.reply.mock.calls[0][0];
+                expect(parseDoppelLobby(antwort.content)).toEqual({
+                    team1: ['111', '222'], team2: ['333', '444'], ausstehend: ['222', '333', '444'],
+                });
+                expect(antwort.components[0].components[0].data.custom_id).toBe('pingpong-doppel:dabei:111:fest');
+            });
+
+            it('lehnt Gegner ohne Partner ab', async () => {
+                const interaction = mockCommand('111', {gegner1: user('333')});
+
+                await pingPongHandler.handleDoppel(interaction);
+
+                expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
+                expect(redisService.setWithExpiry).not.toHaveBeenCalled();
+            });
+
+            it.each([
+                ['sich selbst', {partner: user('111')}],
+                ['einen Bot', {partner: user('222', true)}],
+                ['eine Person doppelt', {partner: user('222'), gegner1: user('222')}],
+            ])('lehnt %s als Mitspieler ab, ohne den Cooldown zu verbrauchen', async (_fall, optionen) => {
+                const interaction = mockCommand('111', optionen);
+
+                await pingPongHandler.handleDoppel(interaction);
+
+                expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
+                expect(redisService.setWithExpiry).not.toHaveBeenCalled();
+            });
+
+            it('greift den Duell-Cooldown ab', async () => {
+                vi.mocked(redisService.getTimeToLive).mockResolvedValue(12);
+                const interaction = mockCommand('111');
+
+                await pingPongHandler.handleDoppel(interaction);
+
+                expect(interaction.reply.mock.calls[0][0].content).toContain('12s');
+            });
+        });
+
+        describe('handleDoppelButton', () => {
+            it('ignoriert Buttons mit fremdem Prefix', async () => {
+                const interaction = mockButton('pingpong-rundlauf:beitreten:111', '222', '');
+
+                await pingPongHandler.handleDoppelButton(interaction);
+
+                expect(interaction.update).not.toHaveBeenCalled();
+                expect(interaction.reply).not.toHaveBeenCalled();
+            });
+
+            it('lässt nur den Eröffner absagen', async () => {
+                const fremd = mockButton('pingpong-doppel:abbrechen:111:offen', '222', offenerInhalt(['111', '222']));
+                await pingPongHandler.handleDoppelButton(fremd);
+                expect(fremd.update).not.toHaveBeenCalled();
+
+                const eroeffner = mockButton('pingpong-doppel:abbrechen:111:offen', '111', offenerInhalt(['111']));
+                await pingPongHandler.handleDoppelButton(eroeffner);
+                expect(eroeffner.update).toHaveBeenCalledWith(expect.objectContaining({components: []}));
+            });
+
+            it('verweist den Eröffner beim Verlassen auf Abbrechen', async () => {
+                const interaction = mockButton('pingpong-doppel:raus:111:fest', '111',
+                    festerInhalt(['111', '222'], [], ['222']));
+
+                await pingPongHandler.handleDoppelButton(interaction);
+
+                expect(interaction.update).not.toHaveBeenCalled();
+                expect(interaction.reply.mock.calls[0][0].content).toContain('Abbrechen');
+            });
+
+            describe('offene Lobby', () => {
+                it('stellt Beitretende an die Platte, solange noch keine vier da sind', async () => {
+                    const interaction = mockButton('pingpong-doppel:dabei:111:offen', '222', offenerInhalt(['111']));
+
+                    await pingPongHandler.handleDoppelButton(interaction);
+
+                    expect(parseTeilnehmer(interaction.update.mock.calls[0][0].content)).toEqual(['111', '222']);
+                });
+
+                it('lässt niemanden doppelt beitreten', async () => {
+                    const interaction = mockButton('pingpong-doppel:dabei:111:offen', '222', offenerInhalt(['111', '222']));
+
+                    await pingPongHandler.handleDoppelButton(interaction);
+
+                    expect(interaction.update).not.toHaveBeenCalled();
+                });
+
+                it('nimmt eine Person wieder raus', async () => {
+                    const interaction = mockButton('pingpong-doppel:raus:111:offen', '222',
+                        offenerInhalt(['111', '222', '333']));
+
+                    await pingPongHandler.handleDoppelButton(interaction);
+
+                    expect(parseTeilnehmer(interaction.update.mock.calls[0][0].content)).toEqual(['111', '333']);
+                });
+
+                it('lost beim vierten die Teams aus und spielt sofort', async () => {
+                    scoresInRedis({});
+                    const interaction = mockButton('pingpong-doppel:dabei:111:offen', '444',
+                        offenerInhalt(['111', '222', '333']));
+
+                    await pingPongHandler.handleDoppelButton(interaction);
+
+                    const ergebnis = interaction.update.mock.calls[0][0];
+                    expect(ergebnis.components).toEqual([]);
+                    expect(ergebnis.content).toContain('Das Los stellt die Teams');
+                    for (const id of ['111', '222', '333', '444']) {
+                        expect(redisService.set).toHaveBeenCalledWith(`${id}PING_PONG`, expect.any(String));
+                    }
+                });
+
+                // Klicken der vierte und ein fünfter gleichzeitig, darf nur EIN Match laufen.
+                it('spielt nicht, wenn ein gleichzeitiger Klick schon gestartet hat', async () => {
+                    vi.mocked(redisService.setIfAbsent).mockResolvedValue(false);
+                    const interaction = mockButton('pingpong-doppel:dabei:111:offen', '444',
+                        offenerInhalt(['111', '222', '333']));
+
+                    await pingPongHandler.handleDoppelButton(interaction);
+
+                    expect(redisService.setIfAbsent).toHaveBeenCalledWith('PING_PONG:DOPPEL_START:msg-1', '1', expect.any(Number));
+                    expect(interaction.update).not.toHaveBeenCalled();
+                    expect(redisService.set).not.toHaveBeenCalled();
+                    expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
+                });
+            });
+
+            describe('feste Teams', () => {
+                it('nimmt die Zusage des Partners an, ohne schon zu spielen', async () => {
+                    const interaction = mockButton('pingpong-doppel:dabei:111:fest', '222',
+                        festerInhalt(['111', '222'], [], ['222']));
+
+                    await pingPongHandler.handleDoppelButton(interaction);
+
+                    expect(parseDoppelLobby(interaction.update.mock.calls[0][0].content)).toEqual({
+                        team1: ['111', '222'], team2: [], ausstehend: [],
+                    });
+                });
+
+                it('setzt Freiwillige auf freie Gegner-Plätze', async () => {
+                    const interaction = mockButton('pingpong-doppel:dabei:111:fest', '333',
+                        festerInhalt(['111', '222'], [], ['222']));
+
+                    await pingPongHandler.handleDoppelButton(interaction);
+
+                    expect(parseDoppelLobby(interaction.update.mock.calls[0][0].content).team2).toEqual(['333']);
+                });
+
+                it('weist ab, wenn beide Gegner-Plätze vergeben sind', async () => {
+                    const interaction = mockButton('pingpong-doppel:dabei:111:fest', '555',
+                        festerInhalt(['111', '222'], ['333', '444'], ['333']));
+
+                    await pingPongHandler.handleDoppelButton(interaction);
+
+                    expect(interaction.update).not.toHaveBeenCalled();
+                    expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
+                });
+
+                it('wartet, bis alle Eingeladenen zugesagt haben', async () => {
+                    // Team 2 ist voll, aber der Partner hat noch nicht zugesagt.
+                    const interaction = mockButton('pingpong-doppel:dabei:111:fest', '444',
+                        festerInhalt(['111', '222'], ['333', '444'], ['222', '444']));
+
+                    await pingPongHandler.handleDoppelButton(interaction);
+
+                    expect(parseDoppelLobby(interaction.update.mock.calls[0][0].content).ausstehend).toEqual(['222']);
+                    expect(redisService.setIfAbsent).not.toHaveBeenCalled();
+                });
+
+                it('spielt, sobald die letzte Zusage da ist - ohne Auslosung', async () => {
+                    scoresInRedis({});
+                    const interaction = mockButton('pingpong-doppel:dabei:111:fest', '222',
+                        festerInhalt(['111', '222'], ['333', '444'], ['222']));
+
+                    await pingPongHandler.handleDoppelButton(interaction);
+
+                    const ergebnis = interaction.update.mock.calls[0][0];
+                    expect(ergebnis.components).toEqual([]);
+                    expect(ergebnis.content).not.toContain('Das Los');
+                    // Die festen Teams bleiben zusammen, egal wer gewinnt.
+                    expect(ergebnis.content).toMatch(/<@111> & <@222>|<@222> & <@111>/);
+                    expect(ergebnis.content).toMatch(/<@333> & <@444>|<@444> & <@333>/);
+                });
+
+                it('lässt das Doppel ausfallen, wenn der Partner abspringt', async () => {
+                    const interaction = mockButton('pingpong-doppel:raus:111:fest', '222',
+                        festerInhalt(['111', '222'], ['333'], []));
+
+                    await pingPongHandler.handleDoppelButton(interaction);
+
+                    expect(interaction.update).toHaveBeenCalledWith(expect.objectContaining({components: []}));
+                });
+
+                it('gibt den Platz eines abspringenden Gegners wieder frei', async () => {
+                    const interaction = mockButton('pingpong-doppel:raus:111:fest', '333',
+                        festerInhalt(['111', '222'], ['333', '444'], ['333']));
+
+                    await pingPongHandler.handleDoppelButton(interaction);
+
+                    expect(parseDoppelLobby(interaction.update.mock.calls[0][0].content)).toEqual({
+                        team1: ['111', '222'], team2: ['444'], ausstehend: [],
+                    });
+                });
+            });
+
+            it('sollte Fehler abfangen', async () => {
+                vi.mocked(redisService.get).mockRejectedValue(new Error('Redis kaputt'));
+                const interaction = mockButton('pingpong-doppel:dabei:111:offen', '444',
+                    offenerInhalt(['111', '222', '333']));
+
+                await pingPongHandler.handleDoppelButton(interaction);
+
+                expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
+            });
+        });
+
+        describe('spieleUndWerteDoppelAus', () => {
+            it('gibt jeder Person im Siegerteam +1 und nimmt jeder im Verliererteam 1', async () => {
+                scoresInRedis({'1PING_PONG': '5', '2PING_PONG': '5', '3PING_PONG': '5', '4PING_PONG': '5'});
+
+                const {content} = await pingPongHandler.spieleUndWerteDoppelAus(['1', '2'], ['3', '4'], false);
+
+                const neu = Object.fromEntries(vi.mocked(redisService.set).mock.calls
+                    .filter(([key]) => key.endsWith('PING_PONG'))
+                    .map(([key, wert]) => [key, wert]));
+                const team1Gewinnt = content.startsWith('**<@1> & <@2> gewinnen');
+                expect(neu).toEqual(team1Gewinnt
+                    ? {'1PING_PONG': '6', '2PING_PONG': '6', '3PING_PONG': '4', '4PING_PONG': '4'}
+                    : {'1PING_PONG': '4', '2PING_PONG': '4', '3PING_PONG': '6', '4PING_PONG': '6'});
+            });
+
+            it('klemmt den Abzug bei 0 Punkten ab', async () => {
+                scoresInRedis({});
+
+                const {content} = await pingPongHandler.spieleUndWerteDoppelAus(['1', '2'], ['3', '4'], false);
+
+                expect(content).not.toContain('**-1**');
+            });
+
+            // User-Entscheidung: die Serie zählt im Doppel wie im Duell, pro Kopf.
+            it('schreibt die Siegesserie aller vier fort', async () => {
+                scoresInRedis({});
+
+                await pingPongHandler.spieleUndWerteDoppelAus(['1', '2'], ['3', '4'], false);
+
+                expect(redisService.increment).toHaveBeenCalledTimes(2);
+                const hochgezaehlt = vi.mocked(redisService.increment).mock.calls.map(([key]) => key).sort();
+                expect([['PING_PONG:SERIE:1', 'PING_PONG:SERIE:2'], ['PING_PONG:SERIE:3', 'PING_PONG:SERIE:4']])
+                    .toContainEqual(hochgezaehlt);
             });
         });
     });

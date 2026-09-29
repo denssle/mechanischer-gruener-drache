@@ -86,6 +86,12 @@ class RedisService {
         await this.#client.set(key, value, {EX: seconds});
     }
 
+    // Setzt einen Key mit Ablaufzeit nur, wenn es ihn noch nicht gibt (SET NX EX) - true heißt
+    // "du warst zuerst". Prüfen und Setzen in einem Schritt, damit sich kein zweiter Klick dazwischenschiebt.
+    async setIfAbsent(key: string, value: string, seconds: number): Promise<boolean> {
+        return (await this.#client.set(key, value, {NX: true, EX: seconds})) === 'OK';
+    }
+
     // Verbleibende Lebensdauer eines Keys in Sekunden. Redis liefert -2 (Key existiert nicht)
     // bzw. -1 (kein Ablauf gesetzt); für Cooldown-Zwecke sind beide "kein Cooldown aktiv".
     async getTimeToLive(key: string): Promise<number> {

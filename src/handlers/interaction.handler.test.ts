@@ -26,6 +26,7 @@ vi.mock('./pingPong.handler.js', () => ({
         handleDuellButton: vi.fn(),
         handleTaktikButton: vi.fn(),
         handleRundlaufButton: vi.fn(),
+        handleDoppelButton: vi.fn(),
     }
 }));
 
@@ -83,7 +84,7 @@ describe('interaction.handler', () => {
     });
 
     describe('handleInteractionCreate', () => {
-        it('reicht Buttons an alle drei Button-Handler weiter (jeder prüft sein Prefix selbst)', async () => {
+        it('reicht Buttons an alle Button-Handler weiter (jeder prüft sein Prefix selbst)', async () => {
             const interaction = buttonInteraction();
 
             await handleInteractionCreate(interaction);
@@ -92,6 +93,7 @@ describe('interaction.handler', () => {
             expect(pingPongHandler.handleDuellButton).toHaveBeenCalledWith(interaction);
             expect(pingPongHandler.handleTaktikButton).toHaveBeenCalledWith(interaction);
             expect(pingPongHandler.handleRundlaufButton).toHaveBeenCalledWith(interaction);
+            expect(pingPongHandler.handleDoppelButton).toHaveBeenCalledWith(interaction);
         });
 
         it('führt den passenden Command aus und merkt die Benutzung für die Tipp-Auswahl', async () => {
