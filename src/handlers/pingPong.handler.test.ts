@@ -367,6 +367,9 @@ describe('PingPongHandler', () => {
             serie: 1,
             istNeuerRekord: false,
             beendeteSerie: 0,
+            pechstraehne: 1,
+            istNeuerPechRekord: false,
+            beendetePechstraehne: 0,
             ...overrides,
         });
 
@@ -392,6 +395,23 @@ describe('PingPongHandler', () => {
         it('ignoriert eine beendete Serie von nur einem Sieg', () => {
             expect(formatSerie(stand({beendeteSerie: 1}))).toBeNull();
         });
+
+        it('nennt die Pechsträhne des Verlierers ab zwei Niederlagen', () => {
+            expect(formatSerie(stand({pechstraehne: 3}))).toBe('<@user-b> hat jetzt **3 Duelle in Folge** verloren.');
+        });
+
+        it('weist auf eine Rekord-Pechsträhne hin', () => {
+            expect(formatSerie(stand({pechstraehne: 4, istNeuerPechRekord: true}))).toContain('noch nie');
+        });
+
+        it('erwähnt die Pechsträhne, die der Sieger beendet', () => {
+            expect(formatSerie(stand({beendetePechstraehne: 6})))
+                .toBe('<@user-a> beendet eine Pechsträhne von **6 Niederlagen**.');
+        });
+
+        it('ignoriert eine beendete Pechsträhne von nur einer Niederlage', () => {
+            expect(formatSerie(stand({beendetePechstraehne: 1}))).toBeNull();
+        });
     });
 
     describe('verarbeiteSerie', () => {
@@ -407,7 +427,7 @@ describe('PingPongHandler', () => {
             expect(redisService.increment).toHaveBeenCalledWith('PING_PONG:SERIE:user-a');
             expect(redisService.delete).toHaveBeenCalledWith('PING_PONG:SERIE:user-b');
             expect(redisService.set).toHaveBeenCalledWith('PING_PONG:REKORD:user-a', '3');
-            expect(stand).toEqual({
+            expect(stand).toMatchObject({
                 siegerId: 'user-a',
                 verliererId: 'user-b',
                 serie: 3,
@@ -436,6 +456,35 @@ describe('PingPongHandler', () => {
             // Gespeichert wird die 1 trotzdem, nur erzählt wird sie nicht.
             expect(redisService.set).toHaveBeenCalledWith('PING_PONG:REKORD:user-a', '1');
             expect(stand.istNeuerRekord).toBe(false);
+        });
+
+        it('zählt die Pechsträhne des Verlierers hoch und beendet die des Siegers', async () => {
+            vi.mocked(redisService.increment).mockImplementation(async (key: string) =>
+                key === 'PING_PONG:PECHSTRAEHNE:user-b' ? 4 : 1);
+            vi.mocked(redisService.get).mockImplementation(async (key: string) => ({
+                'PING_PONG:PECHSTRAEHNE:user-a': '3',
+                'PING_PONG:PECHREKORD:user-b': '2',
+            } as Record<string, string>)[key] ?? null);
+
+            const stand = await pingPongHandler.verarbeiteSerie('user-a', 'user-b');
+
+            expect(redisService.increment).toHaveBeenCalledWith('PING_PONG:PECHSTRAEHNE:user-b');
+            expect(redisService.delete).toHaveBeenCalledWith('PING_PONG:PECHSTRAEHNE:user-a');
+            expect(redisService.set).toHaveBeenCalledWith('PING_PONG:PECHREKORD:user-b', '4');
+            expect(redisService.setSortedSet).toHaveBeenCalledWith('PING_PONG:PECHREKORD_HIGHSCORE', 'user-b', 4);
+            expect(stand).toMatchObject({pechstraehne: 4, istNeuerPechRekord: true, beendetePechstraehne: 3});
+        });
+
+        it('schreibt auch ohne neuen Pech-Rekord den bestehenden Stand in die Rangliste', async () => {
+            vi.mocked(redisService.increment).mockResolvedValue(2);
+            vi.mocked(redisService.get).mockImplementation(async (key: string) =>
+                key === 'PING_PONG:PECHREKORD:user-b' ? '8' : null);
+
+            const stand = await pingPongHandler.verarbeiteSerie('user-a', 'user-b');
+
+            expect(redisService.set).not.toHaveBeenCalledWith('PING_PONG:PECHREKORD:user-b', expect.anything());
+            expect(redisService.setSortedSet).toHaveBeenCalledWith('PING_PONG:PECHREKORD_HIGHSCORE', 'user-b', 8);
+            expect(stand.istNeuerPechRekord).toBe(false);
         });
 
         it('löscht nichts, wenn der Verlierer gar keine Serie hatte', async () => {
@@ -529,6 +578,51 @@ describe('PingPongHandler', () => {
 
             expect(inter.reply).toHaveBeenCalledWith({
                 content: 'Die Serienrekorde konnten nicht abgerufen werden.',
+                flags: MessageFlags.Ephemeral,
+            });
+        });
+    });
+
+    // Dieselbe Anzeige wie handleSerienrekorde (zeigeSerienRangliste), nur aus der Pech-Rangliste.
+    describe('handlePechstraehnen', () => {
+        const interaction = () => ({reply: vi.fn(), guild: {}} as any);
+
+        it('listet die Pechsträhnen aus der eigenen Rangliste, ohne Mentions', async () => {
+            vi.mocked(redisService.getSortedSet).mockResolvedValue([
+                {value: 'user-a', score: 5},
+                {value: 'user-b', score: 1},
+            ] as any);
+            vi.mocked(userService.getUser).mockResolvedValue({displayName: 'Tirsis'} as any);
+
+            const inter = interaction();
+            await pingPongHandler.handlePechstraehnen(inter);
+
+            expect(redisService.getSortedSet).toHaveBeenCalledWith('PING_PONG:PECHREKORD_HIGHSCORE');
+            const antwort = inter.reply.mock.calls[0][0];
+            expect(antwort.content).toContain('Längste Pechsträhnen');
+            expect(antwort.content).toContain('1. 🌞 Tirsis - **5** Niederlagen in Folge');
+            // Unter MIN_SERIE fliegt raus wie bei den Siegesserien.
+            expect(antwort.content).not.toContain('2.');
+            expect(antwort.allowedMentions).toEqual({parse: []});
+        });
+
+        it('meldet eine leere Rangliste', async () => {
+            vi.mocked(redisService.getSortedSet).mockResolvedValue([]);
+
+            const inter = interaction();
+            await pingPongHandler.handlePechstraehnen(inter);
+
+            expect(inter.reply.mock.calls[0][0].content).toContain(`Noch niemand hat ${MIN_SERIE} Duelle in Folge verloren`);
+        });
+
+        it('antwortet ephemer, wenn der Abruf scheitert', async () => {
+            vi.mocked(redisService.getSortedSet).mockRejectedValue(new Error('Redis weg'));
+
+            const inter = interaction();
+            await pingPongHandler.handlePechstraehnen(inter);
+
+            expect(inter.reply).toHaveBeenCalledWith({
+                content: 'Die Pechsträhnen konnten nicht abgerufen werden.',
                 flags: MessageFlags.Ephemeral,
             });
         });
@@ -686,6 +780,16 @@ describe('PingPongHandler', () => {
             expect(text).toContain('/pingpong taktikduell');
             expect(text).toContain('/pingpong bestenliste');
             expect(text).toContain('/pingpong hilfe');
+        });
+
+        // Die Gruppen-Hilfe wächst mit jedem Modus und hatte bis zur Pechsträhne keinen eigenen
+        // Limit-Test (anders als /hilfe) - Discord lehnt längere Nachrichten schlicht ab.
+        it('bleibt unter dem Discord-Limit von 2000 Zeichen', async () => {
+            const interaction = {reply: vi.fn()} as any;
+
+            await pingPongHandler.handleHilfe(interaction);
+
+            expect(interaction.reply.mock.calls[0][0].length).toBeLessThanOrEqual(2000);
         });
     });
 
@@ -1131,10 +1235,11 @@ describe('PingPongHandler', () => {
 
                 await pingPongHandler.handleRundlaufButton(interaction);
 
-                // Genau ein Sieger zählt hoch, genau eine Serie (die des Finalverlierers) wird gelöscht.
-                expect(redisService.increment).toHaveBeenCalledTimes(1);
-                const hochgezaehlt = vi.mocked(redisService.increment).mock.calls[0][0];
-                expect(hochgezaehlt).toMatch(/^PING_PONG:SERIE:/);
+                // Genau ein Sieger zählt seine Siegesserie hoch, genau ein Finalverlierer seine
+                // Pechsträhne - wer vorher rausfliegt, hat gegen niemanden verloren.
+                const hochgezaehlt = vi.mocked(redisService.increment).mock.calls.map(([key]) => key);
+                expect(hochgezaehlt.filter(key => key.startsWith('PING_PONG:SERIE:'))).toHaveLength(1);
+                expect(hochgezaehlt.filter(key => key.startsWith('PING_PONG:PECHSTRAEHNE:'))).toHaveLength(1);
             });
 
             it('sollte Fehler abfangen', async () => {
@@ -1464,10 +1569,12 @@ describe('PingPongHandler', () => {
 
                 await pingPongHandler.spieleUndWerteDoppelAus(['1', '2'], ['3', '4'], false);
 
-                expect(redisService.increment).toHaveBeenCalledTimes(2);
                 const hochgezaehlt = vi.mocked(redisService.increment).mock.calls.map(([key]) => key).sort();
-                expect([['PING_PONG:SERIE:1', 'PING_PONG:SERIE:2'], ['PING_PONG:SERIE:3', 'PING_PONG:SERIE:4']])
-                    .toContainEqual(hochgezaehlt);
+                // Beide Sieger zählen ihre Serie hoch, beide Verlierer ihre Pechsträhne.
+                expect([
+                    ['PING_PONG:PECHSTRAEHNE:3', 'PING_PONG:PECHSTRAEHNE:4', 'PING_PONG:SERIE:1', 'PING_PONG:SERIE:2'],
+                    ['PING_PONG:PECHSTRAEHNE:1', 'PING_PONG:PECHSTRAEHNE:2', 'PING_PONG:SERIE:3', 'PING_PONG:SERIE:4'],
+                ]).toContainEqual(hochgezaehlt);
             });
         });
     });

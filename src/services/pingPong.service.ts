@@ -17,6 +17,9 @@ export const PING_PONG_KEYS = {
     cooldown: (userId: string) => `PING_PONG:COOLDOWN:${userId}`,
     serie: (userId: string) => `PING_PONG:SERIE:${userId}`,
     rekord: (userId: string) => `PING_PONG:REKORD:${userId}`,
+    // Das Spiegelbild von serie/rekord für Niederlagen in Folge.
+    pechstraehne: (userId: string) => `PING_PONG:PECHSTRAEHNE:${userId}`,
+    pechRekord: (userId: string) => `PING_PONG:PECHREKORD:${userId}`,
     // Kurzlebiger Lock je Doppel-Lobby: das Doppel startet von selbst, sobald vier dabei sind -
     // klicken zwei gleichzeitig, darf trotzdem nur EIN Match ausgetragen werden.
     doppelStart: (messageId: string) => `PING_PONG:DOPPEL_START:${messageId}`,
@@ -44,6 +47,8 @@ const KEYS = {
     // Anders als der Score wird das hier vom Season-Reset NIE angefasst: ein Rekord ist eine
     // persönliche Bestmarke, keine Saisonleistung.
     rekordBestenliste: 'PING_PONG:REKORD_HIGHSCORE',
+    // Dasselbe für die längsten Pechsträhnen - ebenfalls nie vom Season-Reset angefasst.
+    pechRekordBestenliste: 'PING_PONG:PECHREKORD_HIGHSCORE',
 };
 
 class PingPongService {
@@ -116,6 +121,15 @@ class PingPongService {
     // Top 10, absteigend (getSortedSet ist genau dafür da und hart auf 10 begrenzt).
     async getRekordBestenliste(): Promise<{value: string; score: number}[]> {
         return redisService.getSortedSet(KEYS.rekordBestenliste);
+    }
+
+    // Die Pechsträhnen-Rangliste, gleiche Mechanik wie die der Siegesserien (zAdd, lazy befüllt).
+    async setPechRekordBestenliste(userId: string, rekord: number): Promise<void> {
+        await redisService.setSortedSet(KEYS.pechRekordBestenliste, userId, rekord);
+    }
+
+    async getPechRekordBestenliste(): Promise<{value: string; score: number}[]> {
+        return redisService.getSortedSet(KEYS.pechRekordBestenliste);
     }
 }
 
