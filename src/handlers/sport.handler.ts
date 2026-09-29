@@ -118,6 +118,16 @@ export function erkenneSportLeistungen(text: string): ErkannteSportLeistung[] {
         /\+\s*(\d+(?:[.,]\d+)?)\s*(km\b|kilometer\b|min\b|minuten\b)/gi
     )];
 
+    if (matches.length === 0) return [];
+
+    const alleAktivitaeten = Object.keys(SportActivities) as SportActivity[];
+
+    // Steht bereits vor der ersten Leistungsangabe eine Sportart,
+    // wird die Nachricht als "Sportart + Leistung" gelesen.
+    const textVorErsterAngabe = text.slice(0, matches[0].index);
+    const sportartStehtDavor =
+        erkenneAktivitaet(textVorErsterAngabe, alleAktivitaeten) !== null;
+
     for (let i = 0; i < matches.length; i++) {
         const match = matches[i];
         const wert = parseFloat(match[1].replace(',', '.'));
@@ -125,44 +135,71 @@ export function erkenneSportLeistungen(text: string): ErkannteSportLeistung[] {
 
         if (!Number.isFinite(wert) || wert <= 0) continue;
 
-        // Der Suchbereich umfasst auch Text vor der Angabe, damit sowohl
-        // "Radfahren +30 km" als auch "+30 km Radfahren" erkannt werden.
-        const start = i === 0
-            ? 0
-            : matches[i - 1].index + matches[i - 1][0].length;
+        const istKilometer =
+            einheit === 'km' || einheit === 'kilometer';
 
-        const ende = matches[i + 1]?.index ?? text.length;
-        const abschnitt = text.slice(start, ende);
+        const erlaubteAktivitaeten = alleAktivitaeten.filter(aktivitaet =>
+            istKilometer
+                ? istDistanzAktivitaet(aktivitaet)
+                : istMinutenAktivitaet(aktivitaet)
+        );
 
-        const istKilometer = einheit === 'km' || einheit === 'kilometer';
-        const erlaubteAktivitaeten = (Object.keys(SportActivities) as SportActivity[])
-            .filter(aktivitaet =>
-                istKilometer
-                    ? istDistanzAktivitaet(aktivitaet)
-                    : istMinutenAktivitaet(aktivitaet)
-            );
+        let abschnitt: string;
+
+        if (sportartStehtDavor) {
+            // "Radfahren +5 km, Laufen +10 km"
+            // Jede Sportart gehört zur folgenden Leistungsangabe.
+            const start = i === 0
+                ? 0
+                : matches[i - 1].index + matches[i - 1][0].length;
+
+            abschnitt = text.slice(start, match.index);
+        } else {
+            // "+5 km gelaufen, danach +20 km Rad"
+            // Normalerweise gehört die Sportart hinter die Leistungsangabe.
+            const start = match.index + match[0].length;
+            const ende = matches[i + 1]?.index ?? text.length;
+
+            abschnitt = text.slice(start, ende);
+
+            // Sonderfall innerhalb einer grundsätzlich nachgestellten Nachricht:
+            // "+5 km und Krafttraining +30 min"
+            //
+            // Steht unmittelbar vor der nächsten Leistungsangabe eine Sportart,
+            // gehört sie zur nächsten Angabe und darf nicht der aktuellen
+            // zugerechnet werden.
+            if (i < matches.length - 1) {
+                const naechsteAktivitaet =
+                    erkenneAktivitaet(abschnitt, alleAktivitaeten);
+
+                if (naechsteAktivitaet) {
+                    const pattern = AKTIVITAET_PATTERNS[naechsteAktivitaet];
+                    const treffer = pattern.exec(abschnitt);
+
+                    if (treffer) {
+                        const nachAktivitaet =
+                            abschnitt.slice(treffer.index + treffer[0].length);
+
+                        // Nach dem Sportwort stehen nur noch Trennzeichen/Wörter
+                        // bis zur nächsten +Leistung: dann gehört die Sportart
+                        // zur nächsten Angabe.
+                        if (/^\s*$|^\s*(?:,|und|danach)*\s*$/i.test(nachAktivitaet)) {
+                            abschnitt = abschnitt.slice(0, treffer.index);
+                        }
+                    }
+                }
+            }
+        }
 
         const passendeAktivitaet =
             erkenneAktivitaet(abschnitt, erlaubteAktivitaeten);
 
-        const alleAktivitaeten = Object.keys(SportActivities) as SportActivity[];
-        const genannteAktivitaet = erkenneAktivitaet(abschnitt, alleAktivitaeten);
+        const genannteAktivitaet =
+            erkenneAktivitaet(abschnitt, alleAktivitaeten);
 
-        const hatPassendeEinheitInNachricht = matches.some(anderesMatch => {
-            const andereEinheit = anderesMatch[2].toLowerCase();
-            const andereIstKilometer =
-                andereEinheit === 'km' || andereEinheit === 'kilometer';
-
-            return andereIstKilometer !== istKilometer;
-        });
-
-        // Wird ausdrücklich eine Sportart genannt, die nicht zur Einheit passt,
-        // ist die Angabe widersprüchlich und die gesamte Nachricht ungültig.
-        if (
-            !passendeAktivitaet &&
-            genannteAktivitaet &&
-            !hatPassendeEinheitInNachricht
-        ) {
+        // Eine ausdrücklich genannte Sportart mit falscher Einheit
+        // macht die gesamte Nachricht ungültig.
+        if (!passendeAktivitaet && genannteAktivitaet) {
             return [];
         }
 

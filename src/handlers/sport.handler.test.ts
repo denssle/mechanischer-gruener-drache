@@ -495,6 +495,31 @@ describe('SportHandler', () => {
                     { aktivitaet: 'krafttraining', minuten: 30 },
                 ],
             ],
+            [
+                '+5 km gelaufen, danach +20 km Rad',
+                [
+                    { aktivitaet: 'laufen', kilometer: 5 },
+                    { aktivitaet: 'radfahren', kilometer: 20 },
+                ],
+            ],
+            [
+                '+5 km gelaufen und +10 km geschwommen',
+                [
+                    { aktivitaet: 'laufen', kilometer: 5 },
+                    { aktivitaet: 'schwimmen', kilometer: 10 },
+                ],
+            ],
+            [
+                'Radfahren +5 km, Laufen +10 km',
+                [
+                    { aktivitaet: 'radfahren', kilometer: 5 },
+                    { aktivitaet: 'laufen', kilometer: 10 },
+                ],
+            ],
+            [
+                '+30 min Laufen und +5 km Radfahren',
+                [],
+            ],
         ])(
             'erkennt Sportleistungen aus "%s"',
             (text, erwartet) => {
