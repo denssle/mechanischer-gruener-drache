@@ -48,6 +48,7 @@ describe('CampService', () => {
             aktuelleStufe: {
                 phase: 0,
                 name: 'Verlassenes Lager',
+                beschreibung: expect.any(String),
             },
             naechsteStufe: {
                 phase: 1,
@@ -57,6 +58,10 @@ describe('CampService', () => {
                     baumaterial: 15,
                     vorraete: 80,
                 },
+                ausbau: [
+                    'einfache, bequeme Schlafplätze',
+                    'trockene Lagerstelle für Holz und Stein',
+                ],
             },
         });
     });
@@ -94,6 +99,7 @@ describe('CampService', () => {
             aktuelleStufe: {
                 phase: 0,
                 name: 'Verlassenes Lager',
+                beschreibung: expect.any(String),
             },
             naechsteStufe: {
                 phase: 1,
@@ -103,6 +109,10 @@ describe('CampService', () => {
                     baumaterial: 15,
                     vorraete: 80,
                 },
+                ausbau: [
+                    'einfache, bequeme Schlafplätze',
+                    'trockene Lagerstelle für Holz und Stein',
+                ],
             },
         });
     });
@@ -130,6 +140,7 @@ describe('CampService', () => {
         expect(fortschritt.aktuelleStufe).toEqual({
             phase: 0,
             name: 'Verlassenes Lager',
+            beschreibung: expect.any(String),
         });
     });
 
@@ -325,6 +336,10 @@ describe('CampService', () => {
                     baumaterial: 15,
                     vorraete: 80,
                 },
+                ausbau: [
+                    'einfache, bequeme Schlafplätze',
+                    'trockene Lagerstelle für Holz und Stein',
+                ],
             },
         ]);
     });
@@ -378,7 +393,11 @@ describe('CampService', () => {
                     baumaterial: 15,
                     vorraete: 80,
                 },
-            },
+                ausbau: [
+                    'einfache, bequeme Schlafplätze',
+                    'trockene Lagerstelle für Holz und Stein',
+                ],
+            }
         ]);
 
         expect(redisService.set).not.toHaveBeenCalled();
@@ -405,6 +424,10 @@ describe('CampService', () => {
                 baumaterial: 15,
                 vorraete: 80,
             },
+            ausbau: [
+            'einfache, bequeme Schlafplätze',
+            'trockene Lagerstelle für Holz und Stein',
+                ],
         });
     });
 
@@ -419,6 +442,11 @@ describe('CampService', () => {
                 baumaterial: 20,
                 vorraete: 85,
             },
+            ausbau: [
+                'Feuerstelle repariert',
+                'einfacher Kochplatz',
+                'erste gesammelte Vorräte',
+            ],
         });
     });
 

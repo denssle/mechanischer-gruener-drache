@@ -52,6 +52,11 @@ describe('CampHandler', () => {
                         baumaterial: 20,
                         vorraete: 85,
                     },
+                    ausbau: [
+                        'Feuerstelle repariert',
+                        'einfacher Kochplatz',
+                        'erste gesammelte Vorräte',
+                    ],
                 },
             });
 
@@ -101,6 +106,11 @@ describe('CampHandler', () => {
                         baumaterial: 20,
                         vorraete: 85,
                     },
+                    ausbau: [
+                        'Feuerstelle repariert',
+                        'einfacher Kochplatz',
+                        'erste gesammelte Vorräte',
+                    ],
                 },
             });
 
@@ -142,6 +152,11 @@ describe('CampHandler', () => {
                         baumaterial: 20,
                         vorraete: 85,
                     },
+                    ausbau: [
+                        'Feuerstelle repariert',
+                        'einfacher Kochplatz',
+                        'erste gesammelte Vorräte',
+                    ],
                 },
             });
 
@@ -178,6 +193,11 @@ describe('CampHandler', () => {
                         baumaterial: 25,
                         vorraete: 90,
                     },
+                    ausbau: [
+                        'Feuerstelle repariert',
+                        'einfacher Kochplatz',
+                        'erste gesammelte Vorräte',
+                    ],
                 },
             ]);
 
@@ -313,6 +333,10 @@ describe('CampHandler', () => {
                         baumaterial: 15,
                         vorraete: 80,
                     },
+                    ausbau: [
+                        'einfache, bequeme Schlafplätze',
+                        'trockene Lagerstelle für Holz und Stein',
+                    ],
                 },
             ]);
 
@@ -344,6 +368,10 @@ describe('CampHandler', () => {
                         baumaterial: 15,
                         vorraete: 80,
                     },
+                    ausbau: [
+                        'einfache, bequeme Schlafplätze',
+                        'trockene Lagerstelle für Holz und Stein',
+                    ],
                 },
                 {
                     phase: 1,
@@ -353,6 +381,11 @@ describe('CampHandler', () => {
                         baumaterial: 20,
                         vorraete: 85,
                     },
+                    ausbau: [
+                        'Feuerstelle repariert',
+                        'einfacher Kochplatz',
+                        'erste gesammelte Vorräte',
+                    ],
                 },
             ]);
 
@@ -379,6 +412,10 @@ describe('CampHandler', () => {
                         baumaterial: 15,
                         vorraete: 80,
                     },
+                    ausbau: [
+                        'einfache, bequeme Schlafplätze',
+                        'trockene Lagerstelle für Holz und Stein',
+                    ],
                 },
             ]);
 
@@ -404,6 +441,10 @@ describe('CampHandler', () => {
                         baumaterial: 15,
                         vorraete: 80,
                     },
+                    ausbau: [
+                        'einfache, bequeme Schlafplätze',
+                        'trockene Lagerstelle für Holz und Stein',
+                    ],
                 },
             ]);
 
@@ -431,6 +472,10 @@ describe('CampHandler', () => {
                         baumaterial: 15,
                         vorraete: 80,
                     },
+                    ausbau: [
+                        'einfache, bequeme Schlafplätze',
+                        'trockene Lagerstelle für Holz und Stein',
+                    ],
                 },
             ]);
 
