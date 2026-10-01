@@ -127,12 +127,23 @@ export interface SerienStand {
     serie: number;
     istNeuerRekord: boolean;
     beendeteSerie: number;
+    // Das Spiegelbild für die Niederlagen: die laufende Pechsträhne des Verlierers, ob sie sein
+    // bisher längste ist, und die Pechsträhne, die der Sieger mit diesem Sieg beendet hat.
+    pechstraehne: number;
+    istNeuerPechRekord: boolean;
+    beendetePechstraehne: number;
 }
 
 // Baut die Serien-Zeile fürs Duell-Ergebnis - oder null, wenn es nichts zu erzählen gibt
 // (erster Sieg des Siegers, Verlierer hatte auch nichts laufen). Exportiert + getestet.
-export function formatSerie({siegerId, verliererId, serie, istNeuerRekord, beendeteSerie}: SerienStand): string | null {
+export function formatSerie({siegerId, verliererId, serie, istNeuerRekord, beendeteSerie,
+                                pechstraehne, istNeuerPechRekord, beendetePechstraehne}: SerienStand): string | null {
     const saetze: string[] = [];
+
+    // Zuerst die gute Nachricht des Siegers: ein Sieg nach langer Durststrecke ist erzählenswert.
+    if (beendetePechstraehne >= MIN_SERIE) {
+        saetze.push(`<@${siegerId}> beendet eine Pechsträhne von **${beendetePechstraehne} Niederlagen**.`);
+    }
 
     if (serie >= MIN_SERIE) {
         saetze.push(`<@${siegerId}> ist jetzt **${serie} Duelle in Folge** ungeschlagen.`);
@@ -143,6 +154,13 @@ export function formatSerie({siegerId, verliererId, serie, istNeuerRekord, beend
 
     if (beendeteSerie >= MIN_SERIE) {
         saetze.push(`Die Serie von <@${verliererId}> endet nach **${beendeteSerie} Siegen**.`);
+    }
+
+    if (pechstraehne >= MIN_SERIE) {
+        saetze.push(`<@${verliererId}> hat jetzt **${pechstraehne} Duelle in Folge** verloren.`);
+        if (istNeuerPechRekord) {
+            saetze.push('So lang war die Pechsträhne noch nie.');
+        }
     }
 
     return saetze.length > 0 ? saetze.join(' ') : null;
@@ -182,7 +200,13 @@ export function formatTeilnehmerZeile(teilnehmer: string[]): string {
 // Marker-Zeile: der Eröffner wird im Text darüber ebenfalls erwähnt und stünde sonst doppelt drin.
 // Doppelte IDs fliegen trotzdem raus - eine Platte, eine Person.
 export function parseTeilnehmer(inhalt: string): string[] {
-    const zeile = inhalt.split('\n').find(z => z.startsWith(TEILNEHMER_MARKER));
+    return idsAusZeile(inhalt, TEILNEHMER_MARKER);
+}
+
+// Die IDs aus der ersten Zeile, die mit `marker` beginnt - Grundlage aller Lobbys, die ihren
+// Zustand in der eigenen Nachricht tragen (Rundlauf, Doppel).
+function idsAusZeile(inhalt: string, marker: string): string[] {
+    const zeile = inhalt.split('\n').find(z => z.startsWith(marker));
     if (!zeile) return [];
 
     const ids = [...zeile.matchAll(/<@!?(\d+)>/g)].map(treffer => treffer[1]);
@@ -247,6 +271,68 @@ export function formatDelta(delta: number): string {
     if (delta > 0) return `+${delta}`;
     if (delta < 0) return `${delta}`;
     return '±0';
+}
+
+// Doppel (2 gegen 2): wie der Rundlauf eine Lobby, deren Zustand in der Nachricht steht. Zwei Arten,
+// ein Befehl: MIT `partner` sind die Teams fest (Team 1 = Eröffner + Partner, die Gegner-Plätze
+// werden benannt oder von den ersten Freiwilligen besetzt), OHNE Partner ist es eine offene Lobby,
+// und der Bot lost die Teams aus, sobald vier dabei sind. Die Art steht in der customId
+// (`pingpong-doppel:{aktion}:{eroeffnerId}:{fest|offen}`), weil sich beide Lobbys anders lesen.
+//
+// Anders als beim Rundlauf gibt es KEINEN Start-Button: bei genau vier Plätzen ist klar, wann es
+// losgeht. Das hat eine Kehrseite - klicken der vierte und ein fünfter gleichzeitig, sähen beide
+// eine Lobby mit drei Leuten und würden beide ein Match auslösen. Deshalb der Lock in
+// PING_PONG_KEYS.doppelStart.
+const DOPPEL_PREFIX = 'pingpong-doppel:';
+const TEAM_1_MARKER = 'Team 1';
+const TEAM_2_MARKER = 'Team 2';
+const ZUSAGE_MARKER = 'Zusage fehlt';
+export const DOPPEL_GROESSE = 4;
+// Der Lock muss nur das Zeitfenster zwischen zwei Klicks abdecken; danach sind die Buttons ohnehin weg.
+const DOPPEL_LOCK_SECONDS = 60;
+
+export type DoppelModus = 'fest' | 'offen';
+
+// Zustand einer Lobby mit festen Teams. `ausstehend` sind eingeladene Personen (Partner, benannte
+// Gegner), die ihren Platz schon haben, aber noch nicht zugesagt haben.
+export interface DoppelLobby {
+    team1: string[];
+    team2: string[];
+    ausstehend: string[];
+}
+
+const mentions = (ids: string[]) => ids.map(id => `<@${id}>`).join(' ');
+
+// Die Zustandszeilen der festen Lobby - Gegenstück zu parseDoppelLobby.
+export function formatDoppelZeilen({team1, team2, ausstehend}: DoppelLobby): string {
+    const frei = 2 - team2.length;
+    const zeilen = [
+        `${TEAM_1_MARKER}: ${mentions(team1)}`,
+        `${TEAM_2_MARKER}: ${mentions(team2)}${frei > 0 ? `${team2.length > 0 ? ' · ' : ''}noch ${frei} ${frei === 1 ? 'Platz' : 'Plätze'} frei` : ''}`,
+    ];
+    if (ausstehend.length > 0) {
+        zeilen.push(`${ZUSAGE_MARKER}: ${mentions(ausstehend)}`);
+    }
+    return zeilen.join('\n');
+}
+
+export function parseDoppelLobby(inhalt: string): DoppelLobby {
+    return {
+        team1: idsAusZeile(inhalt, TEAM_1_MARKER),
+        team2: idsAusZeile(inhalt, TEAM_2_MARKER),
+        ausstehend: idsAusZeile(inhalt, ZUSAGE_MARKER),
+    };
+}
+
+// Mischt die vier Leute der offenen Lobby (Fisher-Yates) und teilt sie in zwei Teams.
+export function loseTeams(spieler: string[]): [string[], string[]] {
+    const gemischt = [...spieler];
+    for (let i = gemischt.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [gemischt[i], gemischt[j]] = [gemischt[j], gemischt[i]];
+    }
+    const haelfte = gemischt.length / 2;
+    return [gemischt.slice(0, haelfte), gemischt.slice(haelfte)];
 }
 
 class PingPongHandler {
@@ -715,30 +801,340 @@ class PingPongHandler {
         };
     }
 
-    // Schreibt die Siegesserie beider Seiten fort: der Sieger zählt hoch (INCR legt den Key bei
-    // Bedarf selbst an), die Serie des Verlierers ist beendet und wird gelöscht. Den Rekord halten
-    // wir separat, damit er die abgerissene Serie überdauert.
-    async verarbeiteSerie(siegerId: string, verliererId: string): Promise<SerienStand> {
-        const beendeteSerie = this.convertScoreToNumber(await redisService.get(PING_PONG_KEYS.serie(verliererId)) ?? 0);
-        if (beendeteSerie > 0) {
-            await redisService.delete(PING_PONG_KEYS.serie(verliererId));
+    // Doppel: mit `partner` feste Teams (benannte Gegner optional), ohne eine offene Lobby mit
+    // ausgelosten Teams (siehe DOPPEL_PREFIX). Den Cooldown bekommt nur der Eröffner - wie beim
+    // Duell hat niemand sonst etwas angezettelt.
+    async handleDoppel(interaction: ChatInputCommandInteraction) {
+        try {
+            const eroeffnerId = interaction.user.id;
+            const partner = interaction.options.getUser('partner');
+            const gegner = [interaction.options.getUser('gegner1'), interaction.options.getUser('gegner2')]
+                .filter(user => user !== null);
+
+            if (!partner && gegner.length > 0) {
+                return interaction.reply({
+                    content: 'Gegner lassen sich nur zusammen mit einem festen `partner` festlegen – '
+                        + 'ohne Partner lost der Bot die Teams aus.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            const abfuhr = this.pruefeDoppelBesetzung(eroeffnerId, partner ? [partner, ...gegner] : [])
+                ?? await this.pruefeCooldown(eroeffnerId);
+            if (abfuhr) {
+                return interaction.reply({content: abfuhr, flags: MessageFlags.Ephemeral});
+            }
+
+            if (!partner) {
+                return interaction.reply({
+                    content: this.baueOffenenDoppelText(eroeffnerId, [eroeffnerId]),
+                    components: [this.baueDoppelButtons(eroeffnerId, 'offen')],
+                });
+            }
+
+            const gegnerIds = gegner.map(user => user.id);
+            return interaction.reply({
+                content: this.baueFestenDoppelText(eroeffnerId, {
+                    team1: [eroeffnerId, partner.id],
+                    team2: gegnerIds,
+                    ausstehend: [partner.id, ...gegnerIds],
+                }),
+                components: [this.baueDoppelButtons(eroeffnerId, 'fest')],
+            });
+        } catch (error) {
+            console.error('Fehler beim Eröffnen des Ping-Pong-Doppels:', error);
+            return interaction.reply({
+                content: 'Es gab einen Fehler beim Ausführen des Befehls.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+    }
+
+    // Die benannten Mitspieler: niemand doppelt, nicht man selbst, keine Bots.
+    pruefeDoppelBesetzung(eroeffnerId: string, benannt: {id: string, bot: boolean}[]): string | null {
+        if (benannt.some(user => user.id === eroeffnerId)) {
+            return 'Du stehst schon selbst an der Platte – such dir für die anderen Plätze jemand anderen.';
+        }
+        if (benannt.some(user => user.bot)) {
+            return 'Bots haben keine Hände. Stell dir ein Team aus Fleisch und Blut zusammen.';
+        }
+        if (new Set(benannt.map(user => user.id)).size !== benannt.length) {
+            return 'Eine Person kann nur einen Platz besetzen.';
+        }
+        return null;
+    }
+
+    baueFestenDoppelText(eroeffnerId: string, lobby: DoppelLobby): string {
+        const [, partnerId] = lobby.team1;
+        return `<@${eroeffnerId}> sucht zusammen mit <@${partnerId}> Gegner für ein **Doppel**.\n`
+            + `Wer eingeladen ist, sagt über **Dabei** zu; freie Gegner-Plätze bekommt, wer zuerst klickt. `
+            + `Sobald alle vier zugesagt haben, geht es los.\n`
+            + this.doppelRegelZeile() + '\n\n'
+            + formatDoppelZeilen(lobby);
+    }
+
+    baueOffenenDoppelText(eroeffnerId: string, teilnehmer: string[]): string {
+        return `<@${eroeffnerId}> eröffnet ein **Doppel** mit ausgelosten Teams.\n`
+            + `Wer mitspielen will, klickt auf **Dabei** – sobald ${DOPPEL_GROESSE} an der Platte stehen, `
+            + `lost der Bot die Teams aus und das Match beginnt.\n`
+            + this.doppelRegelZeile() + '\n\n'
+            + formatTeilnehmerZeile(teilnehmer);
+    }
+
+    doppelRegelZeile(): string {
+        return `Gespielt wird auf **${POINTS_TO_WIN}** gewonnene Ballwechsel. Jede Person im Siegerteam bekommt `
+            + `**+${DUELL_WIN}** Punkt, jede im Verliererteam verliert **${DUELL_LOSS}** (nie unter 0).`;
+    }
+
+    baueDoppelButtons(eroeffnerId: string, modus: DoppelModus): ActionRowBuilder<ButtonBuilder> {
+        return new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`${DOPPEL_PREFIX}dabei:${eroeffnerId}:${modus}`)
+                .setLabel('Dabei')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId(`${DOPPEL_PREFIX}raus:${eroeffnerId}:${modus}`)
+                .setLabel('Doch nicht')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId(`${DOPPEL_PREFIX}abbrechen:${eroeffnerId}:${modus}`)
+                .setLabel('Abbrechen')
+                .setStyle(ButtonStyle.Danger),
+        );
+    }
+
+    // Eigener Einstiegspunkt wie beim Rundlauf (in interaction.handler.ts zusätzlich verkabelt).
+    async handleDoppelButton(interaction: ButtonInteraction) {
+        if (!interaction.customId.startsWith(DOPPEL_PREFIX)) return;
+
+        try {
+            const [aktion, eroeffnerId, modus] = interaction.customId.slice(DOPPEL_PREFIX.length).split(':');
+            const userId = interaction.user.id;
+
+            if (aktion === 'abbrechen') {
+                if (userId !== eroeffnerId) {
+                    return interaction.reply({
+                        content: 'Nur wer das Doppel eröffnet hat, kann es absagen.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+                return interaction.update({
+                    content: `<@${eroeffnerId}> sagt das Doppel ab. Die Platte bleibt heute leer.`,
+                    components: []
+                });
+            }
+
+            // Wie beim Rundlauf: ginge der Eröffner, bliebe eine Lobby stehen, die niemand absagen kann.
+            if (aktion === 'raus' && userId === eroeffnerId) {
+                return interaction.reply({
+                    content: 'Du hast das Doppel eröffnet – wenn du nicht mehr magst, sag es über **Abbrechen** ab.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            return modus === 'offen'
+                ? await this.bearbeiteOffenesDoppel(interaction, aktion, eroeffnerId)
+                : await this.bearbeiteFestesDoppel(interaction, aktion, eroeffnerId);
+        } catch (error) {
+            console.error('Fehler beim Austragen des Ping-Pong-Doppels:', error);
+            if (!interaction.replied) {
+                await interaction.reply({
+                    content: 'Das Doppel konnte nicht ausgetragen werden.',
+                    flags: MessageFlags.Ephemeral
+                }).catch(() => {});
+            }
+        }
+    }
+
+    async bearbeiteOffenesDoppel(interaction: ButtonInteraction, aktion: string, eroeffnerId: string) {
+        const userId = interaction.user.id;
+        const teilnehmer = parseTeilnehmer(interaction.message.content);
+
+        if (aktion === 'raus') {
+            if (!teilnehmer.includes(userId)) {
+                return interaction.reply({content: 'Du stehst gar nicht an der Platte.', flags: MessageFlags.Ephemeral});
+            }
+            return interaction.update({
+                content: this.baueOffenenDoppelText(eroeffnerId, teilnehmer.filter(id => id !== userId)),
+                components: [this.baueDoppelButtons(eroeffnerId, 'offen')],
+            });
         }
 
-        const serie = await redisService.increment(PING_PONG_KEYS.serie(siegerId));
-        const bisherigerRekord = this.convertScoreToNumber(await redisService.get(PING_PONG_KEYS.rekord(siegerId)) ?? 0);
-        const istNeuerRekord = serie > bisherigerRekord;
+        if (teilnehmer.includes(userId)) {
+            return interaction.reply({content: 'Du stehst schon an der Platte.', flags: MessageFlags.Ephemeral});
+        }
+
+        const neu = [...teilnehmer, userId];
+        if (neu.length < DOPPEL_GROESSE) {
+            return interaction.update({
+                content: this.baueOffenenDoppelText(eroeffnerId, neu),
+                components: [this.baueDoppelButtons(eroeffnerId, 'offen')],
+            });
+        }
+
+        const [team1, team2] = loseTeams(neu);
+        return this.starteDoppel(interaction, team1, team2, true);
+    }
+
+    async bearbeiteFestesDoppel(interaction: ButtonInteraction, aktion: string, eroeffnerId: string) {
+        const userId = interaction.user.id;
+        const lobby = parseDoppelLobby(interaction.message.content);
+        const [, partnerId] = lobby.team1;
+        const istDabei = [...lobby.team1, ...lobby.team2].includes(userId);
+
+        if (aktion === 'raus') {
+            // Das Team ist fest - springt der Partner ab, gibt es kein Doppel mehr.
+            if (userId === partnerId) {
+                return interaction.update({
+                    content: `<@${partnerId}> springt ab – das Doppel mit <@${eroeffnerId}> fällt aus.`,
+                    components: []
+                });
+            }
+            if (!lobby.team2.includes(userId)) {
+                return interaction.reply({content: 'Du bist gar nicht dabei.', flags: MessageFlags.Ephemeral});
+            }
+            // Ein Gegner (eingeladen oder freiwillig) gibt seinen Platz frei, der Rest bleibt stehen.
+            return interaction.update({
+                content: this.baueFestenDoppelText(eroeffnerId, {
+                    team1: lobby.team1,
+                    team2: lobby.team2.filter(id => id !== userId),
+                    ausstehend: lobby.ausstehend.filter(id => id !== userId),
+                }),
+                components: [this.baueDoppelButtons(eroeffnerId, 'fest')],
+            });
+        }
+
+        let neu: DoppelLobby;
+        if (lobby.ausstehend.includes(userId)) {
+            neu = {...lobby, ausstehend: lobby.ausstehend.filter(id => id !== userId)};
+        } else if (istDabei) {
+            return interaction.reply({content: 'Du bist schon dabei.', flags: MessageFlags.Ephemeral});
+        } else if (lobby.team2.length >= 2) {
+            return interaction.reply({
+                content: 'Beide Gegner-Plätze sind schon vergeben.',
+                flags: MessageFlags.Ephemeral
+            });
+        } else {
+            neu = {...lobby, team2: [...lobby.team2, userId]};
+        }
+
+        if (neu.team2.length < 2 || neu.ausstehend.length > 0) {
+            return interaction.update({
+                content: this.baueFestenDoppelText(eroeffnerId, neu),
+                components: [this.baueDoppelButtons(eroeffnerId, 'fest')],
+            });
+        }
+
+        return this.starteDoppel(interaction, neu.team1, neu.team2, false);
+    }
+
+    // Der Lock verhindert, dass zwei gleichzeitige Klicks zwei Matches auslösen (siehe DOPPEL_PREFIX).
+    async starteDoppel(interaction: ButtonInteraction, team1: string[], team2: string[], gelost: boolean) {
+        const erster = await redisService.setIfAbsent(PING_PONG_KEYS.doppelStart(interaction.message.id), '1',
+            DOPPEL_LOCK_SECONDS);
+        if (!erster) {
+            return interaction.reply({
+                content: 'Zu spät – das Doppel ist gerade voll geworden und läuft schon.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        return interaction.update(await this.spieleUndWerteDoppelAus(team1, team2, gelost));
+    }
+
+    // Spielt das Match, schreibt Punkte und Serien fort und baut die Ergebnisnachricht. Getrennt vom
+    // Button-Handler, damit der Ablauf ohne Discord-Interaction testbar bleibt (Muster Rundlauf).
+    async spieleUndWerteDoppelAus(team1: string[], team2: string[], gelost: boolean)
+        : Promise<{content: string, components: []}> {
+        const {herausfordererPunkte, gegnerPunkte} = spieleDuell();
+        const team1Gewinnt = herausfordererPunkte > gegnerPunkte;
+        const sieger = team1Gewinnt ? team1 : team2;
+        const verlierer = team1Gewinnt ? team2 : team1;
+
+        // Der Reihe nach wie beim Rundlauf - getScore legt fehlende Einzelkeys selbst an.
+        const punkte: string[] = [];
+        for (const id of sieger) {
+            punkte.push(`<@${id}>: **${await this.updateScore(id, await this.getScore(id) + DUELL_WIN)}**`);
+        }
+        for (const id of verlierer) {
+            punkte.push(`<@${id}>: **${await this.updateScore(id, Math.max(0, await this.getScore(id) - DUELL_LOSS))}**`);
+        }
+
+        // Die Serie zählt wie im Duell (User-Entscheidung): beide Sieger zählen hoch, beide Verlierer
+        // verlieren ihre. Die Paarung ist beliebig - verarbeiteSerie fasst jede Seite nur für sich an.
+        const serienZeilen: string[] = [];
+        for (let i = 0; i < sieger.length; i++) {
+            const zeile = formatSerie(await this.verarbeiteSerie(sieger[i], verlierer[i]));
+            if (zeile) serienZeilen.push(zeile);
+        }
+
+        const team = (ids: string[]) => ids.map(id => `<@${id}>`).join(' & ');
+        const satz = `${Math.max(herausfordererPunkte, gegnerPunkte)}:${Math.min(herausfordererPunkte, gegnerPunkte)}`;
+
+        return {
+            content: (gelost ? `Das Los stellt die Teams: ${team(team1)} gegen ${team(team2)}.\n` : '')
+                + `**${team(sieger)} gewinnen ${satz} gegen ${team(verlierer)}.**\n`
+                + `${randomDuellFlavor()}\n`
+                + `Punkte: ${punkte.join(' · ')}`
+                + (serienZeilen.length > 0 ? `\n${serienZeilen.join('\n')}` : ''),
+            components: []
+        };
+    }
+
+    // Schreibt Siegesserie und Pechsträhne beider Seiten fort - zwei Spiegelbilder: der Sieger zählt
+    // seine Siegesserie hoch und beendet seine Pechsträhne, der Verlierer umgekehrt. Die Rekorde
+    // halten wir jeweils separat, damit sie die abgerissene Serie überdauern.
+    async verarbeiteSerie(siegerId: string, verliererId: string): Promise<SerienStand> {
+        const beendeteSerie = await this.beendeSerie(PING_PONG_KEYS.serie(verliererId));
+        const beendetePechstraehne = await this.beendeSerie(PING_PONG_KEYS.pechstraehne(siegerId));
+
+        const sieg = await this.zaehleSerieHoch(PING_PONG_KEYS.serie(siegerId), PING_PONG_KEYS.rekord(siegerId),
+            rekord => pingPongService.setRekordBestenliste(siegerId, rekord));
+        const pech = await this.zaehleSerieHoch(PING_PONG_KEYS.pechstraehne(verliererId),
+            PING_PONG_KEYS.pechRekord(verliererId),
+            rekord => pingPongService.setPechRekordBestenliste(verliererId, rekord));
+
+        return {
+            siegerId,
+            verliererId,
+            serie: sieg.stand,
+            istNeuerRekord: sieg.istNeuerRekord,
+            beendeteSerie,
+            pechstraehne: pech.stand,
+            istNeuerPechRekord: pech.istNeuerRekord,
+            beendetePechstraehne,
+        };
+    }
+
+    // Löscht eine laufende Serie und liefert, wie lang sie war (0 = es lief keine).
+    async beendeSerie(serieKey: string): Promise<number> {
+        const laenge = this.convertScoreToNumber(await redisService.get(serieKey) ?? 0);
+        if (laenge > 0) {
+            await redisService.delete(serieKey);
+        }
+        return laenge;
+    }
+
+    // Zählt eine Serie hoch (INCR legt den Key bei Bedarf selbst an) und schreibt Rekord und Rangliste
+    // fort - für Siege und Niederlagen derselbe Ablauf. `istNeuerRekord` erst ab MIN_SERIE: ein
+    // "Rekord" von einem einzigen Spiel wäre Lärm (gespeichert wird die 1 trotzdem).
+    async zaehleSerieHoch(serieKey: string, rekordKey: string, schreibeRangliste: (rekord: number) => Promise<void>)
+        : Promise<{stand: number, istNeuerRekord: boolean}> {
+        const stand = await redisService.increment(serieKey);
+        const bisherigerRekord = this.convertScoreToNumber(await redisService.get(rekordKey) ?? 0);
+        const istNeuerRekord = stand > bisherigerRekord;
 
         if (istNeuerRekord) {
-            await redisService.set(PING_PONG_KEYS.rekord(siegerId), serie.toString());
+            await redisService.set(rekordKey, stand.toString());
         }
 
-        // Rangliste bewusst bei JEDEM Sieg mitschreiben, nicht nur bei einem neuen Rekord: das
-        // Sorted Set kam später dazu als die Einzelkeys, und so wandern die Bestandsrekorde nach
-        // und nach von allein hinein, statt eine einmalige Migration per SCAN zu brauchen.
-        // zAdd setzt den Wert, mehrfach mit demselben Rekord zu schreiben ist also folgenlos.
-        await pingPongService.setRekordBestenliste(siegerId, Math.max(serie, bisherigerRekord));
+        // Rangliste bewusst bei JEDEM Spiel mitschreiben, nicht nur bei einem neuen Rekord: das
+        // Sorted Set der Siegesserien kam später dazu als die Einzelkeys, und so wandern die
+        // Bestandsrekorde nach und nach von allein hinein, statt eine einmalige Migration per SCAN zu
+        // brauchen. zAdd setzt den Wert, mehrfach mit demselben Rekord zu schreiben ist also folgenlos.
+        await schreibeRangliste(Math.max(stand, bisherigerRekord));
 
-        return {siegerId, verliererId, serie, istNeuerRekord: istNeuerRekord && serie >= MIN_SERIE, beendeteSerie};
+        return {stand, istNeuerRekord: istNeuerRekord && stand >= MIN_SERIE};
     }
 
     async getSerie(userId: string): Promise<number> {
@@ -831,16 +1227,43 @@ class PingPongHandler {
     // Die längsten je erreichten Siegesserien - anders als die Bestenliste NICHT saisonal: der
     // Rekord überdauert sowohl die abgerissene Serie als auch den monatlichen Reset.
     async handleSerienrekorde(interaction: ChatInputCommandInteraction) {
+        return this.zeigeSerienRangliste(interaction, {
+            lade: () => pingPongService.getRekordBestenliste(),
+            ueberschrift: '**Längste Siegesserien**',
+            leer: `Noch keine Serie von mindestens ${MIN_SERIE} Siegen – da ist die Bestmarke frei.`,
+            einheit: 'Siege in Folge',
+            fehler: 'Die Serienrekorde konnten nicht abgerufen werden.',
+        });
+    }
+
+    // Das Spiegelbild: die längsten je erlittenen Niederlagenserien, ebenfalls ohne Reset.
+    async handlePechstraehnen(interaction: ChatInputCommandInteraction) {
+        return this.zeigeSerienRangliste(interaction, {
+            lade: () => pingPongService.getPechRekordBestenliste(),
+            ueberschrift: '**Längste Pechsträhnen**',
+            leer: `Noch niemand hat ${MIN_SERIE} Duelle in Folge verloren – bemerkenswert.`,
+            einheit: 'Niederlagen in Folge',
+            fehler: 'Die Pechsträhnen konnten nicht abgerufen werden.',
+        });
+    }
+
+    // Gemeinsame Anzeige beider Serien-Ranglisten (Siege und Niederlagen).
+    async zeigeSerienRangliste(interaction: ChatInputCommandInteraction, liste: {
+        lade: () => Promise<{value: string; score: number}[]>,
+        ueberschrift: string,
+        leer: string,
+        einheit: string,
+        fehler: string,
+    }) {
         try {
             // Rekorde unter MIN_SERIE raus: eine "Serie" von 1 hat jede Person, die je ein Duell
-            // gewonnen hat - das wären dieselben Karteileichen wie die 0-Punkte-Einträge in der
+            // gespielt hat - das wären dieselben Karteileichen wie die 0-Punkte-Einträge in der
             // Bestenliste. Erzählt wird eine Serie ohnehin erst ab 2 (siehe formatSerie).
-            const rekorde = (await pingPongService.getRekordBestenliste()).filter(eintrag => eintrag.score >= MIN_SERIE);
-            const ueberschrift = '**Längste Siegesserien**';
+            const rekorde = (await liste.lade()).filter(eintrag => eintrag.score >= MIN_SERIE);
 
             if (rekorde.length === 0) {
                 return interaction.reply({
-                    content: `${ueberschrift}\nNoch keine Serie von mindestens ${MIN_SERIE} Siegen – da ist die Bestmarke frei.`,
+                    content: `${liste.ueberschrift}\n${liste.leer}`,
                     allowedMentions: {parse: []},
                 });
             }
@@ -852,22 +1275,21 @@ class PingPongHandler {
                 .map((item, index) => {
                     const displayName = users[index]?.displayName ?? item.value;
                     const emoji = emojiFuerNachricht(emojis[item.value], interaction.guild, item.value);
-                    return `${index + 1}. ${emoji} ${displayName} - **${item.score}** Siege in Folge`;
+                    return `${index + 1}. ${emoji} ${displayName} - **${item.score}** ${liste.einheit}`;
                 })
                 .join('\n');
 
-            // allowedMentions ist PFLICHT wie in der Bestenliste nebenan: die Zeilen tragen den
-            // selbst gewählten `displayName`, ein Name wie `<@…>` würde sonst bei jedem Aufruf
-            // jemanden anpingen.
+            // allowedMentions ist PFLICHT wie in der Bestenliste: die Zeilen tragen den selbst
+            // gewählten `displayName`, ein Name wie `<@…>` würde sonst bei jedem Aufruf jemanden anpingen.
             return interaction.reply({
-                content: `${ueberschrift}\n${message}\n`
+                content: `${liste.ueberschrift}\n${message}\n`
                     + `Die Bestmarke bleibt vom Monatswechsel unberührt – anders als die Punkte in \`/pingpong bestenliste\`.`,
                 allowedMentions: {parse: []},
             });
         } catch (error) {
-            console.error('Fehler beim Abrufen der Ping-Pong-Serienrekorde:', error);
+            console.error(`Fehler beim Abrufen der Ping-Pong-Rangliste (${liste.einheit}):`, error);
             return interaction.reply({
-                content: 'Die Serienrekorde konnten nicht abgerufen werden.',
+                content: liste.fehler,
                 flags: MessageFlags.Ephemeral,
             });
         }
@@ -886,9 +1308,14 @@ class PingPongHandler {
             + `dann fliegt Runde für Runde einer raus, bis die letzten beiden das Finale ausspielen. `
             + `Punkte nach Platzierung – die vorderen Plätze gewinnen, die hinteren zahlen drauf, `
             + `die beiden Finalisten bekommen **+${RUNDLAUF_FINAL_BONUS}** extra (mindestens ${MIN_RUNDLAUF}, höchstens ${MAX_RUNDLAUF} Leute)\n` +
+            `**/pingpong doppel** – Doppel zu viert, ein Match auf ${POINTS_TO_WIN} gewonnene Ballwechsel: mit \`partner\` `
+            + `spielt ihr als festes Team (Partner und optional \`gegner1\`/\`gegner2\` sagen per Button zu, freie Plätze `
+            + `besetzt, wer zuerst klickt), ohne Partner lost der Bot die Teams aus, sobald vier dabei sind. `
+            + `Punkte und Siegesserie pro Kopf wie im Duell\n` +
             `**/pingpong bestenliste** – Die Top 10 der laufenden Season, mit laufender Siegesserie\n` +
             `**/pingpong ruhmeshalle** – Die Champions der vergangenen Monate\n` +
-            `**/pingpong serienrekorde** – Die längsten je erreichten Siegesserien (übersteht den Reset)\n` +
+            `**/pingpong serienrekorde** · **/pingpong pechstraehnen** – Die längsten je erreichten Sieges- `
+            + `bzw. Niederlagenserien (übersteht den Reset)\n` +
             `**/pingpong hilfe** – Zeigt diese Übersicht\n\n` +
             `**Seasons:** Die Punkte laufen monatsweise. Am Monatsende bekommt Platz eins die `
             + `Champion-Rolle (der bisherige Champion gibt sie ab) und einen Eintrag in der Ruhmeshalle, `

@@ -6,8 +6,10 @@ vi.mock('../handlers/pingPong.handler.js', () => ({
         handleAnsageduell: vi.fn(),
         handleTaktikduell: vi.fn(),
         handleRundlauf: vi.fn(),
+        handleDoppel: vi.fn(),
         handlePingPongHighscore: vi.fn(),
         handleSerienrekorde: vi.fn(),
+        handlePechstraehnen: vi.fn(),
         handleHilfe: vi.fn(),
     }
 }));
@@ -34,8 +36,10 @@ describe('ping.command', () => {
         ['ansageduell', 'handleAnsageduell'],
         ['taktikduell', 'handleTaktikduell'],
         ['rundlauf', 'handleRundlauf'],
+        ['doppel', 'handleDoppel'],
         ['bestenliste', 'handlePingPongHighscore'],
         ['serienrekorde', 'handleSerienrekorde'],
+        ['pechstraehnen', 'handlePechstraehnen'],
         ['hilfe', 'handleHilfe'],
     ] as const)('leitet Subcommand "%s" an pingPongHandler.%s weiter', async (subcommand, method) => {
         const interaction = mockInteraction(subcommand);
@@ -60,8 +64,10 @@ describe('ping.command', () => {
         expect(pingPongHandler.handleAnsageduell).not.toHaveBeenCalled();
         expect(pingPongHandler.handleTaktikduell).not.toHaveBeenCalled();
         expect(pingPongHandler.handleRundlauf).not.toHaveBeenCalled();
+        expect(pingPongHandler.handleDoppel).not.toHaveBeenCalled();
         expect(pingPongHandler.handlePingPongHighscore).not.toHaveBeenCalled();
         expect(pingPongHandler.handleSerienrekorde).not.toHaveBeenCalled();
+        expect(pingPongHandler.handlePechstraehnen).not.toHaveBeenCalled();
         expect(pingPongSeasonHandler.handleRuhmeshalle).not.toHaveBeenCalled();
         expect(pingPongHandler.handleHilfe).not.toHaveBeenCalled();
     });
@@ -69,6 +75,6 @@ describe('ping.command', () => {
     it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
         const definedSubcommands = pingCommand.data.options.map((option) => option.toJSON().name);
 
-        expect(definedSubcommands.sort()).toEqual(['ansageduell', 'bestenliste', 'herausfordern', 'hilfe', 'ruhmeshalle', 'rundlauf', 'serienrekorde', 'taktikduell']);
+        expect(definedSubcommands.sort()).toEqual(['ansageduell', 'bestenliste', 'doppel', 'herausfordern', 'hilfe', 'pechstraehnen', 'ruhmeshalle', 'rundlauf', 'serienrekorde', 'taktikduell']);
     });
 });

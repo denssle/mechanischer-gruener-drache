@@ -42,6 +42,9 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `PING_PONG:COOLDOWN:<userId>` | Marker, dass gerade herausgefordert wurde | 30 Sekunden (TTL) | Anti-Spam |
 | `PING_PONG:SERIE:<userId>`, `PING_PONG:REKORD:<userId>` | Laufende Siegesserie (bei Niederlage gelöscht) und längste je erreichte Serie | dauerhaft | Duell-Ergebnis, `/pingpong bestenliste` |
 | `PING_PONG:REKORD_HIGHSCORE` (Sorted Set) | Dieselben Serien-Rekorde nochmal ranglistenfähig (Quelle bleibt `PING_PONG:REKORD:<userId>`) | dauerhaft, **nicht** vom Season-Reset betroffen | `/pingpong serienrekorde` |
+| `PING_PONG:PECHSTRAEHNE:<userId>`, `PING_PONG:PECHREKORD:<userId>` | Laufende Niederlagenserie (bei einem Sieg gelöscht) und längste je erlittene | dauerhaft | Duell-Ergebnis |
+| `PING_PONG:PECHREKORD_HIGHSCORE` (Sorted Set) | Dieselben Pech-Rekorde ranglistenfähig (Quelle bleibt `PING_PONG:PECHREKORD:<userId>`) | dauerhaft, **nicht** vom Season-Reset betroffen | `/pingpong pechstraehnen` |
+| `PING_PONG:DOPPEL_START:<messageId>` | Lock, dass das Doppel dieser Lobby schon gestartet wurde (gegen doppelte Matches bei gleichzeitigen Klicks) | 60 Sekunden (TTL) | `/pingpong doppel` |
 | `TIPP:COOLDOWN:<userId>` | Marker, dass die Person heute schon einen Tipp gesehen hat | 24 Stunden (TTL) | gelegentliche Tipps/Nettigkeiten |
 | `TIPP:USED_COMMANDS:<userId>` | Set der Slash-Command-**Namen**, die die Person je benutzt hat (keine Argumente, keine Inhalte, keine Zeitpunkte) | dauerhaft | Tipps nur zu noch nie benutzten Befehlen |
 | `ANSTUPSER:ABOS` (Set) | Discord-User-IDs, die den täglichen 13:37-Anstupser abonniert haben – **Opt-in**, nur die ID | bis zur Abmeldung (`/anstupser aus`) | tägliche Anstupser-DM |

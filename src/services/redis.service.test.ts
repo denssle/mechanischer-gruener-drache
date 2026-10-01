@@ -76,6 +76,15 @@ describe('RedisService', () => {
         expect(mockClient.zIncrBy).toHaveBeenCalledWith('key', 5, 'val');
     });
 
+    it('setIfAbsent setzt nur einen fehlenden Key und meldet, ob es geklappt hat', async () => {
+        const mockClient = vi.mocked(createClient).mock.results[0].value;
+        mockClient.set.mockResolvedValueOnce('OK').mockResolvedValueOnce(null);
+
+        expect(await redisService.setIfAbsent('lock', '1', 60)).toBe(true);
+        expect(await redisService.setIfAbsent('lock', '1', 60)).toBe(false);
+        expect(mockClient.set).toHaveBeenCalledWith('lock', '1', {NX: true, EX: 60});
+    });
+
     it('hashFieldExists castet das 0/1 von HEXISTS auf einen echten Boolean', async () => {
         const mockClient = vi.mocked(createClient).mock.results[0].value;
         mockClient.hExists.mockResolvedValue(1);

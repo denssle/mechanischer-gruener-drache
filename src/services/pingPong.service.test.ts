@@ -30,6 +30,8 @@ describe('pingPongService', () => {
         expect(PING_PONG_KEYS.cooldown('user-1')).toBe('PING_PONG:COOLDOWN:user-1');
         expect(PING_PONG_KEYS.serie('user-1')).toBe('PING_PONG:SERIE:user-1');
         expect(PING_PONG_KEYS.rekord('user-1')).toBe('PING_PONG:REKORD:user-1');
+        expect(PING_PONG_KEYS.pechstraehne('user-1')).toBe('PING_PONG:PECHSTRAEHNE:user-1');
+        expect(PING_PONG_KEYS.pechRekord('user-1')).toBe('PING_PONG:PECHREKORD:user-1');
     });
 
     it('liest und schreibt den Monatsmarker', async () => {
@@ -121,6 +123,22 @@ describe('pingPongService', () => {
 
             expect(await pingPongService.getRekordBestenliste()).toEqual([{value: 'user-1', score: 6}]);
             expect(redisService.getSortedSet).toHaveBeenCalledWith('PING_PONG:REKORD_HIGHSCORE');
+        });
+    });
+
+    describe('Pechsträhnen-Rangliste', () => {
+        it('setzt den Rekord, statt ihn aufzusummieren', async () => {
+            await pingPongService.setPechRekordBestenliste('user-1', 5);
+
+            expect(redisService.setSortedSet).toHaveBeenCalledWith('PING_PONG:PECHREKORD_HIGHSCORE', 'user-1', 5);
+            expect(redisService.incrementSortedSet).not.toHaveBeenCalled();
+        });
+
+        it('liest die Rangliste aus dem eigenen Sorted Set', async () => {
+            vi.mocked(redisService.getSortedSet).mockResolvedValue([{value: 'user-1', score: 5}] as any);
+
+            expect(await pingPongService.getPechRekordBestenliste()).toEqual([{value: 'user-1', score: 5}]);
+            expect(redisService.getSortedSet).toHaveBeenCalledWith('PING_PONG:PECHREKORD_HIGHSCORE');
         });
     });
 });

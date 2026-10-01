@@ -15,14 +15,14 @@ export const HELP_TEXT =
     `\`/twitch verknuepfen\` – deinen Kanal hinterlegen; der Server wird benachrichtigt, wenn du live gehst\n\n` +
     `**Sport** (Details: \`/sport hilfe\`)\n` +
     `\`/sport eintragen\` – km/Minuten eintragen · \`/sport gesamt\` – Gesamtsumme · \`/sport statistik\` – deine Übersicht\n` +
-    `Im Sport-Kanal geht auch „+12 km gelaufen" oder „+45 min Krafttraining" – „+" ist Pflicht.\n\n` +
+    `Im Sport-Kanal: „+12 km gelaufen", „+45 min Krafttraining" – „+" ist Pflicht.\n\n` +
     `**Camp** (\`/camp hilfe\`)\n` +
     `\`/camp ressourcen\` – Vorräte, Baumaterial und Fortschritt\n\n` +
     `**Event** (Details: \`/event hilfe\`)\n` +
     `\`/event countdown\` – wie lange bis zum nächsten Event?\n\n` +
     `**Spiel & Spaß**\n` +
     `\`/pingpong herausfordern\` – jemanden zum Ping-Pong-Duell fordern\n` +
-    `\`/pingpong ansageduell\` · \`/pingpong taktikduell\` · \`/pingpong rundlauf\` – mit Ansage, mit verdeckter Aktion, zu mehreren\n` +
+    `\`/pingpong ansageduell\` · \`/pingpong taktikduell\` · \`/pingpong rundlauf\` · \`/pingpong doppel\` – mit Ansage, verdeckt, reihum, zu viert\n` +
     `\`/pingpong ruhmeshalle\` – Liste der monatlichen Champions (Details: \`/pingpong hilfe\`)\n` +
     `\`/blahaj\` – Euro-Beträge in Blåhajs umrechnen (reagiert auch automatisch auf €-Beträge im Chat)\n` +
     `\`/rollenspiel suche\` – dich als Roleplay-suchend melden und Mitspieler finden (Details: \`/rollenspiel hilfe\`)\n` +
