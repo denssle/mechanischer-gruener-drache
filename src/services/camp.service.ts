@@ -3,6 +3,11 @@ import redisService from './redis.service.js';
 import {CampRessourcen, CampStufe, CampFortschritt} from '../types/camp.js';
 import {CAMP_STARTPHASE, CAMP_STUFEN} from '../data/camp.js';
 
+interface CampFortschrittsPruefung {
+    currentLevel: number;
+    erreichteStufen: CampStufe[];
+}
+
 const KILOMETER_PRO_BAUMATERIAL = 10;
 const MINUTEN_PRO_VORRAT = 10;
 
@@ -53,11 +58,11 @@ class CampService {
         await this.setCampStartDate(startDate);
     }
 
-    async pruefeCampFortschrittSeitStart(): Promise<CampStufe[]> {
+    async pruefeCampFortschrittSeitStart(): Promise<CampFortschrittsPruefung | null> {
         const startDate = await this.getCampStartDate();
 
         if (startDate === null) {
-            return [];
+            return null;
         }
 
         return this.pruefeCampFortschritt(startDate);
@@ -116,25 +121,32 @@ class CampService {
         );
     }
 
-    async pruefeCampFortschritt(startDate: Date): Promise<CampStufe[]> {
+    async pruefeCampFortschritt(
+        startDate: Date
+    ): Promise<CampFortschrittsPruefung> {
         const insgesamt = await this.getCampRessourcen(startDate);
-        let currentLevel = await this.getCurrentLevel();
-        const abgeschlosseneStufen: CampStufe[] = [];
+        const currentLevel = await this.getCurrentLevel();
+
+        let pruefLevel = currentLevel;
+        const erreichteStufen: CampStufe[] = [];
 
         while (true) {
-            const verbraucht = this.getVerbrauchteRessourcen(currentLevel);
+            const verbraucht = this.getVerbrauchteRessourcen(pruefLevel);
             const verfuegbar = this.getVerfuegbareRessourcen(insgesamt, verbraucht);
-            const naechsteStufe = this.getNaechsteStufe(currentLevel);
+            const naechsteStufe = this.getNaechsteStufe(pruefLevel);
 
             if (!this.kannStufeAbschliessen(verfuegbar, naechsteStufe)) {
                 break;
             }
 
-            abgeschlosseneStufen.push(naechsteStufe!);
-            currentLevel++;
+            erreichteStufen.push(naechsteStufe!);
+            pruefLevel++;
         }
 
-        return abgeschlosseneStufen;
+        return {
+            currentLevel,
+            erreichteStufen,
+        };
     }
 
     async getCampFortschritt(startDate: Date): Promise<CampFortschritt> {

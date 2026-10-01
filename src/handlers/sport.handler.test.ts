@@ -142,7 +142,7 @@ describe('SportHandler', () => {
             expect(embed.toJSON().description).toContain('45 min');
         });
 
-        it('bestätigt den Slash-Command auch wenn die Camp-Prüfung fehlschlägt', async () => {
+        it('bestätigt den Slash-Command vor der Camp-Prüfung und auch wenn diese fehlschlägt', async () => {
             vi.mocked(sportService.addEntry).mockResolvedValue(
                 mockEntry({kilometers: 0, minutes: 45})
             );
@@ -174,6 +174,13 @@ describe('SportHandler', () => {
 
             expect(sportService.addEntry).toHaveBeenCalled();
             expect(interaction.reply).toHaveBeenCalled();
+            expect(campHandler.pruefeFortschritt).toHaveBeenCalledOnce();
+
+            expect(interaction.reply.mock.invocationCallOrder[0])
+                .toBeLessThan(
+                    vi.mocked(campHandler.pruefeFortschritt)
+                        .mock.invocationCallOrder[0]
+                );
         });
 
         // Distanzaktivitäten dürfen keine Aktivitätsminuten enthalten.
@@ -1105,7 +1112,7 @@ describe('SportHandler', () => {
             );
         });
 
-        it('prüft nach einer erfolgreichen Korrektur den Camp-Fortschritt', async () => {
+        it('prüft nach der Bestätigung einer erfolgreichen Korrektur den Camp-Fortschritt', async () => {
             vi.mocked(sportService.getUserEntries).mockResolvedValue([
                 mockEntry({
                     activity: 'krafttraining',
@@ -1136,8 +1143,16 @@ describe('SportHandler', () => {
 
             await sportHandler.handleBearbeiten(interaction);
 
+            expect(interaction.reply).toHaveBeenCalledOnce();
+
             expect(campHandler.pruefeFortschritt)
                 .toHaveBeenCalledOnce();
+
+            expect(interaction.reply.mock.invocationCallOrder[0])
+                .toBeLessThan(
+                    vi.mocked(campHandler.pruefeFortschritt)
+                        .mock.invocationCallOrder[0]
+                );
         });
 
         it('korrigiert die Aktivitätsminuten einer Minutenaktivität', async () => {

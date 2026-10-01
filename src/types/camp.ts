@@ -7,7 +7,6 @@ export interface CampStufe {
     phase: number;
     stufe: number;
     name: string;
-    ausbau: string[];
     kosten: CampRessourcen;
 }
 

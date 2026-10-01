@@ -356,13 +356,6 @@ class SportHandler {
             minuten ?? undefined
         );
 
-        // Ein Fehler im Camp-System darf einen bereits gespeicherten Sporteintrag
-        // nicht als fehlgeschlagen erscheinen lassen.
-        try {
-            await campHandler.pruefeFortschritt();
-        } catch (error) {
-            console.error('Fehler bei der Camp-Fortschrittsprüfung:', error);
-        }
         const aktivitaetLabel = SportActivities[aktivitaet];
 
         // Direkt nach dem Eintrag die neue gemeinsame Gesamtdistanz zeigen - passt zum
@@ -390,7 +383,19 @@ class SportHandler {
                 `${aktivitaetLabel} – **${leistung}**, gemeinsam schon **${rundeKilometer(gesamtKilometer)} km** und **${rundeMinuten(gesamtMinuten)} Aktivitätsminuten**.`
             );
 
-        await interaction.reply({embeds: [embed], flags: MessageFlags.Ephemeral});
+        await interaction.reply({
+            embeds: [embed],
+            flags: MessageFlags.Ephemeral,
+        });
+
+        // Erst nach der Discord-Antwort weitere Benachrichtigungen prüfen,
+        // damit die Interaction nicht durch externe Arbeit verzögert wird.
+        try {
+            await campHandler.pruefeFortschritt();
+        } catch (error) {
+            console.error('Fehler bei der Camp-Fortschrittsprüfung:', error);
+        }
+
         if (kilometer !== null) {
             await this.announceReachedMilestones();
         }
@@ -464,12 +469,6 @@ class SportHandler {
             );
         }
 
-        try {
-            await campHandler.pruefeFortschritt();
-        } catch (error) {
-            console.error('Fehler bei der Camp-Fortschrittsprüfung:', error);
-        }
-
         const aktivitaetLabel = SportActivities[entry.activity as SportActivity];
 
         const leistung = [
@@ -480,6 +479,15 @@ class SportHandler {
         await interaction.reply(
             `Letzter Eintrag korrigiert: ${aktivitaetLabel} – jetzt **${leistung}**.`
         );
+
+        // Erst nach der Discord-Antwort weitere Benachrichtigungen prüfen,
+        // damit die Interaction nicht durch externe Arbeit verzögert wird.
+        try {
+            await campHandler.pruefeFortschritt();
+        } catch (error) {
+            console.error('Fehler bei der Camp-Fortschrittsprüfung:', error);
+        }
+
         if (kilometer !== null) {
             await this.announceReachedMilestones();
         }

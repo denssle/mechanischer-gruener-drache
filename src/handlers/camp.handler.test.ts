@@ -52,11 +52,6 @@ describe('CampHandler', () => {
                         baumaterial: 20,
                         vorraete: 85,
                     },
-                    ausbau: [
-                        'Feuerstelle repariert',
-                        'einfacher Kochplatz',
-                        'erste gesammelte Vorräte',
-                    ],
                 },
             });
 
@@ -106,11 +101,6 @@ describe('CampHandler', () => {
                         baumaterial: 20,
                         vorraete: 85,
                     },
-                    ausbau: [
-                        'Feuerstelle repariert',
-                        'einfacher Kochplatz',
-                        'erste gesammelte Vorräte',
-                    ],
                 },
             });
 
@@ -152,11 +142,6 @@ describe('CampHandler', () => {
                         baumaterial: 20,
                         vorraete: 85,
                     },
-                    ausbau: [
-                        'Feuerstelle repariert',
-                        'einfacher Kochplatz',
-                        'erste gesammelte Vorräte',
-                    ],
                 },
             });
 
@@ -172,9 +157,51 @@ describe('CampHandler', () => {
         expect(antwort).not.toContain('-20');
     });
 
+    it('rundet verfügbare Camp-Ressourcen nicht auf eine noch nicht erreichte Grenze auf', async () => {
+        vi.mocked(campService.getCampFortschrittSeitStart)
+            .mockResolvedValue({
+                aktuell: {
+                    baumaterial: 14.96,
+                    vorraete: 79.99,
+                },
+                insgesamt: {
+                    baumaterial: 14.96,
+                    vorraete: 79.99,
+                },
+                aktuelleStufe: {
+                    phase: 0,
+                    name: 'Verlassenes Lager',
+                },
+                naechsteStufe: {
+                    phase: 1,
+                    stufe: 1,
+                    name: 'Bewohnbares Lager',
+                    kosten: {
+                        baumaterial: 15,
+                        vorraete: 80,
+                    },
+                },
+            });
+
+        const reply = vi.fn();
+
+        await campHandler.handleRessourcen({reply} as any);
+
+        const antwort = reply.mock.calls[0][0];
+
+        expect(antwort).toContain('14.9/15 BM');
+        expect(antwort).toContain('79.9/80 Vorräte');
+
+        expect(antwort).not.toContain('15/15 BM');
+        expect(antwort).not.toContain('80/80 Vorräte');
+    });
+
     it('prüft den Camp-Fortschritt seit dem Staffelstart', async () => {
         vi.mocked(campService.pruefeCampFortschrittSeitStart)
-            .mockResolvedValue([]);
+            .mockResolvedValue({
+                currentLevel: 0,
+                erreichteStufen: [],
+            });
 
         await campHandler.pruefeFortschritt();
 
@@ -184,25 +211,20 @@ describe('CampHandler', () => {
 
     it('zählt das Camp-Level über Phasengrenzen hinweg weiter', async () => {
         vi.mocked(campService.pruefeCampFortschrittSeitStart)
-            .mockResolvedValue([
-                {
-                    phase: 2,
-                    stufe: 1,
-                    name: 'Erste Stufe der zweiten Phase',
-                    kosten: {
-                        baumaterial: 25,
-                        vorraete: 90,
+            .mockResolvedValue({
+                currentLevel: 2,
+                erreichteStufen: [
+                    {
+                        phase: 2,
+                        stufe: 1,
+                        name: 'Kleine Siedlung',
+                        kosten: {
+                            baumaterial: 15,
+                            vorraete: 80,
+                        },
                     },
-                    ausbau: [
-                        'Feuerstelle repariert',
-                        'einfacher Kochplatz',
-                        'erste gesammelte Vorräte',
-                    ],
-                },
-            ]);
-
-        vi.mocked(campService.getCurrentLevel)
-            .mockResolvedValue(2);
+                ],
+            });
 
         const send = vi.fn();
 
@@ -314,7 +336,10 @@ describe('CampHandler', () => {
 
     it('ruft keinen Ankündigungskanal ab, wenn keine neue Camp-Stufe erreicht wurde', async () => {
         vi.mocked(campService.pruefeCampFortschrittSeitStart)
-            .mockResolvedValue([]);
+            .mockResolvedValue({
+                currentLevel: 0,
+                erreichteStufen: [],
+            });
 
         await campHandler.pruefeFortschritt();
 
@@ -324,21 +349,20 @@ describe('CampHandler', () => {
 
     it('kündigt eine neu erreichte Camp-Stufe im Sportkanal an', async () => {
         vi.mocked(campService.pruefeCampFortschrittSeitStart)
-            .mockResolvedValue([
-                {
-                    phase: 1,
-                    stufe: 1,
-                    name: 'Bewohnbares Lager',
-                    kosten: {
-                        baumaterial: 15,
-                        vorraete: 80,
+            .mockResolvedValue({
+                currentLevel: 0,
+                erreichteStufen: [
+                    {
+                        phase: 1,
+                        stufe: 1,
+                        name: 'Bewohnbares Lager',
+                        kosten: {
+                            baumaterial: 15,
+                            vorraete: 80,
+                        },
                     },
-                    ausbau: [
-                        'einfache, bequeme Schlafplätze',
-                        'trockene Lagerstelle für Holz und Stein',
-                    ],
-                },
-            ]);
+                ],
+            });
 
         const send = vi.fn();
 
@@ -359,35 +383,29 @@ describe('CampHandler', () => {
 
     it('kündigt mehrere neu erreichte Camp-Stufen an', async () => {
         vi.mocked(campService.pruefeCampFortschrittSeitStart)
-            .mockResolvedValue([
-                {
-                    phase: 1,
-                    stufe: 1,
-                    name: 'Bewohnbares Lager',
-                    kosten: {
-                        baumaterial: 15,
-                        vorraete: 80,
+            .mockResolvedValue({
+                currentLevel: 0,
+                erreichteStufen: [
+                    {
+                        phase: 1,
+                        stufe: 1,
+                        name: 'Bewohnbares Lager',
+                        kosten: {
+                            baumaterial: 15,
+                            vorraete: 80,
+                        },
                     },
-                    ausbau: [
-                        'einfache, bequeme Schlafplätze',
-                        'trockene Lagerstelle für Holz und Stein',
-                    ],
-                },
-                {
-                    phase: 1,
-                    stufe: 2,
-                    name: 'Feuerstelle & Vorratsplatz',
-                    kosten: {
-                        baumaterial: 20,
-                        vorraete: 85,
+                    {
+                        phase: 1,
+                        stufe: 2,
+                        name: 'Feuerstelle & Vorratsplatz',
+                        kosten: {
+                            baumaterial: 20,
+                            vorraete: 85,
+                        },
                     },
-                    ausbau: [
-                        'Feuerstelle repariert',
-                        'einfacher Kochplatz',
-                        'erste gesammelte Vorräte',
-                    ],
-                },
-            ]);
+                ],
+            });
 
         const send = vi.fn();
 
@@ -401,23 +419,69 @@ describe('CampHandler', () => {
         expect(campService.setCurrentLevel).toHaveBeenNthCalledWith(2, 2);
     });
 
+    it('führt parallele Camp-Prüfungen nacheinander aus', async () => {
+        const stufe = {
+            phase: 1,
+            stufe: 1,
+            name: 'Bewohnbares Lager',
+            kosten: {
+                baumaterial: 15,
+                vorraete: 80,
+            },
+        };
+
+        let currentLevel = 0;
+
+        vi.mocked(campService.pruefeCampFortschrittSeitStart)
+            .mockImplementation(async () => {
+                const levelBeimStart = currentLevel;
+
+                await new Promise(resolve => setTimeout(resolve, 10));
+
+                return {
+                    currentLevel: levelBeimStart,
+                    erreichteStufen: levelBeimStart === 0
+                        ? [stufe]
+                        : [],
+                };
+            });
+
+        vi.mocked(campService.setCurrentLevel)
+            .mockImplementation(async level => {
+                currentLevel = level;
+            });
+
+        const send = vi.fn();
+
+        vi.mocked(ankuendigungskanalService.holeAnkuendigungskanal)
+            .mockResolvedValue({send} as any);
+
+        await Promise.all([
+            campHandler.pruefeFortschritt(),
+            campHandler.pruefeFortschritt(),
+        ]);
+
+        expect(send).toHaveBeenCalledOnce();
+        expect(campService.setCurrentLevel).toHaveBeenCalledOnce();
+        expect(campService.setCurrentLevel).toHaveBeenCalledWith(1);
+    });
+
     it('bricht ohne Fehler ab, wenn der Ankündigungskanal nicht abrufbar ist', async () => {
         vi.mocked(campService.pruefeCampFortschrittSeitStart)
-            .mockResolvedValue([
-                {
-                    phase: 1,
-                    stufe: 1,
-                    name: 'Bewohnbares Lager',
-                    kosten: {
-                        baumaterial: 15,
-                        vorraete: 80,
+            .mockResolvedValue({
+                currentLevel: 0,
+                erreichteStufen: [
+                    {
+                        phase: 1,
+                        stufe: 1,
+                        name: 'Bewohnbares Lager',
+                        kosten: {
+                            baumaterial: 15,
+                            vorraete: 80,
+                        },
                     },
-                    ausbau: [
-                        'einfache, bequeme Schlafplätze',
-                        'trockene Lagerstelle für Holz und Stein',
-                    ],
-                },
-            ]);
+                ],
+            });
 
         vi.mocked(ankuendigungskanalService.holeAnkuendigungskanal)
             .mockResolvedValue(null);
@@ -432,21 +496,20 @@ describe('CampHandler', () => {
 
     it('speichert die Camp-Stufe nicht, wenn die Ankündigung fehlschlägt', async () => {
         vi.mocked(campService.pruefeCampFortschrittSeitStart)
-            .mockResolvedValue([
-                {
-                    phase: 1,
-                    stufe: 1,
-                    name: 'Bewohnbares Lager',
-                    kosten: {
-                        baumaterial: 15,
-                        vorraete: 80,
+            .mockResolvedValue({
+                currentLevel: 0,
+                erreichteStufen: [
+                    {
+                        phase: 1,
+                        stufe: 1,
+                        name: 'Bewohnbares Lager',
+                        kosten: {
+                            baumaterial: 15,
+                            vorraete: 80,
+                        },
                     },
-                    ausbau: [
-                        'einfache, bequeme Schlafplätze',
-                        'trockene Lagerstelle für Holz und Stein',
-                    ],
-                },
-            ]);
+                ],
+            });
 
         const send = vi.fn()
             .mockRejectedValue(new Error('Discord-Fehler'));
@@ -463,21 +526,20 @@ describe('CampHandler', () => {
 
     it('speichert eine erreichte Camp-Stufe ohne Ankündigungskanal nicht', async () => {
         vi.mocked(campService.pruefeCampFortschrittSeitStart)
-            .mockResolvedValue([
-                {
-                    phase: 1,
-                    stufe: 1,
-                    name: 'Bewohnbares Lager',
-                    kosten: {
-                        baumaterial: 15,
-                        vorraete: 80,
+            .mockResolvedValue({
+                currentLevel: 0,
+                erreichteStufen: [
+                    {
+                        phase: 1,
+                        stufe: 1,
+                        name: 'Bewohnbares Lager',
+                        kosten: {
+                            baumaterial: 15,
+                            vorraete: 80,
+                        },
                     },
-                    ausbau: [
-                        'einfache, bequeme Schlafplätze',
-                        'trockene Lagerstelle für Holz und Stein',
-                    ],
-                },
-            ]);
+                ],
+            });
 
         vi.mocked(ankuendigungskanalService.holeAnkuendigungskanal)
             .mockResolvedValue(null);

@@ -8,6 +8,7 @@ import campService from '../services/camp.service.js';
 import ankuendigungskanalService from '../services/ankuendigungskanal.service.js';
 
 class CampHandler {
+    private laufendePruefung: Promise<void> = Promise.resolve();
     async handleRessourcen(
         interaction: ChatInputCommandInteraction
     ): Promise<void> {
@@ -22,7 +23,7 @@ class CampHandler {
             Math.round(wert * 10) / 10;
 
         const nichtNegativFuerAnzeige = (wert: number): number =>
-            Math.max(0, rundeFuerAnzeige(wert));
+            Math.max(0, Math.floor(wert * 10) / 10);
 
         const {aktuell, insgesamt, aktuelleStufe, naechsteStufe} = fortschritt;
 
@@ -52,7 +53,7 @@ class CampHandler {
         if (naechsteStufe) {
             antwort +=
                 `\n\n**Nächste Stufe:**\n` +
-                `Phase ${naechsteStufe.phase}, Stufe ${naechsteStufe.stufe} – ${naechsteStufe.name}`;
+                `Phase ${naechsteStufe.phase} – ${naechsteStufe.name}`;
         }
 
         await interaction.reply(antwort);
@@ -98,10 +99,23 @@ class CampHandler {
     }
 
     async pruefeFortschritt(): Promise<void> {
-        const erreichteStufen =
+        const pruefung = this.laufendePruefung
+            .then(() => this.pruefeFortschrittJetzt());
+
+        // Ein Fehler darf spätere Prüfungen nicht dauerhaft blockieren.
+        this.laufendePruefung = pruefung.catch(() => {});
+
+        return pruefung;
+    }
+
+    private async pruefeFortschrittJetzt(): Promise<void> {
+        const fortschritt =
             await campService.pruefeCampFortschrittSeitStart();
 
-        if (erreichteStufen.length === 0) {
+        if (
+            fortschritt === null ||
+            fortschritt.erreichteStufen.length === 0
+        ) {
             return;
         }
 
@@ -112,9 +126,9 @@ class CampHandler {
             return;
         }
 
-        let currentLevel = await campService.getCurrentLevel();
+        let currentLevel = fortschritt.currentLevel;
 
-        for (const stufe of erreichteStufen) {
+        for (const stufe of fortschritt.erreichteStufen) {
             await channel.send(
                 `Camp-Ausbau abgeschlossen: **Phase ${stufe.phase}, Stufe ${stufe.stufe} – ${stufe.name}**`
             );

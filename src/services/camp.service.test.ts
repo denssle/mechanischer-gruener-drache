@@ -16,6 +16,7 @@ vi.mock('./redis.service.js', () => ({
 import sportService from './sport.service.js';
 import redisService from './redis.service.js';
 import campService from './camp.service.js';
+import {CAMP_STUFEN} from '../data/camp.js';
 
 describe('CampService', () => {
     beforeEach(() => {
@@ -48,7 +49,6 @@ describe('CampService', () => {
             aktuelleStufe: {
                 phase: 0,
                 name: 'Verlassenes Lager',
-                beschreibung: expect.any(String),
             },
             naechsteStufe: {
                 phase: 1,
@@ -58,10 +58,6 @@ describe('CampService', () => {
                     baumaterial: 15,
                     vorraete: 80,
                 },
-                ausbau: [
-                    'einfache, bequeme Schlafplätze',
-                    'trockene Lagerstelle für Holz und Stein',
-                ],
             },
         });
     });
@@ -99,7 +95,6 @@ describe('CampService', () => {
             aktuelleStufe: {
                 phase: 0,
                 name: 'Verlassenes Lager',
-                beschreibung: expect.any(String),
             },
             naechsteStufe: {
                 phase: 1,
@@ -109,10 +104,6 @@ describe('CampService', () => {
                     baumaterial: 15,
                     vorraete: 80,
                 },
-                ausbau: [
-                    'einfache, bequeme Schlafplätze',
-                    'trockene Lagerstelle für Holz und Stein',
-                ],
             },
         });
     });
@@ -140,7 +131,6 @@ describe('CampService', () => {
         expect(fortschritt.aktuelleStufe).toEqual({
             phase: 0,
             name: 'Verlassenes Lager',
-            beschreibung: expect.any(String),
         });
     });
 
@@ -301,7 +291,7 @@ describe('CampService', () => {
 
         const result = await campService.pruefeCampFortschrittSeitStart();
 
-        expect(result).toEqual([]);
+        expect(result).toBeNull();
         expect(sportService.getEntriesSince).not.toHaveBeenCalled();
     });
 
@@ -327,21 +317,20 @@ describe('CampService', () => {
             new Date('2026-09-25T00:00:00.000Z')
         );
 
-        expect(result).toEqual([
-            {
-                phase: 1,
-                stufe: 1,
-                name: 'Bewohnbares Lager',
-                kosten: {
-                    baumaterial: 15,
-                    vorraete: 80,
+        expect(result).toEqual({
+            currentLevel: 0,
+            erreichteStufen: [
+                {
+                    phase: 1,
+                    stufe: 1,
+                    name: 'Bewohnbares Lager',
+                    kosten: {
+                        baumaterial: 15,
+                        vorraete: 80,
+                    },
                 },
-                ausbau: [
-                    'einfache, bequeme Schlafplätze',
-                    'trockene Lagerstelle für Holz und Stein',
-                ],
-            },
-        ]);
+            ],
+        });
     });
 
     it('steigt automatisch eine Camp-Stufe auf, wenn genug Ressourcen vorhanden sind', async () => {
@@ -362,7 +351,8 @@ describe('CampService', () => {
             new Date('2026-09-19')
         );
 
-        expect(result).toHaveLength(1);
+        expect(result.erreichteStufen).toHaveLength(1);
+        expect(result.currentLevel).toBe(0);
         expect(redisService.set).not.toHaveBeenCalled();
     });
 
@@ -384,21 +374,20 @@ describe('CampService', () => {
             new Date('2026-09-19')
         );
 
-        expect(result).toEqual([
-            {
-                phase: 1,
-                stufe: 1,
-                name: 'Bewohnbares Lager',
-                kosten: {
-                    baumaterial: 15,
-                    vorraete: 80,
+        expect(result).toEqual({
+            currentLevel: 0,
+            erreichteStufen: [
+                {
+                    phase: 1,
+                    stufe: 1,
+                    name: 'Bewohnbares Lager',
+                    kosten: {
+                        baumaterial: 15,
+                        vorraete: 80,
+                    },
                 },
-                ausbau: [
-                    'einfache, bequeme Schlafplätze',
-                    'trockene Lagerstelle für Holz und Stein',
-                ],
-            }
-        ]);
+            ],
+        });
 
         expect(redisService.set).not.toHaveBeenCalled();
     });
@@ -424,10 +413,6 @@ describe('CampService', () => {
                 baumaterial: 15,
                 vorraete: 80,
             },
-            ausbau: [
-            'einfache, bequeme Schlafplätze',
-            'trockene Lagerstelle für Holz und Stein',
-                ],
         });
     });
 
@@ -442,16 +427,11 @@ describe('CampService', () => {
                 baumaterial: 20,
                 vorraete: 85,
             },
-            ausbau: [
-                'Feuerstelle repariert',
-                'einfacher Kochplatz',
-                'erste gesammelte Vorräte',
-            ],
         });
     });
 
     it('gibt undefined zurück, wenn keine weitere Camp-Stufe definiert ist', () => {
-        const result = campService.getNaechsteStufe(2);
+        const result = campService.getNaechsteStufe(CAMP_STUFEN.length);
 
         expect(result).toBeUndefined();
     });
@@ -510,7 +490,8 @@ describe('CampService', () => {
             new Date('2026-09-19')
         );
 
-        expect(result).toHaveLength(2);
+        expect(result.erreichteStufen).toHaveLength(2);
+        expect(result.currentLevel).toBe(0);
         expect(redisService.set).not.toHaveBeenCalled();
     });
 
@@ -543,7 +524,10 @@ describe('CampService', () => {
             new Date('2026-09-19')
         );
 
-        expect(result).toEqual([]);
+        expect(result).toEqual({
+            currentLevel: 0,
+            erreichteStufen: [],
+        });
     });
 
     it('schließt eine Stufe nicht ab, wenn Baumaterial fehlt', () => {
@@ -578,7 +562,7 @@ describe('CampService', () => {
             vorraete: 1000,
         };
 
-        const naechsteStufe = campService.getNaechsteStufe(2);
+        const naechsteStufe = campService.getNaechsteStufe(CAMP_STUFEN.length);
 
         expect(
             campService.kannStufeAbschliessen(ressourcen, naechsteStufe)
