@@ -20,7 +20,7 @@ export const HELP_TEXT =
     `\`/event countdown\` – wie lange noch bis zum nächsten Community-Event?\n\n` +
     `**Spiel & Spaß**\n` +
     `\`/pingpong herausfordern\` – jemanden zum Ping-Pong-Duell fordern, er nimmt per Button an\n` +
-    `\`/pingpong ansageduell\` · \`/pingpong taktikduell\` · \`/pingpong rundlauf\` – mit Ansage, mit verdeckter Aktion, zu mehreren\n` +
+    `\`/pingpong ansageduell\` · \`/pingpong taktikduell\` · \`/pingpong rundlauf\` · \`/pingpong doppel\` – mit Ansage, verdeckt, reihum, zu viert\n` +
     `\`/pingpong ruhmeshalle\` – die Punkte laufen monatsweise, hier stehen die Champions (Details: \`/pingpong hilfe\`)\n` +
     `\`/blahaj\` – Euro-Beträge in Blåhajs umrechnen (reagiert auch automatisch auf €-Beträge im Chat)\n` +
     `\`/rollenspiel suche\` – dich als Roleplay-suchend melden und Mitspieler finden (Details: \`/rollenspiel hilfe\`)\n` +
