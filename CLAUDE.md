@@ -69,6 +69,7 @@ Diese Dinge haben **mehrere Abnehmer** – ihre ausführliche Begründung steht 
 - **`onlinePoll.handler.ts`** – der gemeinsame 5-Minuten-Abruf der Kriegerliste. Abnehmer: `beobachten`, `drachen`. **Ein neuer Abnehmer** = `brauchtOnlineStand()` + Verarbeitungsmethode am eigenen Handler + zwei Zeilen im Poller. Details: [Beobachtung & Drachen](docs/features/beobachten-und-drachen.md).
 - **`dm.service.ts` (`sendeDm`, `DM_GESCHLOSSEN`)** – Abnehmer: `anstupser`, `beobachten`. Details: [Anstupser](docs/features/anstupser.md).
 - **`greetingHandler.holePersoenlicheEmojis`/`emojiFuerNachricht`** – Rangfolge manuell > gelernt > abgeleitet. Abnehmer: Morgengruß selbst + `/pingpong bestenliste`; **muss mit `holeMorgengrussEmojis` (config.settings) gleich bleiben**, die schreibt die Rangfolge wegen der Herkunft-Spalte selbst aus. Details: [Morgengruß](docs/features/morgengruss.md).
+- **`ankuendigungskanal.service.ts`** – gemeinsamer Zugriff auf den konfigurierten Sport-Ankündigungskanal. Abnehmer: Sport-Meilensteine, täglicher Aktivitätsstand und Camp-Fortschritt.
 - **`monatsSchluessel`/`formatMonat`** (`pingPongSeason.handler.ts`) – Abnehmer: `pingPong.handler` (Überschrift der Bestenliste), `diagnose`. `PING_PONG_KEYS` (`pingPong.service.ts`) teilen sich beide Ping-Pong-Handler. Details: [Ping-Pong](docs/features/pingpong.md).
 - **`sportHandler.announceReachedMilestones()`** – liegt in **allen** summen-erhöhenden Pfaden, und die liegen an **zwei** Orten: `sport.handler.ts` (User) + `config.settings.ts` (Admin). **Merksatz: wandert eine summen-ändernde Aktion woandershin, muss der Aufruf mitwandern** (Regression 1.55.0–1.60.0). Details: [Sport](docs/features/sport.md).
 - **`interaction.handler.ts`** ist der zentrale Verteiler: Slash-Commands, **beide** Button-Handler (Rollen + Ping-Pong, jeder prüft sein `customId`-Prefix selbst), die **Modal-Rückläufe** (`bash.handler`, ebenfalls per `customId`-Prefix) und die **Kontextmenü-Befehle** aus `client.kontextBefehle` sowie die Tipp-Zeile nach jedem Command. Neue Button-/Modal-/Kontextmenü-Features werden hier verkabelt, nicht per eigenem Listener. **Kontextmenü-Befehle gehören in `commands/kontextmenues.ts`, nicht in `commands/index.ts`** – ihre Definition hat keine `options`, die daraus abgeleiteten Hilfe-Tests würden darüber stolpern; registriert werden beide Listen zusammen in einem `rest.put`.
@@ -84,6 +85,7 @@ Die Detail-Doku je Feature liegt in eigenen Dateien – **jede enthält die Desi
 
 - [Twitch](docs/features/twitch.md) – `/twitch`, EventSub-Webhooks, Live-Meldung
 - [Sport](docs/features/sport.md) – `/sport`, Auto-Erfassung im Kanal, Meilensteine, Mitternachts-Kilometerstand
+- [Camp](docs/features/camp.md) – `/camp`, Ressourcen aus Sporteinträgen, Camp-Stufen und Fortschritt
 - [Logging](docs/features/logging.md) – Audit-Log-Kanal, Nachrichten-Cache, Audit-Log-Urheber
 - [Rollen & Mitglieder](docs/features/rollen-mitglieder.md) – `/rollenbutton` (Button-Rollen), `member.handler.ts`
 - [Event](docs/features/event.md) – `/event countdown`, Datums-Parsing

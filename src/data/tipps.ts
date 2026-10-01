@@ -18,6 +18,7 @@ export const TIPPS: Tipp[] = [
     {befehl: 'sport', text: 'Tipp: `/sport statistik` zeigt dir deine bisher gesammelten Kilometer und Aktivitätsminuten.'},
     {befehl: 'sport', text: 'Tipp: Vertippt? `/sport bearbeiten` und `/sport loeschen` korrigieren deine eigenen Einträge.'},
     {befehl: 'sport', text: 'Tipp: Mit `/sport meilenstein setzen` legst du ein Ziel fest – der Bot feiert es, sobald wir es gemeinsam erreichen.'},
+    {befehl: 'camp', text: 'Tipp: `/camp ressourcen` zeigt dir, wie viel Baumaterial und Vorräte aktuell verfügbar sind und was die Gruppe insgesamt gesammelt hat.'},
     {befehl: 'pingpong', text: 'Tipp: `/pingpong herausfordern` fordert jemanden zum Duell – Sieg bringt einen Punkt, Niederlage kostet einen.'},
     {befehl: 'pingpong', text: 'Tipp: `/pingpong bestenliste` zeigt, wer im Ping-Pong gerade vorn liegt.'},
     {befehl: 'pingpong', text: 'Tipp: `/pingpong rundlauf` eröffnet einen Rundlauf – ab drei Leuten fliegt reihum einer raus, bis zwei das Finale ausspielen.'},
