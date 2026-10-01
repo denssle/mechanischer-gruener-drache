@@ -18,6 +18,29 @@ export const SportActivities = {
 
 export type SportActivity = keyof typeof SportActivities;
 
+export interface ErkannteSportLeistung {
+    aktivitaet: SportActivity;
+    kilometer?: number;
+    minuten?: number;
+}
+
+export const AKTIVITAET_EINHEIT: Record<SportActivity, 'km' | 'min'> = {
+    laufen: 'km',
+    radfahren: 'km',
+    schwimmen: 'km',
+    wandern: 'km',
+    skifahren: 'km',
+    krafttraining: 'min',
+};
+
+export function istDistanzAktivitaet(aktivitaet: SportActivity): boolean {
+    return AKTIVITAET_EINHEIT[aktivitaet] === 'km';
+}
+
+export function istMinutenAktivitaet(aktivitaet: SportActivity): boolean {
+    return AKTIVITAET_EINHEIT[aktivitaet] === 'min';
+}
+
 export interface SportMilestone {
     kilometers: number;
     text: string;
