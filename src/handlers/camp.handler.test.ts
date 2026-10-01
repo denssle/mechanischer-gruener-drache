@@ -7,31 +7,26 @@ vi.mock('../services/camp.service.js', () => ({
         getCampStartDate: vi.fn(),
         initialisiereCamp: vi.fn(),
         setCurrentLevel: vi.fn(),
+        getCurrentLevel: vi.fn(),
     },
 }));
 
-vi.mock('../services/sport.service.js', () => ({
+vi.mock('../services/ankuendigungskanal.service.js', () => ({
     default: {
-        getAnnouncementChannel: vi.fn(),
-    },
-}));
-
-vi.mock('../client.js', () => ({
-    default: {
-        channels: {
-            fetch: vi.fn(),
-        },
+        holeAnkuendigungskanal: vi.fn(),
     },
 }));
 
 import campService from '../services/camp.service.js';
 import campHandler from './camp.handler.js';
-import sportService from '../services/sport.service.js';
-import client from '../client.js';
+import ankuendigungskanalService from '../services/ankuendigungskanal.service.js';
 
 describe('CampHandler', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+
+        vi.mocked(campService.getCurrentLevel)
+            .mockResolvedValue(0);
     });
 
     it('zeigt die aktuellen und insgesamt gesammelten Camp-Ressourcen an', async () => {
@@ -44,6 +39,10 @@ describe('CampHandler', () => {
                 insgesamt: {
                     baumaterial: 22.5,
                     vorraete: 95,
+                },
+                aktuelleStufe: {
+                    phase: 1,
+                    name: 'Bewohnbares Lager',
                 },
                 naechsteStufe: {
                     phase: 1,
@@ -76,6 +75,86 @@ describe('CampHandler', () => {
         expect(antwort).toContain('22.5 BM');
         expect(antwort).toContain('95 Vorräte');
         expect(antwort).toContain('Feuerstelle & Vorratsplatz');
+        expect(antwort).toContain('Phase 1 – Bewohnbares Lager');
+    });
+
+    it('rundet Camp-Ressourcen in der Anzeige auf eine Nachkommastelle', async () => {
+        vi.mocked(campService.getCampFortschrittSeitStart)
+            .mockResolvedValue({
+                aktuell: {
+                    baumaterial: 1.2200000000000024,
+                    vorraete: 15.000000000000002,
+                },
+                insgesamt: {
+                    baumaterial: 16.220000000000002,
+                    vorraete: 95.00000000000001,
+                },
+                aktuelleStufe: {
+                    phase: 1,
+                    name: 'Bewohnbares Lager',
+                },
+                naechsteStufe: {
+                    phase: 1,
+                    stufe: 2,
+                    name: 'Feuerstelle & Vorratsplatz',
+                    kosten: {
+                        baumaterial: 20,
+                        vorraete: 85,
+                    },
+                },
+            });
+
+        const reply = vi.fn();
+
+        await campHandler.handleRessourcen({reply} as any);
+
+        const antwort = reply.mock.calls[0][0];
+
+        expect(antwort).toContain('1.2/20 BM');
+        expect(antwort).toContain('15/85 Vorräte');
+        expect(antwort).toContain('16.2 BM');
+        expect(antwort).toContain('95 Vorräte');
+
+        expect(antwort).not.toContain('1.2200000000000024');
+        expect(antwort).not.toContain('16.220000000000002');
+    });
+
+    it('zeigt verfügbare Camp-Ressourcen niemals negativ an', async () => {
+        vi.mocked(campService.getCampFortschrittSeitStart)
+            .mockResolvedValue({
+                aktuell: {
+                    baumaterial: -13.25,
+                    vorraete: -20,
+                },
+                insgesamt: {
+                    baumaterial: 1.75,
+                    vorraete: 60,
+                },
+                aktuelleStufe: {
+                    phase: 1,
+                    name: 'Bewohnbares Lager',
+                },
+                naechsteStufe: {
+                    phase: 1,
+                    stufe: 2,
+                    name: 'Feuerstelle & Vorratsplatz',
+                    kosten: {
+                        baumaterial: 20,
+                        vorraete: 85,
+                    },
+                },
+            });
+
+        const reply = vi.fn();
+
+        await campHandler.handleRessourcen({reply} as any);
+
+        const antwort = reply.mock.calls[0][0];
+
+        expect(antwort).toContain('0/20 BM');
+        expect(antwort).toContain('0/85 Vorräte');
+        expect(antwort).not.toContain('-13.25');
+        expect(antwort).not.toContain('-20');
     });
 
     it('prüft den Camp-Fortschritt seit dem Staffelstart', async () => {
@@ -86,6 +165,34 @@ describe('CampHandler', () => {
 
         expect(campService.pruefeCampFortschrittSeitStart)
             .toHaveBeenCalledOnce();
+    });
+
+    it('zählt das Camp-Level über Phasengrenzen hinweg weiter', async () => {
+        vi.mocked(campService.pruefeCampFortschrittSeitStart)
+            .mockResolvedValue([
+                {
+                    phase: 2,
+                    stufe: 1,
+                    name: 'Erste Stufe der zweiten Phase',
+                    kosten: {
+                        baumaterial: 25,
+                        vorraete: 90,
+                    },
+                },
+            ]);
+
+        vi.mocked(campService.getCurrentLevel)
+            .mockResolvedValue(2);
+
+        const send = vi.fn();
+
+        vi.mocked(ankuendigungskanalService.holeAnkuendigungskanal)
+            .mockResolvedValue({send} as any);
+
+        await campHandler.pruefeFortschritt();
+
+        expect(campService.setCurrentLevel)
+            .toHaveBeenCalledWith(3);
     });
 
     it('meldet, wenn das Camp noch nicht gestartet wurde', async () => {
@@ -191,7 +298,8 @@ describe('CampHandler', () => {
 
         await campHandler.pruefeFortschritt();
 
-        expect(sportService.getAnnouncementChannel).not.toHaveBeenCalled();
+        expect(ankuendigungskanalService.holeAnkuendigungskanal)
+            .not.toHaveBeenCalled();
     });
 
     it('kündigt eine neu erreichte Camp-Stufe im Sportkanal an', async () => {
@@ -208,20 +316,15 @@ describe('CampHandler', () => {
                 },
             ]);
 
-        vi.mocked(sportService.getAnnouncementChannel)
-            .mockResolvedValue('chan-1');
-
         const send = vi.fn();
-        vi.mocked(client.channels.fetch)
+
+        vi.mocked(ankuendigungskanalService.holeAnkuendigungskanal)
             .mockResolvedValue({send} as any);
 
         await campHandler.pruefeFortschritt();
 
-        expect(sportService.getAnnouncementChannel)
+        expect(ankuendigungskanalService.holeAnkuendigungskanal)
             .toHaveBeenCalledOnce();
-
-        expect(client.channels.fetch)
-            .toHaveBeenCalledWith('chan-1');
 
         expect(send)
             .toHaveBeenCalledOnce();
@@ -253,11 +356,9 @@ describe('CampHandler', () => {
                 },
             ]);
 
-        vi.mocked(sportService.getAnnouncementChannel)
-            .mockResolvedValue('chan-1');
-
         const send = vi.fn();
-        vi.mocked(client.channels.fetch)
+
+        vi.mocked(ankuendigungskanalService.holeAnkuendigungskanal)
             .mockResolvedValue({send} as any);
 
         await campHandler.pruefeFortschritt();
@@ -281,15 +382,15 @@ describe('CampHandler', () => {
                 },
             ]);
 
-        vi.mocked(sportService.getAnnouncementChannel)
-            .mockResolvedValue('chan-1');
-
-        vi.mocked(client.channels.fetch)
-            .mockRejectedValue(new Error('Kanal nicht erreichbar'));
+        vi.mocked(ankuendigungskanalService.holeAnkuendigungskanal)
+            .mockResolvedValue(null);
 
         await expect(
             campHandler.pruefeFortschritt()
         ).resolves.toBeUndefined();
+
+        expect(campService.setCurrentLevel)
+            .not.toHaveBeenCalled();
     });
 
     it('speichert die Camp-Stufe nicht, wenn die Ankündigung fehlschlägt', async () => {
@@ -306,16 +407,37 @@ describe('CampHandler', () => {
                 },
             ]);
 
-        vi.mocked(sportService.getAnnouncementChannel)
-            .mockResolvedValue('chan-1');
+        const send = vi.fn()
+            .mockRejectedValue(new Error('Discord-Fehler'));
 
-        const send = vi.fn().mockRejectedValue(new Error('Discord-Fehler'));
-
-        vi.mocked(client.channels.fetch)
+        vi.mocked(ankuendigungskanalService.holeAnkuendigungskanal)
             .mockResolvedValue({send} as any);
 
         await expect(campHandler.pruefeFortschritt())
             .rejects.toThrow('Discord-Fehler');
+
+        expect(campService.setCurrentLevel)
+            .not.toHaveBeenCalled();
+    });
+
+    it('speichert eine erreichte Camp-Stufe ohne Ankündigungskanal nicht', async () => {
+        vi.mocked(campService.pruefeCampFortschrittSeitStart)
+            .mockResolvedValue([
+                {
+                    phase: 1,
+                    stufe: 1,
+                    name: 'Bewohnbares Lager',
+                    kosten: {
+                        baumaterial: 15,
+                        vorraete: 80,
+                    },
+                },
+            ]);
+
+        vi.mocked(ankuendigungskanalService.holeAnkuendigungskanal)
+            .mockResolvedValue(null);
+
+        await campHandler.pruefeFortschritt();
 
         expect(campService.setCurrentLevel)
             .not.toHaveBeenCalled();

@@ -1,7 +1,7 @@
 import sportService from './sport.service.js';
 import redisService from './redis.service.js';
 import {CampRessourcen, CampStufe, CampFortschritt} from '../types/camp.js';
-import {CAMP_STUFEN} from '../data/camp.js';
+import {CAMP_STARTPHASE, CAMP_STUFEN} from '../data/camp.js';
 
 const KILOMETER_PRO_BAUMATERIAL = 10;
 const MINUTEN_PRO_VORRAT = 10;
@@ -140,6 +140,12 @@ class CampService {
     async getCampFortschritt(startDate: Date): Promise<CampFortschritt> {
         const insgesamt = await this.getCampRessourcen(startDate);
         const currentLevel = await this.getCurrentLevel();
+
+        const aktuelleStufe =
+            currentLevel === 0
+                ? CAMP_STARTPHASE
+                : CAMP_STUFEN[currentLevel - 1];
+
         const verbraucht = this.getVerbrauchteRessourcen(currentLevel);
         const aktuell = this.getVerfuegbareRessourcen(insgesamt, verbraucht);
         const naechsteStufe = this.getNaechsteStufe(currentLevel);
@@ -147,7 +153,8 @@ class CampService {
         return {
             aktuell,
             insgesamt,
-            naechsteStufe: naechsteStufe,
+            aktuelleStufe,
+            naechsteStufe,
         };
     }
 

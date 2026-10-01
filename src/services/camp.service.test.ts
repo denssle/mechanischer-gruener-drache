@@ -45,6 +45,10 @@ describe('CampService', () => {
                 baumaterial: 15,
                 vorraete: 80,
             },
+            aktuelleStufe: {
+                phase: 0,
+                name: 'Verlassenes Lager',
+            },
             naechsteStufe: {
                 phase: 1,
                 stufe: 1,
@@ -87,6 +91,10 @@ describe('CampService', () => {
                 baumaterial: 0,
                 vorraete: 0,
             },
+            aktuelleStufe: {
+                phase: 0,
+                name: 'Verlassenes Lager',
+            },
             naechsteStufe: {
                 phase: 1,
                 stufe: 1,
@@ -106,6 +114,23 @@ describe('CampService', () => {
 
         expect(fortschritt).toBeNull();
         expect(sportService.getEntriesSince).not.toHaveBeenCalled();
+    });
+
+    it('zeigt bei Level 0 das verlassene Lager als aktuellen Zustand', async () => {
+        vi.mocked(sportService.getEntriesSince)
+            .mockResolvedValue([]);
+
+        vi.mocked(redisService.get)
+            .mockResolvedValue('0');
+
+        const fortschritt = await campService.getCampFortschritt(
+            new Date('2026-10-01T00:00:00.000Z')
+        );
+
+        expect(fortschritt.aktuelleStufe).toEqual({
+            phase: 0,
+            name: 'Verlassenes Lager',
+        });
     });
 
     it('liest den aktuellen Camp-Level aus Redis', async () => {

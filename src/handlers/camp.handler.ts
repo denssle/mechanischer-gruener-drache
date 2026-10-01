@@ -1,7 +1,11 @@
-import {ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits, TextChannel} from 'discord.js';
+import {
+    ChatInputCommandInteraction,
+    MessageFlags,
+    PermissionFlagsBits
+} from 'discord.js';
+
 import campService from '../services/camp.service.js';
-import sportService from '../services/sport.service.js';
-import client from '../client.js';
+import ankuendigungskanalService from '../services/ankuendigungskanal.service.js';
 
 class CampHandler {
     async handleRessourcen(
@@ -14,26 +18,36 @@ class CampHandler {
             return;
         }
 
-        const {aktuell, insgesamt, naechsteStufe} = fortschritt;
+        const rundeFuerAnzeige = (wert: number): number =>
+            Math.round(wert * 10) / 10;
+
+        const nichtNegativFuerAnzeige = (wert: number): number =>
+            Math.max(0, rundeFuerAnzeige(wert));
+
+        const {aktuell, insgesamt, aktuelleStufe, naechsteStufe} = fortschritt;
 
         let antwort = `**Camp-Ressourcen**\n\n`;
+
+        antwort +=
+            `**Aktueller Stand:**\n` +
+            `Phase ${aktuelleStufe.phase} – ${aktuelleStufe.name}\n\n`;
 
         if (naechsteStufe) {
             antwort +=
                 `**Aktuell:**\n` +
-                `${aktuell.baumaterial}/${naechsteStufe.kosten.baumaterial} BM\n` +
-                `${aktuell.vorraete}/${naechsteStufe.kosten.vorraete} Vorräte\n\n`;
+                `${nichtNegativFuerAnzeige(aktuell.baumaterial)}/${naechsteStufe.kosten.baumaterial} BM\n` +
+                `${nichtNegativFuerAnzeige(aktuell.vorraete)}/${naechsteStufe.kosten.vorraete} Vorräte\n\n`;
         } else {
             antwort +=
                 `**Aktuell:**\n` +
-                `${aktuell.baumaterial} BM\n` +
-                `${aktuell.vorraete} Vorräte\n\n`;
+                `${nichtNegativFuerAnzeige(aktuell.baumaterial)} BM\n` +
+                `${nichtNegativFuerAnzeige(aktuell.vorraete)} Vorräte\n\n`;
         }
 
         antwort +=
             `**Insgesamt gesammelt:**\n` +
-            `${insgesamt.baumaterial} BM\n` +
-            `${insgesamt.vorraete} Vorräte`;
+            `${rundeFuerAnzeige(insgesamt.baumaterial)} BM\n` +
+            `${rundeFuerAnzeige(insgesamt.vorraete)} Vorräte`;
 
         if (naechsteStufe) {
             antwort +=
@@ -50,7 +64,7 @@ class CampHandler {
         await interaction.reply(
             `**Camp-Hilfe**\n\n` +
             `\`/camp ressourcen\` – zeigt die aktuellen und insgesamt gesammelten Camp-Ressourcen sowie die nächste Stufe\n` +
-            `\`/camp hilfe\` – zeigt diese Hilfe` +
+            `\`/camp hilfe\` – zeigt diese Hilfe\n` +
             `\`/camp starten\` – startet das Camp (nur für Administratoren)\n`
         );
     }
@@ -91,24 +105,23 @@ class CampHandler {
             return;
         }
 
-        const channelId = await sportService.getAnnouncementChannel();
-        if (!channelId) {
-            return;
-        }
-
-        const channel = await client.channels.fetch(channelId)
-            .catch(() => null) as TextChannel | null;
+        const channel =
+            await ankuendigungskanalService.holeAnkuendigungskanal();
 
         if (!channel) {
             return;
         }
+
+        let currentLevel = await campService.getCurrentLevel();
 
         for (const stufe of erreichteStufen) {
             await channel.send(
                 `Camp-Ausbau abgeschlossen: **Phase ${stufe.phase}, Stufe ${stufe.stufe} – ${stufe.name}**`
             );
 
-            await campService.setCurrentLevel(stufe.stufe);
+            currentLevel++;
+
+            await campService.setCurrentLevel(currentLevel);
         }
     }
 }

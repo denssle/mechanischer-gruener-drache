@@ -886,6 +886,29 @@ describe('SportHandler', () => {
             );
         });
 
+        it('prüft nach einer erfolgreichen Korrektur den Camp-Fortschritt', async () => {
+            vi.mocked(sportService.editLastEntry).mockResolvedValue(
+                mockEntry({ kilometers: 15, minutes: 45 })
+            );
+
+            const interaction = {
+                user: { id: 'user-123' },
+                options: {
+                    getNumber: vi.fn((name: string) => {
+                        if (name === 'kilometer') return 15;
+                        if (name === 'minuten') return 45;
+                        return null;
+                    }),
+                },
+                reply: vi.fn(),
+            } as any;
+
+            await sportHandler.handleBearbeiten(interaction);
+
+            expect(campHandler.pruefeFortschritt)
+                .toHaveBeenCalledOnce();
+        });
+
         it('korrigiert nur die Aktivitätsminuten und behält die Kilometer bei', async () => {
             vi.mocked(sportService.editLastEntry).mockResolvedValue(
                 mockEntry({ kilometers: 10, minutes: 45 })

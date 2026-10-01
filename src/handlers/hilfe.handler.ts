@@ -5,10 +5,10 @@ import {ChatInputCommandInteraction} from 'discord.js';
 // (/sport, /twitch, /event, /pingpong, /charakter) haben zusätzlich je ein eigenes `hilfe` mit allen Details.
 export const HELP_TEXT =
     `**Befehlsübersicht – Mechanischer Grüner Drache**\n` +
-    `Details zu Befehlsgruppen gibt es per \`/<bereich> hilfe\`.\n\n` +
+    `Tippe \`/\` und den Befehl, um ihn zu nutzen. Zu Bereichen mit mehreren Unterbefehlen gibt es Details per \`/<bereich> hilfe\`.\n\n` +
     `**Spielwelt (lotgd.de)** (Details: \`/spielwelt\`)\n` +
     `\`/online\` – wer gerade im Spiel eingeloggt ist\n` +
-    `\`/news\` – die neuesten Spiel-News · \`/ereignisse\` – was zuletzt im Spiel geschah (Kämpfe, Wiederbelebungen, Blamagen)\n` +
+    `\`/news\` – die neuesten Spiel-News · \`/ereignisse\` – sehen was zuletzt im Spiel passierte\n` +
     `\`/charakter\` – Charakter-Infos aus der Kriegerliste (Details: \`/charakter hilfe\`)\n` +
     `\`/beobachten hinzufuegen\` – DM bekommen, wenn ein bestimmter Charakter online geht (Details: \`/beobachten hilfe\`)\n\n` +
     `**Twitch** (Details: \`/twitch hilfe\`)\n` +
@@ -19,11 +19,11 @@ export const HELP_TEXT =
     `**Camp** (\`/camp hilfe\`)\n` +
     `\`/camp ressourcen\` – Vorräte, Baumaterial und Fortschritt\n\n` +
     `**Event** (Details: \`/event hilfe\`)\n` +
-    `\`/event countdown\` – wie lange noch bis zum nächsten Community-Event?\n\n` +
+    `\`/event countdown\` – wie lange bis zum nächsten Event?\n\n` +
     `**Spiel & Spaß**\n` +
-    `\`/pingpong herausfordern\` – jemanden zum Ping-Pong-Duell fordern, er nimmt per Button an\n` +
+    `\`/pingpong herausfordern\` – jemanden zum Ping-Pong-Duell fordern\n` +
     `\`/pingpong ansageduell\` · \`/pingpong taktikduell\` · \`/pingpong rundlauf\` – mit Ansage, mit verdeckter Aktion, zu mehreren\n` +
-    `\`/pingpong ruhmeshalle\` – die Punkte laufen monatsweise, hier stehen die Champions (Details: \`/pingpong hilfe\`)\n` +
+    `\`/pingpong ruhmeshalle\` – Liste der monatlichen Champions (Details: \`/pingpong hilfe\`)\n` +
     `\`/blahaj\` – Euro-Beträge in Blåhajs umrechnen (reagiert auch automatisch auf €-Beträge im Chat)\n` +
     `\`/rollenspiel suche\` – dich als Roleplay-suchend melden und Mitspieler finden (Details: \`/rollenspiel hilfe\`)\n` +
     `\`/anstupser an\` – täglich um 13:37 eine DM vom Bot; rein freiwillig (Details: \`/anstupser hilfe\`)\n` +
