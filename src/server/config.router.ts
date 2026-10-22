@@ -5,6 +5,7 @@ import config from '../../config.json' with {type: 'json'};
 import client from '../client.js';
 import greetingHandler from '../handlers/greeting.handler.js';
 import {GRATULATIONS_STUNDE} from '../handlers/geburtstag.handler.js';
+import {ROLLENHINWEIS_TEXT} from '../handlers/rollenhinweis.handler.js';
 import {getLogEntries, LogEntry} from '../services/logBuffer.service.js';
 import {
     buildAuthorizeUrl,
@@ -553,6 +554,13 @@ export function renderSpielweltHinweis(): string {
     Ohne Kanal passiert nichts.</p>`;
 }
 
+// Wie beim Spielwelt-Bereich: ohne Erklärung stünde hier ein Dropdown ohne erkennbaren Zweck. Der
+// Antworttext steht mit drin, damit man sieht, was die Leute zu lesen bekommen.
+export function renderRollenhinweisHinweis(): string {
+    return `<p class="feld-hinweis">Wer in diesem Kanal schreibt und noch gar keine Rolle hat, bekommt
+    vom Bot einmalig (pro Person, für immer) diese Antwort: „${escapeHtml(ROLLENHINWEIS_TEXT)}"</p>`;
+}
+
 function configBody(bereicheHtml: string): string {
     return `<h1>Mechanischer Grüner Drache</h1>
     <p>Bot-Einstellungen, nach Bereich gruppiert.</p>
@@ -683,6 +691,9 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
         renderBereich('spielwelt', 'Spielwelt',
             kanal('spielwelt-kanal') + renderSpielweltHinweis(),
             meldungFuer('spielwelt')) +
+        renderBereich('rollenhinweis', 'Rollenhinweis',
+            kanal('rollenhinweis-kanal') + renderRollenhinweisHinweis(),
+            meldungFuer('rollenhinweis')) +
         renderBereich('pingpong', 'Ping-Pong',
             rolle('pingpong-champion') + renderPingPongHinweis(),
             meldungFuer('pingpong')) +
@@ -801,6 +812,7 @@ const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
     'morgengruss-kanal': {bereich: 'morgengruss', text: 'Morgengruß-Kanal gespeichert.'},
     'geburtstag-kanal': {bereich: 'geburtstag', text: 'Geburtstagskanal gespeichert.'},
     'spielwelt-kanal': {bereich: 'spielwelt', text: 'Spielwelt-Ankündigungskanal gespeichert.'},
+    'rollenhinweis-kanal': {bereich: 'rollenhinweis', text: 'Rollenhinweis-Kanal gespeichert.'},
     'twitch-rolle': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle gespeichert.'},
     'twitch-rolle-entfernt': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle entfernt.'},
     'pingpong-champion': {bereich: 'pingpong', text: 'Champion-Rolle gespeichert.'},

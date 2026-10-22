@@ -14,6 +14,7 @@ import twitchHandler from "./handlers/twitch.handler.js";
 import blahajHandler from "./handlers/blahaj.handler.js";
 import sportHandler from "./handlers/sport.handler.js";
 import greetingHandler from "./handlers/greeting.handler.js";
+import rollenhinweisHandler from "./handlers/rollenhinweis.handler.js";
 import anstupserHandler from "./handlers/anstupser.handler.js";
 import geburtstagHandler from "./handlers/geburtstag.handler.js";
 import pingPongSeasonHandler from "./handlers/pingPongSeason.handler.js";
@@ -67,6 +68,13 @@ client.on(Events.MessageCreate, (message) => {
 client.on(Events.MessageCreate, (message) => {
     greetingHandler.handleMessage(message).catch((error) => {
         console.error('Fehler im Morgengruß-Handler:', error);
+    });
+});
+// Rollenhinweis: wer im konfigurierten Kanal ohne jede Rolle schreibt, bekommt einmalig einen Hinweis
+// (der Handler prüft Kanal, Rollen und "schon hingewiesen" selbst). Eigene Zuständigkeit, eigene Registrierung.
+client.on(Events.MessageCreate, (message) => {
+    rollenhinweisHandler.handleMessage(message).catch((error) => {
+        console.error('Fehler im Rollenhinweis-Handler:', error);
     });
 });
 // Alle Logging-Registrierungen mit .catch(): die Handler fangen ihre Fehler zwar selbst (bei jedem
