@@ -5,7 +5,7 @@ import {ChatInputCommandInteraction} from 'discord.js';
 // (/sport, /twitch, /event, /pingpong, /charakter) haben zusätzlich je ein eigenes `hilfe` mit allen Details.
 export const HELP_TEXT =
     `**Befehlsübersicht – Mechanischer Grüner Drache**\n` +
-    `Tippe \`/\` und den Befehl, um ihn zu nutzen. Zu Bereichen mit mehreren Unterbefehlen gibt es Details per \`/<bereich> hilfe\`.\n\n` +
+    `Tippe \`/\` und den Befehl. Details zu Bereichen: \`/<bereich> hilfe\`.\n\n` +
     `**Spielwelt (lotgd.de)** (Details: \`/spielwelt\`)\n` +
     `\`/online\` – wer gerade im Spiel eingeloggt ist\n` +
     `\`/news\` – die neuesten Spiel-News · \`/ereignisse\` – was zuletzt im Spiel geschah (Kämpfe, Wiederbelebungen, Blamagen)\n` +
@@ -13,6 +13,7 @@ export const HELP_TEXT =
     `\`/beobachten hinzufuegen\` – DM bekommen, wenn ein bestimmter Charakter online geht (Details: \`/beobachten hilfe\`)\n\n` +
     `**Twitch** (Details: \`/twitch hilfe\`)\n` +
     `\`/twitch verknuepfen\` – deinen Kanal hinterlegen; der Server wird benachrichtigt, wenn du live gehst\n\n` +
+    `**Camp** \`/camp hilfe\`\n` +
     `**Sport** (Details: \`/sport hilfe\`)\n` +
     `\`/sport eintragen\` – km/Minuten eintragen · \`/sport gesamt\` – Gesamtsumme · \`/sport statistik\` – deine Übersicht\n` +
     `Im Sport-Kanal: „+12 km gelaufen", „+45 min Krafttraining" – „+" ist Pflicht.\n\n` +

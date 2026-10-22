@@ -1,6 +1,7 @@
 import ping from "./ping.command.js";
 import version from "./version.command.js";
 import sport from "./sport.command.js";
+import camp from "./camp.command.js";
 import twitch from "./twitch.command.js";
 import rollenbutton from "./rollenbutton.command.js";
 import event from "./event.command.js";
@@ -31,6 +32,7 @@ export default [
     ping,
     version,
     sport,
+    camp,
     twitch,
     rollenbutton,
     event,

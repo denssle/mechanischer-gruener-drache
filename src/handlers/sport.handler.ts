@@ -5,11 +5,18 @@ import {
     MessageFlags,
     OmitPartialGroupDMChannel,
     PartialMessage,
-    TextChannel
 } from 'discord.js';
+
 import sportService from '../services/sport.service.js';
-import { ErkannteSportLeistung, SportActivities, SportActivity } from '../types/sport.js';
-import client from '../client.js';
+
+import {
+    ErkannteSportLeistung,
+    SportActivities,
+    SportActivity,
+} from '../types/sport.js';
+
+import campHandler from './camp.handler.js';
+import ankuendigungskanalService from '../services/ankuendigungskanal.service.js';
 
 // Ohne Schlüsselwort im Text wird Laufen angenommen (bewusst: lieber ein Eintrag mit der
 // häufigsten Aktivität als gar keiner - die Distanz zählt fürs kooperative Gesamtziel).
@@ -301,6 +308,12 @@ class SportHandler {
             );
         }
 
+        try {
+            await campHandler.pruefeFortschritt();
+        } catch (error) {
+            console.error('Fehler bei der Camp-Fortschrittsprüfung:', error);
+        }
+
         await message.react(BESTAETIGUNGS_REAKTION);
         await this.entferneRueckfrage(message);
 
@@ -345,7 +358,13 @@ class SportHandler {
             });
         }
 
-        await sportService.addEntry(interaction.user.id, aktivitaet, kilometer ?? 0, minuten ?? undefined);
+        await sportService.addEntry(
+            interaction.user.id,
+            aktivitaet,
+            kilometer ?? 0,
+            minuten ?? undefined
+        );
+
         const aktivitaetLabel = SportActivities[aktivitaet];
 
         // Direkt nach dem Eintrag die neue gemeinsame Gesamtdistanz zeigen - passt zum
@@ -373,7 +392,19 @@ class SportHandler {
                 `${aktivitaetLabel} – **${leistung}**, gemeinsam schon **${rundeKilometer(gesamtKilometer)} km** und **${rundeMinuten(gesamtMinuten)} Aktivitätsminuten**.`
             );
 
-        await interaction.reply({embeds: [embed], flags: MessageFlags.Ephemeral});
+        await interaction.reply({
+            embeds: [embed],
+            flags: MessageFlags.Ephemeral,
+        });
+
+        // Erst nach der Discord-Antwort weitere Benachrichtigungen prüfen,
+        // damit die Interaction nicht durch externe Arbeit verzögert wird.
+        try {
+            await campHandler.pruefeFortschritt();
+        } catch (error) {
+            console.error('Fehler bei der Camp-Fortschrittsprüfung:', error);
+        }
+
         if (kilometer !== null) {
             await this.announceReachedMilestones();
         }
@@ -441,6 +472,15 @@ class SportHandler {
         await interaction.reply(
             `Letzter Eintrag korrigiert: ${aktivitaetLabel} – jetzt **${leistung}**.`
         );
+
+        // Erst nach der Discord-Antwort weitere Benachrichtigungen prüfen,
+        // damit die Interaction nicht durch externe Arbeit verzögert wird.
+        try {
+            await campHandler.pruefeFortschritt();
+        } catch (error) {
+            console.error('Fehler bei der Camp-Fortschrittsprüfung:', error);
+        }
+
         if (kilometer !== null) {
             await this.announceReachedMilestones();
         }
@@ -520,7 +560,7 @@ class SportHandler {
     // liegen, sondern in config.settings.ts - die rufen das hier auf (siehe dort).
     async announceReachedMilestones(): Promise<void> {
         try {
-            const channel = await this.holeAnkuendigungskanal();
+            const channel = await ankuendigungskanalService.holeAnkuendigungskanal();
             if (!channel) {
                 return;
             }
@@ -536,22 +576,6 @@ class SportHandler {
         } catch (error) {
             console.error('Fehler beim Prüfen/Posten der Sport-Meilensteine:', error);
         }
-    }
-
-    // Holt den konfigurierten Ankündigungskanal oder null (kein Kanal gesetzt bzw. nicht abrufbar).
-    // Geteilt von der Meilenstein-Ankündigung und der täglichen Aktivitätsstand-Meldung.
-    private async holeAnkuendigungskanal(): Promise<TextChannel | null> {
-        const channelId = await sportService.getAnnouncementChannel();
-        if (!channelId) {
-            return null;
-        }
-
-        const channel = await client.channels.fetch(channelId).catch(() => null) as TextChannel | null;
-        if (!channel) {
-            console.warn(`⚠️ Sport-Ankündigungskanal ${channelId} nicht abrufbar - Meldung wird verworfen.`);
-            return null;
-        }
-        return channel;
     }
 
     // Beim Start einmal aufrufen: Ist noch nie ein Aktivitätsstand gepostet worden (frischer Deploy),
@@ -582,7 +606,7 @@ class SportHandler {
                 return;
             }
 
-            const channel = await this.holeAnkuendigungskanal();
+            const channel = await ankuendigungskanalService.holeAnkuendigungskanal();
             if (!channel) {
                 return;
             }

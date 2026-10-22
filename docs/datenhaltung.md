@@ -33,6 +33,8 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `SPORT:HIGHSCORE`, `SPORT:MILESTONES`, `SPORT:ANNOUNCEMENT_CHANNEL` | Kilometer je User, Meilensteine, Ankündigungskanal | dauerhaft | `/sport gesamt`, Meilenstein-Ankündigungen |
 | `SPORT:MINUTEN` | Aktivitätsminuten je User | dauerhaft | `/sport gesamt` (ab Schritt 2) |
 | `SPORT:LAST_DAILY_POST` | Tag (YYYY-MM-DD) des zuletzt geposteten täglichen Kilometerstands | bis zum Überschreiben | Doppelpost-Schutz der Mitternachts-Meldung |
+| `CAMP:START_DATE` | Zeitpunkt, ab dem Sporteinträge für Camp-Ressourcen zählen | dauerhaft nach `/camp starten` | Startpunkt der Camp-/Staffel-Auswertung |
+| `CAMP:CURRENT_LEVEL` | Anzahl der insgesamt abgeschlossenen Einträge aus `CAMP_STUFEN`; nicht die phaseninterne Stufennummer | bis zum nächsten Camp-Aufstieg | Aktueller Camp-Fortschritt und Berechnung bereits verbrauchter Ressourcen |
 | `<userId>PING_PONG`, `PING_PONG` (Sorted Set) | Ping-Pong-Punktestand der laufenden Season | bis zum Monatsende (Season-Reset) | `/pingpong bestenliste` |
 | `PING_PONG:LAST_SEASON` | Monat (YYYY-MM) der zuletzt abgerechneten Season | bis zum Überschreiben | Doppelabrechnungs-Schutz am Monatswechsel |
 | `PING_PONG:RUHMESHALLE` (Hash) | je Monat: User-ID des Champions + sein Punktestand | dauerhaft | `/pingpong ruhmeshalle` |
