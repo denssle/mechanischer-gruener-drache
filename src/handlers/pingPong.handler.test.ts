@@ -1,5 +1,5 @@
 import {describe, it, expect, vi, beforeEach} from 'vitest';
-import {MessageFlags} from 'discord.js';
+import {DiscordAPIError, MessageFlags, RESTJSONErrorCodes} from 'discord.js';
 
 vi.mock("../services/redis.service.js", () => ({
     default: {
@@ -7,6 +7,7 @@ vi.mock("../services/redis.service.js", () => ({
         set: vi.fn(),
         getSortedSet: vi.fn(),
         setSortedSet: vi.fn(),
+        removeFromSortedSet: vi.fn(),
         getTimeToLive: vi.fn(),
         getSortedSetAll: vi.fn(),
         setWithExpiry: vi.fn(),
@@ -62,6 +63,7 @@ import pingPongHandler, {
     MIN_SERIE,
     parseTeilnehmer,
     randomDuellFlavor,
+    rundlaufListenEintrag,
     rundlaufPunkte,
     spieleDuell,
     spieleRundlauf,
@@ -966,15 +968,17 @@ describe('PingPongHandler', () => {
         });
     });
     describe('Rundlauf', () => {
+        const lobbyNachricht = {guildId: 'g1', channelId: 'c1', id: 'm1', createdTimestamp: 1_000};
         const mockCommand = (userId: string) => ({
             user: {id: userId},
-            reply: vi.fn().mockResolvedValue(undefined),
+            reply: vi.fn().mockResolvedValue({resource: {message: lobbyNachricht}}),
+            replied: false,
         } as any);
 
         const mockButton = (customId: string, userId: string, inhalt: string) => ({
             customId,
             user: {id: userId},
-            message: {content: inhalt},
+            message: {...lobbyNachricht, content: inhalt},
             update: vi.fn(),
             reply: vi.fn().mockResolvedValue(undefined),
             replied: false,
@@ -1098,6 +1102,111 @@ describe('PingPongHandler', () => {
 
                 expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
                 expect(interaction.reply.mock.calls[0][0].content).toContain('12s');
+                expect(redisService.setSortedSet).not.toHaveBeenCalled();
+            });
+
+            it('trägt die Lobby in die Liste der offenen Runden ein', async () => {
+                await pingPongHandler.handleRundlauf(mockCommand('111'));
+
+                expect(redisService.setSortedSet).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_OFFEN', 'g1:c1:m1', 1_000);
+            });
+
+            // Die Lobby steht dann schon im Kanal - eine Fehlermeldung hinterher wäre falsch.
+            it('bleibt still, wenn das Eintragen in die Liste scheitert', async () => {
+                vi.mocked(redisService.setSortedSet).mockRejectedValueOnce(new Error('Redis kaputt'));
+                const interaction = mockCommand('111');
+
+                await pingPongHandler.handleRundlauf(interaction);
+
+                expect(interaction.reply).toHaveBeenCalledTimes(1);
+            });
+        });
+
+        describe('handleRundlaeufe', () => {
+            // Was Discord für eine Lobby liefert: offen = Buttons noch dran.
+            const lobby = (id: string, teilnehmer: string[], offen = true) => ({
+                id,
+                content: lobbyInhalt(teilnehmer),
+                components: offen ? [{}] : [],
+                createdTimestamp: 1_700_000_000_000,
+                url: `https://discord.com/channels/g1/c1/${id}`,
+            });
+
+            const mockListe = (nachrichten: Record<string, unknown>) => {
+                const fetch = vi.fn(async (id: string) => {
+                    const nachricht = nachrichten[id];
+                    if (nachricht instanceof Error) throw nachricht;
+                    return nachricht;
+                });
+                return {
+                    guildId: 'g1',
+                    client: {channels: {fetch: vi.fn().mockResolvedValue({isTextBased: () => true, messages: {fetch}})}},
+                    reply: vi.fn(),
+                } as any;
+            };
+
+            const offeneEintraege = (...werte: string[]) =>
+                vi.mocked(redisService.getSortedSetAll).mockResolvedValue(werte.map((value, i) => ({value, score: i})) as any);
+
+            const unbekannteNachricht = () => new DiscordAPIError(
+                {code: RESTJSONErrorCodes.UnknownMessage, message: 'Unknown Message'},
+                RESTJSONErrorCodes.UnknownMessage, 404, 'GET', '/channels/c1/messages/m9', {});
+
+            it('listet offene Runden mit Eröffner, Besetzung und Link', async () => {
+                offeneEintraege('g1:c1:m1');
+                const interaction = mockListe({m1: lobby('m1', ['111', '222'])});
+
+                await pingPongHandler.handleRundlaeufe(interaction);
+
+                const antwort = interaction.reply.mock.calls[0][0];
+                expect(antwort.content).toContain(`<@111>s Runde – 2/${MAX_RUNDLAUF} an der Platte`);
+                expect(antwort.content).toContain('https://discord.com/channels/g1/c1/m1');
+                expect(antwort.content).toContain('<t:1700000000:R>');
+                expect(antwort.flags).toBe(MessageFlags.Ephemeral);
+                expect(antwort.allowedMentions).toEqual({parse: []});
+            });
+
+            it('zeigt nur Runden dieses Servers', async () => {
+                offeneEintraege('g2:c1:m1');
+                const interaction = mockListe({m1: lobby('m1', ['111'])});
+
+                await pingPongHandler.handleRundlaeufe(interaction);
+
+                expect(interaction.reply.mock.calls[0][0].content).toContain('kein Rundlauf offen');
+                expect(interaction.client.channels.fetch).not.toHaveBeenCalled();
+            });
+
+            // Scheiterte das Austragen beim Start, erkennt man die fertige Runde an den fehlenden Buttons.
+            it('räumt gespielte und gelöschte Runden aus der Liste', async () => {
+                offeneEintraege('g1:c1:m1', 'g1:c1:m9', 'g1:c1:m2');
+                const interaction = mockListe({
+                    m1: lobby('m1', ['111'], false),
+                    m9: unbekannteNachricht(),
+                    m2: lobby('m2', ['333']),
+                });
+
+                await pingPongHandler.handleRundlaeufe(interaction);
+
+                expect(redisService.removeFromSortedSet).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_OFFEN', 'g1:c1:m1');
+                expect(redisService.removeFromSortedSet).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_OFFEN', 'g1:c1:m9');
+                const content = interaction.reply.mock.calls[0][0].content;
+                expect(content).toContain('1. <@333>s Runde');
+                expect(content).not.toContain('/m1');
+            });
+
+            // Ein Netzwerkfehler heißt nicht, dass die Runde weg ist - sie darf nicht aus der Liste fallen.
+            it('behält Runden, die nur gerade nicht abrufbar sind', async () => {
+                offeneEintraege('g1:c1:m1');
+                const interaction = mockListe({m1: new Error('Zeitüberschreitung')});
+
+                await pingPongHandler.handleRundlaeufe(interaction);
+
+                expect(redisService.removeFromSortedSet).not.toHaveBeenCalled();
+                expect(interaction.reply.mock.calls[0][0].content).toContain('kein Rundlauf offen');
+            });
+
+            it('baut den Listeneintrag aus Gilde, Kanal und Nachricht', () => {
+                expect(rundlaufListenEintrag('g1', 'c1', 'm1')).toBe('g1:c1:m1');
             });
         });
 
@@ -1167,6 +1276,7 @@ describe('PingPongHandler', () => {
                 const eroeffner = mockButton('pingpong-rundlauf:abbrechen:111', '111', lobbyInhalt(['111']));
                 await pingPongHandler.handleRundlaufButton(eroeffner);
                 expect(eroeffner.update).toHaveBeenCalledWith(expect.objectContaining({components: []}));
+                expect(redisService.removeFromSortedSet).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_OFFEN', 'g1:c1:m1');
             });
 
             it('lässt nur den Eröffner starten', async () => {
@@ -1201,6 +1311,7 @@ describe('PingPongHandler', () => {
                 await pingPongHandler.handleRundlaufButton(interaction);
 
                 const ergebnis = interaction.update.mock.calls[0][0];
+                expect(redisService.removeFromSortedSet).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_OFFEN', 'g1:c1:m1');
                 expect(ergebnis.components).toEqual([]);
                 // Jeder Teilnehmer steht mit einem Platz in der Ergebnisliste.
                 expect(ergebnis.content).toContain('1. <@');
