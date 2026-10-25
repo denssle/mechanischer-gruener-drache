@@ -101,6 +101,7 @@ Die Detail-Doku je Feature liegt in eigenen Dateien – **jede enthält die Desi
 - [Zitatsammlung](docs/features/bash.md) – `/bash`, Erfassen per Rechtsklick auf eine Nachricht (Kontextmenü + Modal)
 - [Tipps & Nettigkeiten](docs/features/tipps.md) – ephemere Zeilen an Slash-Command-Antworten
 - [Hilfe](docs/features/hilfe.md) – `/hilfe`, `/spielwelt`, Gruppen-`hilfe`, die abgeleiteten Hilfe-Tests
+- [Rollenhinweis](docs/features/rollenhinweis.md) – einmaliger Hinweis an Leute ohne Rolle im konfigurierten Kanal
 - [Diagnose](docs/features/diagnose.md) – `/diagnose` (Admin-Gesundheitscheck)
 - [Web-Konfigurationsseite](docs/features/config-seite.md) – `/config` samt Discord-OAuth-Login, Log-Ansicht
 
