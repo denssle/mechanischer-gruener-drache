@@ -1045,7 +1045,7 @@ describe('SportHandler', () => {
 
             await sportHandler.handleEintragen(eintragenInteraction());
 
-            expect(send).toHaveBeenCalledWith('Yay, 2000 km!');
+            expect(send).toHaveBeenCalledWith({content: 'Yay, 2000 km!', allowedMentions: {parse: []}});
         });
 
         it('markiert nichts als erreicht wenn kein Ankündigungskanal gesetzt ist', async () => {

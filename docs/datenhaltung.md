@@ -45,8 +45,7 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `PING_PONG:PECHSTRAEHNE:<userId>`, `PING_PONG:PECHREKORD:<userId>` | Laufende Niederlagenserie (bei einem Sieg gelöscht) und längste je erlittene | dauerhaft | Duell-Ergebnis |
 | `PING_PONG:PECHREKORD_HIGHSCORE` (Sorted Set) | Dieselben Pech-Rekorde ranglistenfähig (Quelle bleibt `PING_PONG:PECHREKORD:<userId>`) | dauerhaft, **nicht** vom Season-Reset betroffen | `/pingpong pechstraehnen` |
 | `PING_PONG:RUNDLAUF_OFFEN` (Sorted Set) | Wo offene Rundlauf-Lobbys liegen (`guildId:channelId:messageId`, Score = Eröffnungszeit) – nur IDs, Teilnehmer stehen in der Nachricht | bis Start/Absage der Runde, sonst bis zur nächsten Abfrage nach 7 Tagen oder nachdem die Nachricht gelöscht wurde | `/pingpong rundlaeufe` |
-| `PING_PONG:RUNDLAUF_START:{messageId}` | Lock gegen doppelten Start einer Rundlauf-Lobby | 60 Sekunden | Doppelklick auf Start |
-| `PING_PONG:DOPPEL_START:<messageId>` | Lock, dass das Doppel dieser Lobby schon gestartet wurde (gegen doppelte Matches bei gleichzeitigen Klicks) | 60 Sekunden (TTL) | `/pingpong doppel` |
+| `PING_PONG:SPIEL_START:{messageId}` | Lock, dass das Spiel dieser Nachricht schon läuft (alle Spielarten, gegen Doppelklicks und gleichzeitige Klicks) | 60 Sekunden (TTL) | `spieleEinmal` |
 | `TIPP:COOLDOWN:<userId>` | Marker, dass die Person heute schon einen Tipp gesehen hat | 24 Stunden (TTL) | gelegentliche Tipps/Nettigkeiten |
 | `TIPP:USED_COMMANDS:<userId>` | Set der Slash-Command-**Namen**, die die Person je benutzt hat (keine Argumente, keine Inhalte, keine Zeitpunkte) | dauerhaft | Tipps nur zu noch nie benutzten Befehlen |
 | `ANSTUPSER:ABOS` (Set) | Discord-User-IDs, die den täglichen 13:37-Anstupser abonniert haben – **Opt-in**, nur die ID | bis zur Abmeldung (`/anstupser aus`) | tägliche Anstupser-DM |

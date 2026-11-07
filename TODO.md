@@ -52,6 +52,10 @@ bewusst Abgelehntes nach ganz unten (mit Begründung, damit es nicht erneut aufk
   - [ ] Optional: `resurrections` + `age` (Wiederauferstehungen, Spieltage) als Flavor-Statistik
   - [ ] Globales Feld `secondsToNextGameDay` in der API-Antwort (kein Personenbezug): der Kern hat `secondstonextgameday()` in `lib/datetime.php` fertig. **Durch den `about.php`-Befund (siehe Erledigt) nur noch ein Nice-to-have** – der Countdown geht schon ohne Modul; die API wäre lediglich robuster als das HTML
   - [ ] Nach Live-Gang: Drachentötungs-Gratulation (siehe Erledigt) auf API-Daten umstellen – exakte Zahlen statt Roster-Scraping, gleiches opportunistisches Muster ohne Polling
+- [ ] **Teams bzw. Gilden** (Idee vom 2026-11-07): Leute organisieren sich in Mannschaften, **zunächst nur für Ping-Pong**. Wie das aussehen soll, ist noch komplett offen, das hier ist bisher nur die Idee.
+  - **Noch zu entscheiden:** (1) Geben wir die Teams vor, oder gründen die Leute sie selbst? (2) Sucht man sich sein Team aus, oder wird man zugewiesen? (3) Muss man in einem Team sein, oder darf man alleine bleiben?
+  - **Beim Bau mitdenken:** Verhältnis zu den Doppel-Teams (`/pingpong doppel`) und zu den **Völkern und Klassen** weiter oben, falls beide kommen.
+- [ ] **Kleinkram aus dem Gesamt-Review** (2026-11-07), nichts davon ist kaputt: `member.handler.ts` registriert vier `client.on` ohne `.catch()` (die Regel sagt „ausnahmslos"); `twitch.service.getUserByLogin` setzt den Namen unkodiert in die URL; `formatTag` existiert viermal (Sport, Anstupser, Geburtstag, Morgengruß); `/event` wiederholt den Admin-Titel ohne `allowedMentions`.
 
 ## Erledigt
 

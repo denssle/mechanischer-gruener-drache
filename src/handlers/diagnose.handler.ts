@@ -20,6 +20,24 @@ import config from '../../config.json' with {type: 'json'};
 // wie in config.router.ts.
 const CONFIG_URL = `${(config as {CONFIG_BASE_URL?: string}).CONFIG_BASE_URL ?? 'http://localhost:3000'}/config`;
 
+const MAX_NACHRICHT = 1900;
+
+// Bei vielen Verknüpfungen reißt der Bericht das 2000-Zeichen-Limit. Geteilt wird an Zeilengrenzen und
+// nicht gekürzt: die Warnungen stehen oft am Ende, gerade die dürfen nicht wegfallen.
+export function teileInNachrichten(zeilen: string[]): string[] {
+    const nachrichten: string[] = [];
+    let aktuell = '';
+    for (const zeile of zeilen) {
+        if (aktuell && aktuell.length + zeile.length + 1 > MAX_NACHRICHT) {
+            nachrichten.push(aktuell);
+            aktuell = zeile;
+        } else {
+            aktuell = aktuell ? `${aktuell}\n${zeile}` : zeile;
+        }
+    }
+    return [...nachrichten, aktuell];
+}
+
 // Feature-übergreifende Admin-Diagnose: zeigt auf einen Blick, ob alle setzbaren Kanäle/Einstellungen
 // gesetzt UND abrufbar sind, und faltet den früheren Twitch-EventSub-Check mit ein (ersetzt
 // `/twitch diagnose`). Die ✅/⚠️/❌-Marker sind hier funktional (Admin-Debugging, dokumentierte
@@ -68,7 +86,11 @@ class DiagnoseHandler {
         lines.push('\n**Config-Seite (/config)**');
         this.pruefeConfig(lines);
 
-        return interaction.editReply(lines.join('\n'));
+        const [erste, ...rest] = teileInNachrichten(lines);
+        await interaction.editReply(erste);
+        for (const nachricht of rest) {
+            await interaction.followUp({content: nachricht, flags: MessageFlags.Ephemeral});
+        }
     }
 
     // Ist der /config-Login scharf geschaltet? Reines Config-Lesen (kein Netz): ohne beide Secrets
@@ -210,6 +232,18 @@ class DiagnoseHandler {
         if (!roster) {
             lines.push('⚠️ Roster nicht abrufbar – Verknüpfungen konnten nicht gegen die Kriegerliste geprüft werden.');
             return;
+        }
+
+        // Seit 2026-11-07 ist jeder Charakter nur einmal verknüpfbar. Was vorher doppelt entstand, bleibt
+        // bestehen und gehört von Hand aufgelöst (siehe docs/features/charakter.md).
+        const doppelt = new Map<string, number>();
+        for (const link of links) {
+            const name = findInRoster(roster, link.name)?.name.toLowerCase();
+            if (name) doppelt.set(name, (doppelt.get(name) ?? 0) + 1);
+        }
+        const mehrfach = [...doppelt.values()].filter(anzahl => anzahl > 1).length;
+        if (mehrfach > 0) {
+            lines.push(`⚠️ ${mehrfach} Charakter(e) sind mehrfach verknüpft – das sollte ein Admin auflösen.`);
         }
 
         let verwaist = 0;

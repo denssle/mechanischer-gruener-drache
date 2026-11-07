@@ -526,7 +526,8 @@ class SportHandler {
             const reached = await sportService.checkAndMarkReachedMilestones();
             for (const milestone of reached) {
                 try {
-                    await channel.send(milestone.text);
+                    // Der Text stammt von irgendwem (der Befehl ist für alle offen): kein Ping.
+                    await channel.send({content: milestone.text, allowedMentions: {parse: []}});
                 } catch (error) {
                     console.error(`Fehler beim Posten des Sport-Meilensteins (${milestone.kilometers} km):`, error);
                 }

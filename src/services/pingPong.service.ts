@@ -20,11 +20,9 @@ export const PING_PONG_KEYS = {
     // Das Spiegelbild von serie/rekord für Niederlagen in Folge.
     pechstraehne: (userId: string) => `PING_PONG:PECHSTRAEHNE:${userId}`,
     pechRekord: (userId: string) => `PING_PONG:PECHREKORD:${userId}`,
-    // Kurzlebiger Lock je Doppel-Lobby: das Doppel startet von selbst, sobald vier dabei sind -
-    // klicken zwei gleichzeitig, darf trotzdem nur EIN Match ausgetragen werden.
-    doppelStart: (messageId: string) => `PING_PONG:DOPPEL_START:${messageId}`,
-    // Kurzlebiger Lock je Rundlauf-Lobby: ein Doppelklick auf Start darf nur EINE Runde austragen.
-    rundlaufStart: (messageId: string) => `PING_PONG:RUNDLAUF_START:${messageId}`,
+    // Kurzlebiger Lock je Spiel-Nachricht, für alle Spielarten: ein Doppelklick (oder beim Doppel
+    // zwei gleichzeitige Klicks) darf nur EIN Spiel austragen. Siehe spieleEinmal.
+    spielStart: (messageId: string) => `PING_PONG:SPIEL_START:${messageId}`,
     // Sorted Set der offenen Rundlauf-Lobbys für /pingpong rundlaeufe: Wert "guildId:channelId:messageId",
     // Score = Eröffnungszeitpunkt (ms). Nur ein Wegweiser - der Zustand der Runde bleibt in der Nachricht.
     rundlaufOffen: "PING_PONG:RUNDLAUF_OFFEN",

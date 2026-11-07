@@ -63,7 +63,8 @@ export default {
                 .addStringOption(option => option
                     .setName('text')
                     .setDescription('Ankündigungstext (Markdown erlaubt, \\n für Zeilenumbruch)')
-                    .setRequired(true)))),
+                    .setRequired(true)
+                    .setMaxLength(2000)))),
 
     async execute(interaction: ChatInputCommandInteraction) {
         const group = interaction.options.getSubcommandGroup(false);

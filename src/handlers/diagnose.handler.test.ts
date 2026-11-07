@@ -48,6 +48,7 @@ function makeInteraction(isAdmin = true) {
         reply: vi.fn(),
         deferReply: vi.fn().mockResolvedValue(undefined),
         editReply: vi.fn(),
+        followUp: vi.fn(),
     } as any;
 }
 
@@ -79,6 +80,33 @@ describe('DiagnoseHandler', () => {
         // Standard: Bot darf das Audit-Log lesen
         guildsCache.clear();
         guildsCache.set(config.GUILD_ID, { members: { me: { permissions: { has: () => true } } } });
+    });
+
+    it('teilt einen langen Bericht auf, ohne Zeilen zu verlieren', async () => {
+        character.getAllLinks.mockResolvedValue(Array.from({length: 25}, (_, i) => ({
+            discordUserId: `10000000000000000${i}`, name: `Charakter Mit Langem Namen ${i}`,
+        })));
+        character.getRoster.mockResolvedValue([]);
+        const interaction = makeInteraction();
+
+        await diagnoseHandler.handleDiagnose(interaction);
+
+        const teile = [report(interaction), ...interaction.followUp.mock.calls.map((aufruf: any) => aufruf[0].content)];
+        expect(teile.length).toBeGreaterThan(1);
+        expect(teile.every((teil: string) => teil.length <= 2000)).toBe(true);
+        expect(teile.join('\n')).toContain('**Config-Seite (/config)**');
+    });
+
+    it('warnt vor mehrfach verknüpften Charakteren', async () => {
+        character.getAllLinks.mockResolvedValue([
+            {discordUserId: 'a', name: 'Acaine'}, {discordUserId: 'b', name: 'acaine'},
+        ]);
+        character.getRoster.mockResolvedValue([{name: 'Centurio Acaine'}]);
+        const interaction = makeInteraction();
+
+        await diagnoseHandler.handleDiagnose(interaction);
+
+        expect(report(interaction)).toContain('1 Charakter(e) sind mehrfach verknüpft');
     });
 
     it('zeigt den optionalen Kanal mit dem Rollen-Button leer ohne Fehlermarker', async () => {

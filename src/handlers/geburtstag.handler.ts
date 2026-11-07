@@ -121,6 +121,22 @@ export const GEBURTSTAG_HILFE =
     `Am Tag selbst gratuliere ich im Geburtstagskanal. Das **Jahr ist freiwillig** – gibst du es an, ` +
     `nenne ich beim Gratulieren auch das Alter; ohne Jahr eben nicht. Alles nur, wenn du dich selbst einträgst.`;
 
+// Die Liste ist nach dem nächsten Termin sortiert, am Limit fallen also die fernsten Geburtstage weg.
+const MAX_LISTEN_LAENGE = 1900;
+
+export function baueGeburtstagsliste(zeilen: string[]): string {
+    const kopf = '**Die nächsten Geburtstage:**';
+    const passend: string[] = [];
+    let laenge = kopf.length;
+    for (const zeile of zeilen) {
+        if (laenge + zeile.length + 1 > MAX_LISTEN_LAENGE) break;
+        passend.push(zeile);
+        laenge += zeile.length + 1;
+    }
+    const rest = zeilen.length - passend.length;
+    return [kopf, ...passend, ...(rest > 0 ? [`… und ${rest} weitere.`] : [])].join('\n');
+}
+
 // Die anzuzeigenden Einträge: die hinterlegten - aber nur von aktuellen Mitgliedern, ein Eintrag
 // ohne Mitglied wäre eine tote Erwähnung - plus der fest verdrahtete Bot-Geburtstag. Der Bot steht
 // bewusst nicht unter dem Mitglieder-Filter: er ist immer auf dem Server, und ein leerer
@@ -204,11 +220,13 @@ class GeburtstagHandler {
             return interaction.reply('Es hat noch niemand einen Geburtstag hinterlegt. Mit `/geburtstag setzen` fängst du an.');
         }
 
+        // Ohne Jahr: die Liste ist öffentlich, das Geburtsjahr sieht die Person nur selbst
+        // (/geburtstag status). Es ist freiwillig und hilft hier niemandem.
         const zeilen = eintraege.map(({userId, geburtstag}) =>
-            `- <@${userId}> – ${formatDatum(geburtstag)}`);
+            `- <@${userId}> – ${formatDatum({...geburtstag, jahr: null})}`);
 
         return interaction.reply({
-            content: `**Die nächsten Geburtstage:**\n${zeilen.join('\n')}`,
+            content: baueGeburtstagsliste(zeilen),
             allowedMentions: {parse: []},
         });
     }
@@ -275,7 +293,7 @@ class GeburtstagHandler {
     }
 
     // Konfigurierter Geburtstagskanal oder null (nicht gesetzt bzw. nicht abrufbar) - Muster wie
-    // sportHandler.holeAnkuendigungskanal, inklusive lautem Log statt stillem return.
+    // ankuendigungskanal.service, inklusive lautem Log statt stillem return.
     private async holeKanal(): Promise<TextChannel | null> {
         const channelId = await geburtstagService.getChannel();
         if (!channelId) {

@@ -2,7 +2,7 @@ import {ChatInputCommandInteraction} from 'discord.js';
 
 // Gesamt-Übersicht aller Befehle. Flache Einzelbefehle (kein eigenes hilfe) werden NUR hier
 // erklärt - ein Test stellt sicher, dass jeder von ihnen hier auftaucht. Die Gruppen-Befehle
-// (/sport, /twitch, /event, /pingpong, /charakter) haben zusätzlich je ein eigenes `hilfe` mit allen Details.
+// (z.B. /sport, /twitch, /pingpong, /charakter, /bash) haben zusätzlich je ein eigenes `hilfe` mit allen Details.
 export const HELP_TEXT =
     `**Befehlsübersicht – Mechanischer Grüner Drache**\n` +
     `Tippe \`/\` und den Befehl. Details zu Bereichen: \`/<bereich> hilfe\`.\n\n` +

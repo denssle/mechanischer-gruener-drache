@@ -23,6 +23,7 @@ vi.mock('../client.js', () => ({
 }));
 
 import geburtstagHandler, {
+    baueGeburtstagsliste,
     berechneAlter,
     BOT_GEBURTSTAG,
     formatDatum,
@@ -257,6 +258,28 @@ describe('GeburtstagHandler', () => {
             expect(reply.content).toContain('<@u2>');
         });
 
+        it('zeigt das freiwillige Geburtsjahr nicht öffentlich', async () => {
+            mitglieder.add('u2');
+            svc.getAlle.mockResolvedValue({u2: {tag: 1, monat: 1, jahr: 2000}});
+            const interaction = mockInteraction();
+
+            await geburtstagHandler.handleListe(interaction);
+
+            const {content} = interaction.reply.mock.calls[0][0];
+            expect(content).toContain('1. Januar');
+            expect(content).not.toContain('2000');
+        });
+
+        it('bleibt unter dem Discord-Limit und nennt, wie viele fehlen', () => {
+            const zeilen = Array.from({length: 100}, (_, i) => `- <@1234567890123456789> – ${i}. Dezember`);
+
+            const text = baueGeburtstagsliste(zeilen);
+
+            expect(text.length).toBeLessThanOrEqual(2000);
+            expect(text).toContain(zeilen[0]);
+            expect(text).toMatch(/… und \d+ weitere\.$/);
+        });
+
         // Wer den Server verlassen hat, steht noch im Hash - eine tote Erwähnung will die Liste nicht.
         it('überspringt Einträge von Leuten, die nicht mehr auf dem Server sind', async () => {
             svc.getAlle.mockResolvedValue({
@@ -279,7 +302,7 @@ describe('GeburtstagHandler', () => {
 
             const reply = interaction.reply.mock.calls[0][0];
             expect(reply.content).toContain('<@bot-1>');
-            expect(reply.content).toContain('11. Juni 2026');
+            expect(reply.content).toContain('11. Juni');
         });
     });
 
