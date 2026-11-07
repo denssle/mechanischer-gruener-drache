@@ -558,7 +558,9 @@ export function renderSpielweltHinweis(): string {
 // Antworttext steht mit drin, damit man sieht, was die Leute zu lesen bekommen.
 export function renderRollenhinweisHinweis(): string {
     return `<p class="feld-hinweis">Wer in diesem Kanal schreibt und noch gar keine Rolle hat, bekommt
-    vom Bot einmalig (pro Person, für immer) diese Antwort: „${escapeHtml(ROLLENHINWEIS_TEXT)}"</p>`;
+    vom Bot einmalig (pro Person, für immer) diese Antwort: „${escapeHtml(ROLLENHINWEIS_TEXT)}"
+    Ist der Kanal mit dem Rollen-Button gesetzt, verlinkt die Antwort ihn. Er muss auch für Leute ohne
+    Rolle sichtbar sein, sonst führt der Link ins Leere.</p>`;
 }
 
 function configBody(bereicheHtml: string): string {
@@ -692,7 +694,7 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
             kanal('spielwelt-kanal') + renderSpielweltHinweis(),
             meldungFuer('spielwelt')) +
         renderBereich('rollenhinweis', 'Rollenhinweis',
-            kanal('rollenhinweis-kanal') + renderRollenhinweisHinweis(),
+            kanal('rollenhinweis-kanal') + kanal('rollenhinweis-rollenkanal') + renderRollenhinweisHinweis(),
             meldungFuer('rollenhinweis')) +
         renderBereich('pingpong', 'Ping-Pong',
             rolle('pingpong-champion') + renderPingPongHinweis(),
@@ -813,6 +815,7 @@ const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
     'geburtstag-kanal': {bereich: 'geburtstag', text: 'Geburtstagskanal gespeichert.'},
     'spielwelt-kanal': {bereich: 'spielwelt', text: 'Spielwelt-Ankündigungskanal gespeichert.'},
     'rollenhinweis-kanal': {bereich: 'rollenhinweis', text: 'Rollenhinweis-Kanal gespeichert.'},
+    'rollenhinweis-rollenkanal': {bereich: 'rollenhinweis', text: 'Kanal mit dem Rollen-Button gespeichert.'},
     'twitch-rolle': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle gespeichert.'},
     'twitch-rolle-entfernt': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle entfernt.'},
     'pingpong-champion': {bereich: 'pingpong', text: 'Champion-Rolle gespeichert.'},

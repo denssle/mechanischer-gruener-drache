@@ -2,6 +2,8 @@ import redisService from './redis.service.js';
 
 const KEYS = {
     channel: 'ROLLENHINWEIS:CHANNEL',
+    // Kanal mit dem Rollen-Button, auf den der Hinweis verlinkt. Optional.
+    rollenKanal: 'ROLLENHINWEIS:ROLLENKANAL',
     // Set der User-IDs, die den Hinweis schon bekommen haben - jede Person genau einmal, für immer.
     hingewiesen: 'ROLLENHINWEIS:HINGEWIESEN',
 };
@@ -13,6 +15,14 @@ class RollenhinweisService {
 
     async getChannel(): Promise<string | null> {
         return redisService.get(KEYS.channel);
+    }
+
+    async setRollenKanal(channelId: string): Promise<void> {
+        await redisService.set(KEYS.rollenKanal, channelId);
+    }
+
+    async getRollenKanal(): Promise<string | null> {
+        return redisService.get(KEYS.rollenKanal);
     }
 
     // true = die Person war noch nicht vermerkt und ist es jetzt. Ein Schritt (SADD), damit zwei
