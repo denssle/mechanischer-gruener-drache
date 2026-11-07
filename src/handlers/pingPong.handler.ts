@@ -791,12 +791,17 @@ class PingPongHandler {
         // gegen niemanden verloren.
         const serienZeile = formatSerie(await this.verarbeiteSerie(siegerId, finalVerliererId));
 
+        // Discord zeigt an der Nachricht nur, wann die Lobby eröffnet wurde - bis zum Start
+        // können Stunden vergehen. Der Timestamp rendert beim Betrachter in dessen Ortszeit.
+        const gespieltUm = Math.floor(Date.now() / 1000);
+
         return {
             content: `**<@${siegerId}> gewinnt den Rundlauf.**\n`
                 + `Im Finale gegen <@${finalVerliererId}> steht es am Ende ${finalSatz.siegerPunkte}:${finalSatz.verliererPunkte}. `
                 + `${randomDuellFlavor()}\n\n`
                 + zeilen.join('\n')
-                + (serienZeile ? `\n\n${serienZeile}` : ''),
+                + (serienZeile ? `\n\n${serienZeile}` : '')
+                + `\n\n_Gespielt <t:${gespieltUm}:f>._`,
             components: []
         };
     }
