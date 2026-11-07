@@ -449,6 +449,24 @@ describe('SportHandler', () => {
         });
     });
 
+    describe('Sportart nach der Angabe, wenn die erste davor stand', () => {
+        it.each([
+            ['Laufen +5 km, +30 min Schwimmen', [{aktivitaet: 'laufen', kilometer: 5}, {aktivitaet: 'schwimmen', minuten: 30}]],
+            ['Gelaufen +5 km und +10 km Rad', [{aktivitaet: 'laufen', kilometer: 5}, {aktivitaet: 'radfahren', kilometer: 10}]],
+            // Ein Wort gilt für genau eine Angabe, die dritte fällt auf den Standard zurück.
+            ['Rad +5 km, +10 km Schwimmen, +3 km', [
+                {aktivitaet: 'radfahren', kilometer: 5},
+                {aktivitaet: 'schwimmen', kilometer: 10},
+                {aktivitaet: 'laufen', kilometer: 3},
+            ]],
+            // Unverändert: davor gewinnt, und ohne Sportwort bleibt es beim Standard.
+            ['Radfahren +5 km, Laufen +10 km', [{aktivitaet: 'radfahren', kilometer: 5}, {aktivitaet: 'laufen', kilometer: 10}]],
+            ['Rad +5 km und +30 min', [{aktivitaet: 'radfahren', kilometer: 5}, {aktivitaet: 'krafttraining', minuten: 30}]],
+        ])('%s', (text, erwartet) => {
+            expect(erkenneSportLeistungen(text)).toEqual(erwartet);
+        });
+    });
+
     describe('erkenneSportLeistungen', () => {
         it.each([
             [
@@ -597,6 +615,20 @@ describe('SportHandler', () => {
             ['+1, bin dabei', false],
             ['heute 2 h geschwommen', false],
             ['Moin zusammen', false],
+            // Zusagen und beiläufige Zahlen: das Sportwort steht nicht an der Zahl, oder es ist die +1.
+            ['+1 fürs Radfahren', false],
+            ['+1 Laufgruppe morgen?', false],
+            ['+1 bin beim Lauf dabei', false],
+            ['+2 Bier nach dem Laufen', false],
+            // Gemeinte Einträge, die der Parser nicht versteht.
+            ['+240 schwimmen', true],
+            ['Schwimmen +240', true],
+            ['Schwimmen: +240', true],
+            ['+3 Stunden wandern', true],
+            ['+500m geschwommen', true],
+            ['+30 mins laufen', true],
+            ['+1 Minute Hantel', true],
+            ['+10 Kilometern', true],
         ])('siehtNachSportAus("%s") ist %s', (text, erwartet) => {
             expect(siehtNachSportAus(text)).toBe(erwartet);
         });
