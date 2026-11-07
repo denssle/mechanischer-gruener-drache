@@ -5,8 +5,9 @@ Was der Bot speichert, warum, wie lange – und was er bewusst **nicht** speiche
 Gedacht als ehrliche Antwort auf die Frage „was weiß der Bot eigentlich über mich?" und als
 Entscheidungsgrundlage, bevor ein neues Feature anfängt, Daten zu horten.
 
-Alles liegt in **Redis** auf dem Uberspace (Unix-Socket, nur lokal erreichbar). Kein Backup, keine
-Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server, kein Enterprise-Setup.
+Alles liegt in **Redis** auf dem Uberspace (Unix-Socket, nur lokal erreichbar). Keine Replikation, keine
+Verschlüsselung im Ruhezustand – ein privater Hobby-Server, kein Enterprise-Setup. Das tägliche Backup
+steht in [Betrieb](betrieb.md); es enthält dieselben Daten und landet in `~/backups/drache/`, 14 Tage lang.
 
 ## Leitplanken
 
@@ -24,6 +25,7 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 |---|---|---|---|
 | `<discord-user-id>` (roh, ohne Prefix – Legacy-Format) | `StoredUser`: ID, Username, Tag, Displayname, Rollen-IDs, Beitrittsdatum | bis zum Überschreiben | Mitglieder-Tracking (`member.handler.ts`) |
 | `LOGGING:CHANNEL` | Channel-ID des Audit-Logs | bis zum Überschreiben | Audit-Log (Kanal via `/config` gesetzt) |
+| `FEHLER:CHANNEL` | Channel-ID für gesammelte Bot-Fehler | bis zum Überschreiben | Fehlermeldung (optional, via `/config` gesetzt) |
 | `LOGGING:MESSAGE:<messageId>` | **Nachrichtentext + Autor-Tag + Dateinamen der Anhänge** | **7 Tage** (TTL), beim Löschen der Nachricht sofort weg | alter Inhalt im Lösch-/Bearbeitungs-Log (s.u.) |
 | `CHARACTER:LINK:<userId>`, `CHARACTER:ALL_LINKS` | öffentlicher LotGD-Charaktername | bis `/charakter entfernen` | `/charakter`, Hervorhebung in `/online`/`/ereignisse` |
 | `TWITCH:USER:*`, `TWITCH:MAPPING:*`, `TWITCH:SUBSCRIPTION:*`, `TWITCH:ALL_LINKS` | Twitch-Login ↔ Discord-User, EventSub-Subscription-IDs | bis `/twitch entfernen` (oder Revocation) | Live-Benachrichtigungen |

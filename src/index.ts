@@ -1,6 +1,6 @@
 import {Events} from "discord.js";
 import pjson from "../package.json" with {type: "json"};
-import {installLogCapture} from "./services/logBuffer.service.js";
+import {installLogCapture, setzeFehlerBeobachter} from "./services/logBuffer.service.js";
 import client from "./client.js";
 import redisService from "./services/redis.service.js";
 import {deployCommands} from "./deploy-commands.js";
@@ -19,10 +19,12 @@ import anstupserHandler from "./handlers/anstupser.handler.js";
 import geburtstagHandler from "./handlers/geburtstag.handler.js";
 import pingPongSeasonHandler from "./handlers/pingPongSeason.handler.js";
 import onlinePollHandler from "./handlers/onlinePoll.handler.js";
+import fehlerMeldungHandler from "./handlers/fehlerMeldung.handler.js";
 
 // console.log/warn/error in einen Ringpuffer spiegeln, damit sie auf /config einsehbar sind. Moeglichst
 // frueh, damit die Boot-/Laufzeit-Zeilen (Webhook-Server-Start, Fehler) mitgeschnitten werden.
 installLogCapture();
+setzeFehlerBeobachter((text) => fehlerMeldungHandler.merke(text));
 
 webhookServer.onNotification((twitchUserId, streamData) => {
     twitchHandler.handleStreamOnline(twitchUserId, streamData).catch((error) => {
@@ -142,7 +144,7 @@ client.on(Events.GuildAuditLogEntryCreate, (entry, guild) => {
 // EINZIGER TIMER für alle täglichen Aufgaben, kein zweiter Mechanismus und keine Cron-Dependency.
 const TAEGLICHER_POST_INTERVALL_MS = 60 * 1000;
 
-client.once(Events.ClientReady, async () => {
+async function starteNachLogin(): Promise<void> {
     console.log(`Eingeloggt als ${client.user?.tag} - Version ${pjson.version}`);
     try {
         await redisService.connect();
@@ -176,10 +178,21 @@ client.once(Events.ClientReady, async () => {
             onlinePollHandler.poll().catch((error) => {
                 console.error('Fehler beim Abrufen des Online-Stands:', error);
             });
+            // Meldet gesammelte Fehler in den Admin-Kanal. console.warn statt error: ein Fehler beim
+            // Melden darf nicht selbst wieder gemeldet werden.
+            fehlerMeldungHandler.sendeSammlung().catch((error) => {
+                console.warn('Fehlermeldung gescheitert:', error);
+            });
         }, TAEGLICHER_POST_INTERVALL_MS);
     } catch (error) {
         console.error('Fehler beim Initialisieren nach dem Discord-Login:', error);
     }
+}
+
+client.once(Events.ClientReady, () => {
+    starteNachLogin().catch((error) => {
+        console.error('Fehler beim Start nach dem Discord-Login:', error);
+    });
 });
 
 if (process.env.CI) {

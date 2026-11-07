@@ -69,7 +69,12 @@ class ButtonRoleHandler {
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
 
-        await interaction.channel.send({ content: text, components: [row] });
+        // Der Text kommt von einem Admin und darf bewusst pingen, etwa in einer Regel-Ankündigung.
+        await interaction.channel.send({
+            content: text,
+            components: [row],
+            allowedMentions: {parse: ['users', 'roles', 'everyone']},
+        });
 
         return interaction.reply({
             content: `Button-Nachricht gepostet. Wer klickt, bekommt die Rolle **${role.name}** (nochmal klicken entfernt sie wieder).`,

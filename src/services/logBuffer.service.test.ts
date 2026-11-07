@@ -15,7 +15,24 @@ import {
     getLogEntries,
     installLogCapture,
     redigiere,
+    setzeFehlerBeobachter,
 } from './logBuffer.service.js';
+
+describe('setzeFehlerBeobachter', () => {
+    it('bekommt nur console.error, geschwärzt und ohne die Ausgabe zu stören', () => {
+        const beobachter = vi.fn();
+        installLogCapture();
+        setzeFehlerBeobachter(beobachter);
+
+        console.log('alles gut');
+        console.warn('na ja');
+        console.error('kaputt:', 'details');
+        setzeFehlerBeobachter(null);
+
+        expect(beobachter).toHaveBeenCalledTimes(1);
+        expect(beobachter).toHaveBeenCalledWith('kaputt: details');
+    });
+});
 
 describe('logBuffer.service', () => {
     beforeEach(() => {

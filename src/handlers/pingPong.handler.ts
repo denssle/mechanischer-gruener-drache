@@ -396,7 +396,12 @@ class PingPongHandler {
             const row = this.baueDuellButtons(`${prefix}annehmen:${herausforderer.id}:${gegner.id}`,
                 `${prefix}ablehnen:${herausforderer.id}:${gegner.id}`);
 
-            return interaction.reply({content: baueText(herausforderer.id, gegner.id), components: [row]});
+            // Die Herausforderung soll genau die herausgeforderte Person erreichen.
+            return interaction.reply({
+                content: baueText(herausforderer.id, gegner.id),
+                components: [row],
+                allowedMentions: {users: [gegner.id]},
+            });
         } catch (error) {
             console.error(fehlerText, error);
             return interaction.reply({
@@ -571,7 +576,8 @@ class PingPongHandler {
                     + `der **Lupfer** übertrumpft den Konter, der **Konter** übertrumpft den Schmetterball. `
                     + `Wählt ihr dasselbe, entscheidet ein Ballwechsel.\n`
                     + `Der Sieg bringt **+${DUELL_WIN}** Punkt, die Niederlage kostet **${DUELL_LOSS}** (nie unter 0).`,
-                components: [row]
+                components: [row],
+                allowedMentions: {users: [gegner.id]},
             });
         } catch (error) {
             console.error('Fehler beim Erstellen des Ping-Pong-Taktikduells:', error);
@@ -1016,6 +1022,8 @@ class PingPongHandler {
                     ausstehend: [partner.id, ...gegnerIds],
                 }),
                 components: [this.baueDoppelButtons(eroeffnerId, 'fest')],
+                // Wer eingeladen ist, muss es mitbekommen, sonst sagt niemand zu.
+                allowedMentions: {users: [partner.id, ...gegnerIds]},
             });
         } catch (error) {
             console.error('Fehler beim Eröffnen des Ping-Pong-Doppels:', error);

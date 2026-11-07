@@ -45,6 +45,23 @@ jobs:
       - name: Run tests
         run: npm test
 
+      # Alle anderen Tests mocken Redis. Der Socket muss dort liegen, wo redis.service.ts ihn erwartet.
+      - name: Start Redis
+        run: |
+          mkdir -p "$HOME/.redis"
+          docker run -d --name redis-test --user "$(id -u):$(id -g)" -v "$HOME/.redis:/data" redis:7.4-alpine \
+            redis-server --unixsocket /data/sock --unixsocketperm 700 --save "" --appendonly no
+          for versuch in $(seq 1 20); do
+            [ -S "$HOME/.redis/sock" ] && exit 0
+            sleep 1
+          done
+          echo "Redis-Socket ist nicht aufgetaucht."
+          docker logs redis-test
+          exit 1
+
+      - name: Run Redis integration tests
+        run: npm run test:redis
+
       # Type-Check inklusive der Testdateien: die sind seit dem tsconfig-exclude nicht mehr
       # Teil von npm run build, Typfehler dort wuerden sonst nirgends auffallen (vitest/esbuild
       # prueft keine Typen, siehe CLAUDE.md-Stolperfalle zu type-only Imports).

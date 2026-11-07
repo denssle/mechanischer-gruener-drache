@@ -8,6 +8,7 @@ import greetingService from '../services/greeting.service.js';
 import geburtstagService from '../services/geburtstag.service.js';
 import drachenService from '../services/drachen.service.js';
 import rollenhinweisService from '../services/rollenhinweis.service.js';
+import fehlerMeldungService from '../services/fehlerMeldung.service.js';
 import eventService from '../services/event.service.js';
 import characterService, {CharacterLink, findInRoster} from '../services/character.service.js';
 import pingPongService from '../services/pingPong.service.js';
@@ -70,6 +71,8 @@ class DiagnoseHandler {
         lines.push(`Rollenhinweis-Kanal: ${await this.pruefeKanal(await rollenhinweisService.getChannel())}`);
         const rollenKanal = await rollenhinweisService.getRollenKanal();
         lines.push(`Rollenhinweis, Kanal mit dem Rollen-Button: ${rollenKanal ? await this.pruefeKanal(rollenKanal) : 'ℹ️ nicht gesetzt (optional)'}`);
+        const fehlerKanal = await fehlerMeldungService.getChannel();
+        lines.push(`Kanal für Bot-Fehler: ${fehlerKanal ? await this.pruefeKanal(fehlerKanal) : 'ℹ️ nicht gesetzt (optional)'}`);
         lines.push(`Audit-Log-Zugriff: ${this.pruefeAuditLogRecht()}`);
 
         const event = await eventService.getEvent();

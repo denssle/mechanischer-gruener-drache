@@ -55,6 +55,13 @@ function merke(level: LogLevel, args: unknown[]): void {
 }
 
 let installiert = false;
+let fehlerBeobachter: ((text: string) => void) | null = null;
+
+// Wird bei jedem console.error aufgerufen, geschwärzt wie der Puffer. Nur EIN Beobachter: der Puffer
+// hat auch nur einen Abnehmer dieser Art, die Fehlermeldung im Admin-Kanal.
+export function setzeFehlerBeobachter(beobachter: ((text: string) => void) | null): void {
+    fehlerBeobachter = beobachter;
+}
 
 // console.log/warn/error abfangen: der Ringpuffer bekommt eine Kopie, die Ausgabe geht unveraendert
 // weiter (der Hoster persistiert sie wie bisher). Idempotent - ein zweiter Aufruf tut nichts.
@@ -75,6 +82,7 @@ export function installLogCapture(): void {
     console.error = (...args: unknown[]) => {
         merke('error', args);
         original.error(...args);
+        fehlerBeobachter?.(redigiere(format(...args)));
     };
 }
 

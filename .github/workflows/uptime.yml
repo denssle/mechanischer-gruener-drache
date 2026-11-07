@@ -1,0 +1,31 @@
+name: Bot erreichbar
+
+# Der Check im Deploy prüft nur beim Deploy. Dieser hier merkt auch einen Ausfall um drei Uhr nachts:
+# Schlägt der Lauf fehl, schickt GitHub eine Mail. Gesund antwortet der Webhook-Pfad auf GET mit 404,
+# nginx liefert 502, solange der Bot nicht läuft. Mehrere Versuche, weil ein Deploy kurz neu startet.
+on:
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check bot answers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check webhook endpoint
+        run: |
+          for versuch in 1 2 3 4; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://enzlor.uber.space/twitch/eventsub || true)
+            if [ "$status" = "404" ]; then
+              echo "Bot antwortet."
+              exit 0
+            fi
+            echo "Versuch $versuch: HTTP $status"
+            sleep 30
+          done
+          echo "Bot antwortet nicht. Logs: ~/logs/supervisord.log"
+          exit 1
