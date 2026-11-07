@@ -2,13 +2,14 @@ import {describe, it, expect, vi, beforeEach} from 'vitest';
 
 const rollenhinweisService = vi.hoisted(() => ({
     getChannel: vi.fn(),
+    getRollenKanal: vi.fn(),
     markiereHingewiesen: vi.fn(),
     vergiss: vi.fn(),
 }));
 vi.mock('../services/rollenhinweis.service.js', () => ({default: rollenhinweisService}));
 
 import {Collection} from 'discord.js';
-import rollenhinweisHandler, {ROLLENHINWEIS_TEXT} from './rollenhinweis.handler.js';
+import rollenhinweisHandler, {ROLLENHINWEIS_TEXT, rollenhinweisText} from './rollenhinweis.handler.js';
 
 const GUILD_ID = 'guild-1';
 const KANAL_ID = 'kanal-hinweis';
@@ -35,6 +36,7 @@ describe('RollenhinweisHandler.handleMessage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         rollenhinweisService.getChannel.mockResolvedValue(KANAL_ID);
+        rollenhinweisService.getRollenKanal.mockResolvedValue(null);
         rollenhinweisService.markiereHingewiesen.mockResolvedValue(true);
     });
 
@@ -45,6 +47,22 @@ describe('RollenhinweisHandler.handleMessage', () => {
 
         expect(rollenhinweisService.markiereHingewiesen).toHaveBeenCalledWith('user-1');
         expect(message.reply).toHaveBeenCalledWith(ROLLENHINWEIS_TEXT);
+    });
+
+    it('verlinkt den Kanal mit dem Rollen-Button, wenn er gesetzt ist', async () => {
+        rollenhinweisService.getRollenKanal.mockResolvedValue('kanal-rollen');
+        const message = mockMessage();
+
+        await rollenhinweisHandler.handleMessage(message);
+
+        expect(message.reply).toHaveBeenCalledWith(rollenhinweisText('kanal-rollen'));
+        expect(rollenhinweisText('kanal-rollen')).toContain('Hol dir in <#kanal-rollen> eine Rolle');
+    });
+
+    // Ein geänderter Wortlaut ließe replace() sonst still ins Leere laufen.
+    it('baut den Link wirklich in den Text ein', () => {
+        expect(rollenhinweisText('x')).not.toBe(ROLLENHINWEIS_TEXT);
+        expect(rollenhinweisText(null)).toBe(ROLLENHINWEIS_TEXT);
     });
 
     it('ignoriert Personen mit mindestens einer echten Rolle (@everyone zählt nicht)', async () => {
@@ -101,6 +119,15 @@ describe('RollenhinweisHandler.handleMessage', () => {
         message.reply.mockRejectedValue(new Error('Missing Permissions'));
 
         await expect(rollenhinweisHandler.handleMessage(message)).rejects.toThrow('Missing Permissions');
+
+        expect(rollenhinweisService.vergiss).toHaveBeenCalledWith('user-1');
+    });
+
+    it('nimmt die Markierung auch zurück, wenn der Rollen-Kanal nicht lesbar ist', async () => {
+        rollenhinweisService.getRollenKanal.mockRejectedValue(new Error('Redis weg'));
+        const message = mockMessage();
+
+        await expect(rollenhinweisHandler.handleMessage(message)).rejects.toThrow('Redis weg');
 
         expect(rollenhinweisService.vergiss).toHaveBeenCalledWith('user-1');
     });

@@ -24,6 +24,15 @@ describe('RollenhinweisService', () => {
         expect(await rollenhinweisService.getChannel()).toBe('kanal-1');
     });
 
+    it('speichert und liest den Kanal mit dem Rollen-Button', async () => {
+        redisService.get.mockResolvedValue('kanal-2');
+
+        await rollenhinweisService.setRollenKanal('kanal-2');
+
+        expect(redisService.set).toHaveBeenCalledWith('ROLLENHINWEIS:ROLLENKANAL', 'kanal-2');
+        expect(await rollenhinweisService.getRollenKanal()).toBe('kanal-2');
+    });
+
     it('meldet beim Markieren, ob die Person neu war', async () => {
         redisService.addToSet.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 

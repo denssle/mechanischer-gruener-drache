@@ -8,6 +8,14 @@ export const ROLLENHINWEIS_TEXT =
     'Hallo und willkommen! Du hast bisher noch keine Rolle auf dem Server - deshalb siehst du ' +
     'nur einen kleinen Teil davon. Hol dir eine Rolle, dann kannst du überall mitlesen und mitmachen.';
 
+// Mit Rollen-Kanal aus /config wird daraus ein Link. Eine Kanal-Erwähnung pingt nicht, und die ID
+// stammt vom Admin, deshalb bleibt es ohne allowedMentions.
+export function rollenhinweisText(rollenKanalId: string | null): string {
+    return rollenKanalId
+        ? ROLLENHINWEIS_TEXT.replace('Hol dir eine Rolle', `Hol dir in <#${rollenKanalId}> eine Rolle`)
+        : ROLLENHINWEIS_TEXT;
+}
+
 class RollenhinweisHandler {
     // Auto-Listener für den Rollenhinweis-Kanal: wer dort ohne jede Rolle schreibt, bekommt EINMAL
     // (pro Person, für immer) eine Antwort mit dem Hinweis. Kanal kommt aus /config, ohne Kanal
@@ -25,7 +33,8 @@ class RollenhinweisHandler {
         if (!await rollenhinweisService.markiereHingewiesen(message.author.id)) return;
 
         try {
-            await message.reply(ROLLENHINWEIS_TEXT);
+            const rollenKanalId = await rollenhinweisService.getRollenKanal();
+            await message.reply(rollenhinweisText(rollenKanalId));
         } catch (error) {
             await rollenhinweisService.vergiss(message.author.id);
             throw error;

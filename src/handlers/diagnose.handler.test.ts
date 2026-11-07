@@ -14,7 +14,7 @@ const character = vi.hoisted(() => ({ getAllLinks: vi.fn(), getRoster: vi.fn() }
 const oauth = vi.hoisted(() => ({ oauthConfigured: vi.fn() }));
 const geburtstag = vi.hoisted(() => ({ getChannel: vi.fn(async () => null) }));
 const drachen = vi.hoisted(() => ({ getChannel: vi.fn(async () => null) }));
-const rollenhinweis = vi.hoisted(() => ({ getChannel: vi.fn(async () => null) }));
+const rollenhinweis = vi.hoisted(() => ({ getChannel: vi.fn(async () => null), getRollenKanal: vi.fn(async (): Promise<string | null> => null) }));
 const session = vi.hoisted(() => ({ sessionConfigured: vi.fn() }));
 const pingPong = vi.hoisted(() => ({ getLastSeason: vi.fn(), getChampionRole: vi.fn() }));
 const channelsFetch = vi.hoisted(() => vi.fn());
@@ -79,6 +79,25 @@ describe('DiagnoseHandler', () => {
         // Standard: Bot darf das Audit-Log lesen
         guildsCache.clear();
         guildsCache.set(config.GUILD_ID, { members: { me: { permissions: { has: () => true } } } });
+    });
+
+    it('zeigt den optionalen Kanal mit dem Rollen-Button leer ohne Fehlermarker', async () => {
+        rollenhinweis.getRollenKanal.mockResolvedValue(null);
+        const interaction = makeInteraction();
+
+        await diagnoseHandler.handleDiagnose(interaction);
+
+        expect(report(interaction)).toContain('Kanal mit dem Rollen-Button: ℹ️ nicht gesetzt (optional)');
+    });
+
+    it('prüft den Kanal mit dem Rollen-Button, wenn er gesetzt ist', async () => {
+        rollenhinweis.getRollenKanal.mockResolvedValueOnce('kanal-rollen');
+        channelsFetch.mockRejectedValue(new Error('Unknown Channel'));
+        const interaction = makeInteraction();
+
+        await diagnoseHandler.handleDiagnose(interaction);
+
+        expect(report(interaction)).toMatch(/Kanal mit dem Rollen-Button: ⚠️/);
     });
 
     // Die Champion-Rolle wird am Monatswechsel automatisch weitergereicht - scheitert das, wird es

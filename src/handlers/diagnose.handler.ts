@@ -50,6 +50,8 @@ class DiagnoseHandler {
         lines.push(`Geburtstagskanal: ${await this.pruefeKanal(await geburtstagService.getChannel())}`);
         lines.push(`Spielwelt-Ankündigungskanal: ${await this.pruefeKanal(await drachenService.getChannel())}`);
         lines.push(`Rollenhinweis-Kanal: ${await this.pruefeKanal(await rollenhinweisService.getChannel())}`);
+        const rollenKanal = await rollenhinweisService.getRollenKanal();
+        lines.push(`Rollenhinweis, Kanal mit dem Rollen-Button: ${rollenKanal ? await this.pruefeKanal(rollenKanal) : 'ℹ️ nicht gesetzt (optional)'}`);
         lines.push(`Audit-Log-Zugriff: ${this.pruefeAuditLogRecht()}`);
 
         const event = await eventService.getEvent();

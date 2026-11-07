@@ -103,6 +103,11 @@ const KANAL_SERVICES: Record<string, KanalService> = {
         lade: () => rollenhinweisService.getChannel(),
         speichere: (id) => rollenhinweisService.setChannel(id),
     },
+    'rollenhinweis-rollenkanal': {
+        label: 'Kanal mit dem Rollen-Button',
+        lade: () => rollenhinweisService.getRollenKanal(),
+        speichere: (id) => rollenhinweisService.setRollenKanal(id),
+    },
 };
 
 export interface KanalFeld {

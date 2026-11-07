@@ -66,6 +66,7 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `GREETING:EMOJI` (Hash userId→Emoji) | persönliches Morgengruß-Emoji, aus der Chat-Historie gelernt (nur die Emoji-Kennung, keine Nachrichten) | bis zum Überschreiben (Lern-Button auf `/config`) | persönlicher Morgengruß (Zuordnung dort auch einsehbar) |
 | `GREETING:EMOJI_MANUELL` (Hash userId→Emoji) | persönliches Morgengruß-Emoji, auf `/config` **von Hand** gesetzt (nur die Emoji-Kennung) | bis zum Überschreiben (nur über das Formular auf `/config`) | persönlicher Morgengruß – schlägt das Gelernte, damit der Lern-Button eine Handeingabe nicht überschreibt |
 | `ROLLENHINWEIS:CHANNEL` | Channel-ID des Rollenhinweis-Kanals | bis zum Überschreiben | Rollenhinweis (gesetzt über `/config`) |
+| `ROLLENHINWEIS:ROLLENKANAL` | Channel-ID des Kanals mit dem Rollen-Button, auf den der Hinweis verlinkt | bis zum Überschreiben | Rollenhinweis (optional, gesetzt über `/config`) |
 | `ROLLENHINWEIS:HINGEWIESEN` (Set) | User-IDs, die den Rollenhinweis schon bekommen haben | dauerhaft | „nur einmal pro Person" |
 | `GEBURTSTAG:DATEN` (Hash userId→Datum) | **Geburtstag**, ausschließlich selbst eingetragen (`/geburtstag setzen`): Tag + Monat, **Jahr nur, wenn die Person es freiwillig angibt** (`TT.MM` bzw. `TT.MM.JJJJ`) | bis `/geburtstag entfernen` | Glückwunsch am Tag, `/geburtstag liste` |
 | `GEBURTSTAG:CHANNEL` | Channel-ID des Geburtstagskanals | bis zum Überschreiben | Glückwunsch-Post (gesetzt über `/config`) |
