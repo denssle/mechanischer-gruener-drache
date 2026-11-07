@@ -11,7 +11,7 @@
 
 ## Willkommensgruß (seit 2026-11-07)
 
-- Anlass: 87 von 225 Mitgliedern hatten die Hauptrolle nicht, und laut Discords Vorschau „Mitglieder entfernen" waren nur 38 davon länger als 7 Tage weg. Das sind also keine Karteileichen. Der Hinweis oben erreicht aber nur, wer im Kanal **schreibt**, wer still mitliest, erfuhr nie etwas.
+- Anlass: 87 von 225 Mitgliedern hatten die Hauptrolle nicht. Der Hinweis oben erreicht aber nur, wer im Kanal **schreibt**, wer still mitliest, erfuhr nie etwas. Die erste `/diagnose` vom 2026-11-07 zeigte dann: 73 der 86 sind seit über einem Jahr da, nur 2 kamen in den letzten 30 Tagen. Der Gruß deckt also den Zugang ab, nicht den Bestand, dafür gibt es die DM-Runde unten.
 - `handleBeitritt` (`GuildMemberAdd`, eigene Registrierung in `index.ts`) schreibt in den Kanal aus `/config` (`rollenhinweis-willkommen`, Key `ROLLENHINWEIS:WILLKOMMENSKANAL`) einen festen Text samt Ping und nutzt denselben Link auf den Rollen-Kanal. Ohne Kanal passiert nichts, Bots und Beitritte auf anderen Servern werden übergangen.
 - **Abschaltbar:** Anders als die übrigen Kanal-Felder hat dieses eine Option „— aus —" (`entferne` in `KANAL_SERVICES`, leerer Wert an `POST /config/kanal`). Der Gruß postet bei jedem Beitritt, bei einer Beitrittswelle muss er ohne Host-Zugriff ausgehen können.
 - **Kein Warten auf die Regeln:** Es gibt keine Auto-Rolle, alle Rollen kommen auf Wunsch (User-Auskunft 2026-11-07). Deshalb stimmt der Satz „Noch siehst du nur einen kleinen Teil" beim Beitritt. Kommt je eine Auto-Rolle dazu, muss der Gruß das berücksichtigen.
@@ -19,3 +19,14 @@
 - **Markiert bewusst nicht als „hingewiesen":** Wer den Gruß übersieht und später im Hinweis-Kanal schreibt, soll die Antwort noch bekommen. Die ist dann die zweite Chance, im passenden Moment.
 - **Kein Merker gegen Wiederkehrer:** Wer geht und wiederkommt, wird erneut begrüßt. Das ist so gewollt und bleibt selten.
 - **Hauptrolle** (`rollenhinweis-hauptrolle`, Key `ROLLENHINWEIS:HAUPTROLLE`, optional): gilt nur für die Zählung in `/diagnose`. Der Hinweis selbst prüft weiter auf „gar keine Rolle", siehe oben.
+
+## Einmalige Rollen-Erinnerung per DM (seit 2026-11-07, Start nur von Hand)
+
+- Zweck: Der Bestand ohne Hauptrolle ist über Kanäle nicht mehr erreichbar, wer den Server aus den Augen verloren hat, liest dort nichts. Gebaut auf Vorrat, **die Runde ist nicht beschlossen** (User-Entscheidung).
+- **Das ist die einzige Ausnahme von der Opt-in-Linie** (siehe [Anstupser](anstupser.md)) und nur deshalb vertretbar, weil sie eng begrenzt ist: Start nur von Hand auf `/config` mit Häkchen (Bereich „Rollenhinweis"), jede Person **höchstens einmal im Leben** (`ROLLENHINWEIS:DM_ANGESCHRIEBEN`), Abbruch jederzeit. **Nicht** als Vorlage für weitere ungefragte DMs nehmen und **nicht** automatisch wiederholen.
+- **Empfänger:** keine Bots, keine Hauptrolle, noch nie angeschrieben, seit mindestens 30 Tagen da (Frische haben gerade den Gruß bekommen). Wer nur z. B. die Twitch-Rolle hat, ist dabei. Kurz vor jedem Versand wird neu geprüft: wer inzwischen die Rolle hat oder gegangen ist, fällt raus.
+- **Takt:** eine DM alle 10 Minuten zwischen 17 und 20 Uhr, höchstens 18 am Tag, über den 60-s-Timer in `index.ts` (kein eigener Mechanismus). Massen-DMs an Fremde wertet Discord als Spam, das kann den Bot kosten.
+- **Der Start sendet selbst nichts**, er füllt nur die Warteschlange. Ohne Warteschlange tut der Timer nichts. Fehlen Hauptrolle oder Rollen-Kanal während der Runde, pausiert sie.
+- **Vermerk vor dem Versand:** ein Absturz dazwischen kostet schlimmstenfalls eine DM. Zwei DMs an dieselbe Person wären schlimmer.
+- **Nicht zustellbar bleibt nicht zustellbar:** `sendeDm` meldet nur `false`, ob DMs zu sind oder Discord blockt, unterscheidet die Runde nicht. Es gibt keinen zweiten Versuch. Die Zähler auf `/config` zeigen das, bei vielen Fehlschlägen ins Log schauen und abbrechen.
+- **Voller Link statt `<#id>`:** Kanal-Erwähnungen sind in DMs nicht verlässlich klickbar. Der Text steht in `rollenDmText`, `/config` zeigt ihn vor dem Start mit echten Werten.

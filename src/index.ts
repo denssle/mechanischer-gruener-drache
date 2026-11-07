@@ -14,6 +14,7 @@ import twitchHandler from "./handlers/twitch.handler.js";
 import blahajHandler from "./handlers/blahaj.handler.js";
 import sportHandler from "./handlers/sport.handler.js";
 import greetingHandler from "./handlers/greeting.handler.js";
+import rollenDmHandler from './handlers/rollenDm.handler.js';
 import rollenhinweisHandler from "./handlers/rollenhinweis.handler.js";
 import anstupserHandler from "./handlers/anstupser.handler.js";
 import geburtstagHandler from "./handlers/geburtstag.handler.js";
@@ -177,6 +178,10 @@ async function starteNachLogin(): Promise<void> {
             // Deploy), setzt der Aufruf ihn selbst - deshalb braucht es hier keinen Init-Schritt.
             pingPongSeasonHandler.rechneSeasonAb().catch((error) => {
                 console.error('Fehler beim Abrechnen der Ping-Pong-Season:', error);
+            });
+            // Tut nichts, solange die Runde nicht von Hand auf /config gestartet wurde.
+            rollenDmHandler.sendeNaechste().catch((error) => {
+                console.error('Fehler bei der Rollen-DM-Runde:', error);
             });
             // Pollt die Kriegerliste EINMAL fuer alle, die sie brauchen (Beobachtungslisten +
             // Drachentoetungs-Gratulation). Taktet sich selbst herunter (alle 5 Minuten) und
