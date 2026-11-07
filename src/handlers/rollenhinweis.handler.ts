@@ -1,5 +1,7 @@
 import {GuildMember, Message, OmitPartialGroupDMChannel} from 'discord.js';
 import rollenhinweisService from '../services/rollenhinweis.service.js';
+import {hatEigeneRolle} from '../services/rollen.service.js';
+import config from '../../config.json' with {type: 'json'};
 
 // Bewusst eine normale, bleibende Antwort: ephemere ("nur du siehst das") Nachrichten gibt es in
 // Discord nur als Antwort auf Interactions (Slash-Command, Button, ...), nicht auf Chatnachrichten.
@@ -31,7 +33,7 @@ class RollenhinweisHandler {
     // bewusst nicht als "hingewiesen": wer ihn übersieht und später schreibt, soll die Antwort noch
     // bekommen. Kanal kommt aus /config, ohne Kanal passiert nichts.
     async handleBeitritt(member: GuildMember): Promise<void> {
-        if (member.user.bot) return;
+        if (member.user.bot || member.guild.id !== config.GUILD_ID) return;
 
         const kanalId = await rollenhinweisService.getWillkommensKanal();
         if (!kanalId) return;
@@ -55,9 +57,7 @@ class RollenhinweisHandler {
         const channelId = await rollenhinweisService.getChannel();
         if (!channelId || message.channelId !== channelId) return;
 
-        // @everyone steckt in jedem Rollen-Cache (ID = Guild-ID) und zählt nicht als Rolle.
-        const guildId = message.guild.id;
-        if (message.member.roles.cache.some(rolle => rolle.id !== guildId)) return;
+        if (hatEigeneRolle(message.member, message.guild.id)) return;
 
         if (!await rollenhinweisService.markiereHingewiesen(message.author.id)) return;
 

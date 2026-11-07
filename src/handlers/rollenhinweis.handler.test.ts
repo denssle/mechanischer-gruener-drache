@@ -10,6 +10,7 @@ const rollenhinweisService = vi.hoisted(() => ({
 vi.mock('../services/rollenhinweis.service.js', () => ({default: rollenhinweisService}));
 
 import {Collection} from 'discord.js';
+import config from '../../config.json' with {type: 'json'};
 import rollenhinweisHandler, {ROLLENHINWEIS_TEXT, rollenhinweisText, willkommensText} from './rollenhinweis.handler.js';
 
 const GUILD_ID = 'guild-1';
@@ -137,7 +138,8 @@ describe('RollenhinweisHandler.handleMessage', () => {
 describe('Willkommensgruß', () => {
     const send = vi.fn();
     const fetch = vi.fn();
-    const mockMember = (bot = false) => ({id: 'neu-1', user: {bot}, guild: {channels: {fetch}}}) as any;
+    const mockMember = (bot = false, guildId = config.GUILD_ID) =>
+        ({id: 'neu-1', user: {bot}, guild: {id: guildId, channels: {fetch}}}) as any;
 
     beforeEach(() => {
         vi.resetAllMocks();
@@ -167,6 +169,12 @@ describe('Willkommensgruß', () => {
         await rollenhinweisHandler.handleBeitritt(mockMember(true));
 
         expect(send).not.toHaveBeenCalled();
+    });
+
+    it('ignoriert Beitritte auf anderen Servern', async () => {
+        await rollenhinweisHandler.handleBeitritt(mockMember(false, 'anderer-server'));
+
+        expect(fetch).not.toHaveBeenCalled();
     });
 
     it('bleibt ohne Kanal still', async () => {

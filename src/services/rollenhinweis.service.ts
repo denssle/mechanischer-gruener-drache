@@ -37,6 +37,10 @@ class RollenhinweisService {
         return redisService.get(KEYS.willkommensKanal);
     }
 
+    async removeWillkommensKanal(): Promise<void> {
+        await redisService.delete(KEYS.willkommensKanal);
+    }
+
     async setHauptrolle(rolleId: string): Promise<void> {
         await redisService.set(KEYS.hauptrolle, rolleId);
     }

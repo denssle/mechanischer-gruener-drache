@@ -46,7 +46,7 @@ vi.mock('../services/character.service.js', async (importOriginal) => {
     return { ...actual, default: character };
 });
 
-import {Collection} from 'discord.js';
+import {Collection, PermissionFlagsBits} from 'discord.js';
 import diagnoseHandler, {zaehleOhneRolle} from './diagnose.handler.js';
 import config from '../../config.json' with { type: 'json' };
 
@@ -139,6 +139,7 @@ describe('DiagnoseHandler', () => {
             rollenhinweis.getHingewiesene.mockResolvedValue([]);
             rollenhinweis.getWillkommensKanal.mockResolvedValue(null);
             rollenhinweis.getChannel.mockResolvedValue(null);
+            rollenhinweis.getRollenKanal.mockResolvedValue(null);
         });
 
         it('zählt ohne Hauptrolle, wer gar keine Rolle hat', async () => {
@@ -164,7 +165,7 @@ describe('DiagnoseHandler', () => {
 
             expect(report(interaction)).toContain('Hauptrolle: ✅ <@&haupt>');
             expect(report(interaction)).toContain('Ohne Rolle: 2 von 3 (ohne Bots)');
-            expect(report(interaction)).toContain('Rollenhinweis bekommen: 1, nie erreicht: 1');
+            expect(report(interaction)).toContain('Rollenhinweis bekommen: 1, noch nicht: 1');
         });
 
         it('fällt bei einer gelöschten Hauptrolle auf "gar keine Rolle" zurück', async () => {
@@ -190,24 +191,64 @@ describe('DiagnoseHandler', () => {
             expect(report(interaction)).toContain('**Config-Seite (/config)**');
         });
 
-        it('warnt, wenn ein Kanal für Leute ohne Rolle unsichtbar ist', async () => {
+        // Der Bot (members.me) und @everyone (roles.everyone) bekommen getrennte Rechte, damit die
+        // Tests sehen, wer gemeint ist.
+        const mockKanal = (rechteOhneRolle: bigint[], rechteBot: bigint[]) => ({
+            id: 'kanal',
+            permissionsFor: (wer: {id?: string}) => ({
+                has: (recht: bigint) => (wer.id === config.GUILD_ID ? rechteOhneRolle : rechteBot).includes(recht),
+            }),
+        });
+        const {ViewChannel, SendMessages, ReadMessageHistory} = PermissionFlagsBits;
+
+        it('warnt, wenn Leute ohne Rolle den Willkommens-Kanal nicht sehen', async () => {
             rollenhinweis.getWillkommensKanal.mockResolvedValue('kanal-gruss');
-            channelsFetch.mockResolvedValue({id: 'kanal-gruss', permissionsFor: () => ({has: () => false})});
+            channelsFetch.mockResolvedValue(mockKanal([], [ViewChannel, SendMessages]));
             const interaction = makeInteraction();
 
             await diagnoseHandler.handleDiagnose(interaction);
 
-            expect(report(interaction)).toContain('Willkommensgruß: ✅ <#kanal-gruss> ⚠️ für Leute ohne Rolle nicht sichtbar');
+            expect(report(interaction)).toContain('Willkommensgruß: ⚠️ <#kanal-gruss>, Leuten ohne Rolle fehlt: Kanal sehen, Nachrichtenverlauf lesen');
         });
 
-        it('schweigt, wenn der Kanal für Leute ohne Rolle sichtbar ist', async () => {
+        it('warnt, wenn der Bot im Willkommens-Kanal nicht schreiben darf', async () => {
             rollenhinweis.getWillkommensKanal.mockResolvedValue('kanal-gruss');
-            channelsFetch.mockResolvedValue({id: 'kanal-gruss', permissionsFor: () => ({has: () => true})});
+            channelsFetch.mockResolvedValue(mockKanal([ViewChannel, ReadMessageHistory], [ViewChannel]));
             const interaction = makeInteraction();
 
             await diagnoseHandler.handleDiagnose(interaction);
 
-            expect(report(interaction)).not.toContain('nicht sichtbar');
+            expect(report(interaction)).toContain('Willkommensgruß: ⚠️ <#kanal-gruss>, mir fehlt: Nachrichten senden');
+        });
+
+        it('warnt, wenn Leute ohne Rolle im Hinweis-Kanal nicht schreiben dürfen', async () => {
+            rollenhinweis.getChannel.mockResolvedValue('kanal-hinweis');
+            channelsFetch.mockResolvedValue(mockKanal([ViewChannel], [ViewChannel, SendMessages, ReadMessageHistory]));
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Rollenhinweis-Kanal: ⚠️ <#kanal-hinweis>, Leuten ohne Rolle fehlt: Nachrichten senden');
+        });
+
+        it('warnt, wenn Leute ohne Rolle den Verlauf im Rollen-Kanal nicht lesen dürfen', async () => {
+            rollenhinweis.getRollenKanal.mockResolvedValue('kanal-rollen');
+            channelsFetch.mockResolvedValue(mockKanal([ViewChannel], [ViewChannel]));
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Kanal mit dem Rollen-Button: ⚠️ <#kanal-rollen>, Leuten ohne Rolle fehlt: Nachrichtenverlauf lesen');
+        });
+
+        it('zeigt ein Grün, wenn alle nötigen Rechte da sind', async () => {
+            rollenhinweis.getWillkommensKanal.mockResolvedValue('kanal-gruss');
+            channelsFetch.mockResolvedValue(mockKanal([ViewChannel, ReadMessageHistory], [ViewChannel, SendMessages]));
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Willkommensgruß: ✅ <#kanal-gruss>');
         });
     });
 

@@ -12,7 +12,9 @@
 ## Willkommensgruß (seit 2026-11-07)
 
 - Anlass: 87 von 225 Mitgliedern hatten die Hauptrolle nicht, und laut Discords Vorschau „Mitglieder entfernen" waren nur 38 davon länger als 7 Tage weg. Das sind also keine Karteileichen. Der Hinweis oben erreicht aber nur, wer im Kanal **schreibt**, wer still mitliest, erfuhr nie etwas.
-- `handleBeitritt` (`GuildMemberAdd`, eigene Registrierung in `index.ts`) schreibt in den Kanal aus `/config` (`rollenhinweis-willkommen`, Key `ROLLENHINWEIS:WILLKOMMENSKANAL`) einen festen Text samt Ping und nutzt denselben Link auf den Rollen-Kanal. Ohne Kanal passiert nichts, Bots werden nicht begrüßt.
+- `handleBeitritt` (`GuildMemberAdd`, eigene Registrierung in `index.ts`) schreibt in den Kanal aus `/config` (`rollenhinweis-willkommen`, Key `ROLLENHINWEIS:WILLKOMMENSKANAL`) einen festen Text samt Ping und nutzt denselben Link auf den Rollen-Kanal. Ohne Kanal passiert nichts, Bots und Beitritte auf anderen Servern werden übergangen.
+- **Abschaltbar:** Anders als die übrigen Kanal-Felder hat dieses eine Option „— aus —" (`entferne` in `KANAL_SERVICES`, leerer Wert an `POST /config/kanal`). Der Gruß postet bei jedem Beitritt, bei einer Beitrittswelle muss er ohne Host-Zugriff ausgehen können.
+- **Kein Warten auf die Regeln:** Es gibt keine Auto-Rolle, alle Rollen kommen auf Wunsch (User-Auskunft 2026-11-07). Deshalb stimmt der Satz „Noch siehst du nur einen kleinen Teil" beim Beitritt. Kommt je eine Auto-Rolle dazu, muss der Gruß das berücksichtigen.
 - **Der Ping braucht `allowedMentions: {users: [id]}`**, sonst schluckt ihn die Voreinstellung am Client.
 - **Markiert bewusst nicht als „hingewiesen":** Wer den Gruß übersieht und später im Hinweis-Kanal schreibt, soll die Antwort noch bekommen. Die ist dann die zweite Chance, im passenden Moment.
 - **Kein Merker gegen Wiederkehrer:** Wer geht und wiederkommt, wird erneut begrüßt. Das ist so gewollt und bleibt selten.

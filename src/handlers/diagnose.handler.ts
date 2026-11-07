@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, Guild, GuildMember, MessageFlags, PermissionFlagsBits} from 'discord.js';
+import {ChatInputCommandInteraction, Guild, GuildMember, MessageFlags, PermissionFlagsBits, Role} from 'discord.js';
 import client from '../client.js';
 import twitchUserService from '../services/twitch.user.service.js';
 import twitchService from '../services/twitch.service.js';
@@ -8,6 +8,7 @@ import greetingService from '../services/greeting.service.js';
 import geburtstagService from '../services/geburtstag.service.js';
 import drachenService from '../services/drachen.service.js';
 import rollenhinweisService from '../services/rollenhinweis.service.js';
+import {hatEigeneRolle} from '../services/rollen.service.js';
 import fehlerMeldungService from '../services/fehlerMeldung.service.js';
 import eventService from '../services/event.service.js';
 import characterService, {CharacterLink, findInRoster} from '../services/character.service.js';
@@ -40,6 +41,19 @@ export function teileInNachrichten(zeilen: string[]): string[] {
 }
 
 const TAG_MS = 24 * 60 * 60 * 1000;
+
+interface KanalRecht {
+    recht: bigint;
+    name: string;
+}
+
+const KANAL_SEHEN: KanalRecht = {recht: PermissionFlagsBits.ViewChannel, name: 'Kanal sehen'};
+const SCHREIBEN: KanalRecht = {recht: PermissionFlagsBits.SendMessages, name: 'Nachrichten senden'};
+const VERLAUF: KanalRecht = {recht: PermissionFlagsBits.ReadMessageHistory, name: 'Nachrichtenverlauf lesen'};
+
+function nichtAbrufbar(channelId: string): string {
+    return `⚠️ gesetzt (\`${channelId}\`), aber nicht abrufbar (gelöscht oder kein Zugriff?)`;
+}
 
 export interface RollenStand {
     gesamt: number;
@@ -103,12 +117,20 @@ class DiagnoseHandler {
         lines.push(`Morgengruß-Kanal: ${await this.pruefeKanal(await greetingService.getChannel())}`);
         lines.push(`Geburtstagskanal: ${await this.pruefeKanal(await geburtstagService.getChannel())}`);
         lines.push(`Spielwelt-Ankündigungskanal: ${await this.pruefeKanal(await drachenService.getChannel())}`);
-        const hinweisKanal = await rollenhinweisService.getChannel();
-        lines.push(`Rollenhinweis-Kanal: ${await this.pruefeKanal(hinweisKanal)}${await this.warnungUnsichtbar(hinweisKanal)}`);
-        const rollenKanal = await rollenhinweisService.getRollenKanal();
-        lines.push(`Rollenhinweis, Kanal mit dem Rollen-Button: ${rollenKanal ? await this.pruefeKanal(rollenKanal) : 'ℹ️ nicht gesetzt (optional)'}${await this.warnungUnsichtbar(rollenKanal)}`);
-        const willkommensKanal = await rollenhinweisService.getWillkommensKanal();
-        lines.push(`Willkommensgruß: ${willkommensKanal ? await this.pruefeKanal(willkommensKanal) : 'ℹ️ nicht gesetzt, Neue werden nicht begrüßt'}${await this.warnungUnsichtbar(willkommensKanal)}`);
+        // Die Antwort ist ein Reply, dafür braucht der Bot auch den Verlauf.
+        lines.push(`Rollenhinweis-Kanal: ${await this.pruefeZugang(
+            await rollenhinweisService.getChannel(), '❌ nicht gesetzt',
+            [KANAL_SEHEN, SCHREIBEN], [KANAL_SEHEN, SCHREIBEN, VERLAUF],
+        )}`);
+        // Die Button-Nachricht ist alt, ohne Verlauf bliebe der Kanal für Leute ohne Rolle leer.
+        lines.push(`Rollenhinweis, Kanal mit dem Rollen-Button: ${await this.pruefeZugang(
+            await rollenhinweisService.getRollenKanal(), 'ℹ️ nicht gesetzt (optional)',
+            [KANAL_SEHEN, VERLAUF], [KANAL_SEHEN],
+        )}`);
+        lines.push(`Willkommensgruß: ${await this.pruefeZugang(
+            await rollenhinweisService.getWillkommensKanal(), 'ℹ️ nicht gesetzt, Neue werden nicht begrüßt',
+            [KANAL_SEHEN, VERLAUF], [KANAL_SEHEN, SCHREIBEN],
+        )}`);
         const fehlerKanal = await fehlerMeldungService.getChannel();
         lines.push(`Kanal für Bot-Fehler: ${fehlerKanal ? await this.pruefeKanal(fehlerKanal) : 'ℹ️ nicht gesetzt (optional)'}`);
         lines.push(`Audit-Log-Zugriff: ${this.pruefeAuditLogRecht()}`);
@@ -151,14 +173,14 @@ class DiagnoseHandler {
             const hauptrolle = await this.ladeHauptrolle(guild, lines);
             const hatRolle = hauptrolle
                 ? (mitglied: GuildMember) => mitglied.roles.cache.has(hauptrolle)
-                : (mitglied: GuildMember) => mitglied.roles.cache.some(rolle => rolle.id !== guild.id);
+                : (mitglied: GuildMember) => hatEigeneRolle(mitglied, guild.id);
             const mitglieder = await guild.members.fetch();
             const hingewiesen = new Set(await rollenhinweisService.getHingewiesene());
             const stand = zaehleOhneRolle(mitglieder.values(), hatRolle, hingewiesen);
 
             lines.push(`Ohne Rolle: ${stand.ohneRolle} von ${stand.gesamt} (ohne Bots)`);
             lines.push(`Beigetreten: ${stand.letzte30Tage} in den letzten 30 Tagen, ${stand.letztesJahr} im letzten Jahr, ${stand.aelter} früher`);
-            lines.push(`Rollenhinweis bekommen: ${stand.hingewiesen}, nie erreicht: ${stand.ohneRolle - stand.hingewiesen}`);
+            lines.push(`Rollenhinweis bekommen: ${stand.hingewiesen}, noch nicht: ${stand.ohneRolle - stand.hingewiesen}`);
         } catch (error) {
             console.error('Konnte die Mitglieder für /diagnose nicht auswerten:', error);
             lines.push('⚠️ Mitglieder konnten nicht ausgewertet werden.');
@@ -180,17 +202,35 @@ class DiagnoseHandler {
         return rolleId;
     }
 
-    // Hinweis, Gruß und Rollen-Button richten sich an Leute ohne Rolle. Sehen die den Kanal nicht, läuft
-    // alles ins Leere, ohne dass irgendwo ein Fehler auftaucht.
-    private async warnungUnsichtbar(channelId: string | null): Promise<string> {
-        const guild = client.guilds.cache.get(config.GUILD_ID);
-        if (!channelId || !guild) return '';
+    // Hinweis, Gruß und Rollen-Button richten sich an Leute ohne Rolle. Fehlt denen oder dem Bot ein
+    // Recht, läuft alles ins Leere, und außer einer Logzeile taucht nirgends ein Fehler auf. Ein
+    // einziger Status statt Haken plus Warnung: ein Kanal, der nicht funktioniert, ist nicht grün.
+    private async pruefeZugang(
+        channelId: string | null,
+        leerText: string,
+        rechteOhneRolle: KanalRecht[],
+        rechteBot: KanalRecht[],
+    ): Promise<string> {
+        if (!channelId) return leerText;
 
         const kanal = await client.channels.fetch(channelId).catch(() => null);
-        if (!kanal || !('permissionsFor' in kanal)) return '';
-        return kanal.permissionsFor(guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel)
-            ? ''
-            : ' ⚠️ für Leute ohne Rolle nicht sichtbar';
+        if (!kanal) return nichtAbrufbar(channelId);
+
+        const guild = client.guilds.cache.get(config.GUILD_ID);
+        const me = guild?.members.me;
+        if (!guild || !me || !('permissionsFor' in kanal)) return `✅ <#${channelId}>`;
+
+        const fehlt = (wer: GuildMember | Role, rechte: KanalRecht[]) => {
+            const erlaubt = kanal.permissionsFor(wer);
+            return rechte.filter(({recht}) => !erlaubt?.has(recht)).map(({name}) => name);
+        };
+        const ohneRolle = fehlt(guild.roles.everyone, rechteOhneRolle);
+        const bot = fehlt(me, rechteBot);
+        const probleme = [
+            ...(ohneRolle.length ? [`Leuten ohne Rolle fehlt: ${ohneRolle.join(', ')}`] : []),
+            ...(bot.length ? [`mir fehlt: ${bot.join(', ')}`] : []),
+        ];
+        return probleme.length ? `⚠️ <#${channelId}>, ${probleme.join('; ')}` : `✅ <#${channelId}>`;
     }
 
     // Ist der /config-Login scharf geschaltet? Reines Config-Lesen (kein Netz): ohne beide Secrets
@@ -261,9 +301,7 @@ class DiagnoseHandler {
     private async pruefeKanal(channelId: string | null): Promise<string> {
         if (!channelId) return '❌ nicht gesetzt';
         const channel = await client.channels.fetch(channelId).catch(() => null);
-        return channel
-            ? `✅ <#${channelId}>`
-            : `⚠️ gesetzt (\`${channelId}\`), aber nicht abrufbar (gelöscht oder kein Zugriff?)`;
+        return channel ? `✅ <#${channelId}>` : nichtAbrufbar(channelId);
     }
 
     // Twitch-EventSub-Status (übernommen aus dem früheren /twitch diagnose): nur `enabled` stellt zu.

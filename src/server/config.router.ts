@@ -63,6 +63,7 @@ import {
     speichereBashZitat,
     speichereEventDaten,
     speichereKanal,
+    entferneKanal,
     speichereKilometer,
     speichereMorgengrussEmoji,
     speichereRolle
@@ -204,12 +205,15 @@ export function renderKanalFormular(feld: KanalFeld, kanaele: KanalOption[], csr
     // id/for-Paar: ohne die Verknüpfung liest ein Screenreader das Feld unbeschriftet vor, und der
     // Klick aufs Label fokussiert nichts. Der Schlüssel ist pro Seite eindeutig.
     const id = `kanal-${feld.schluessel}`;
+    const platzhalter = feld.abschaltbar
+        ? `${feld.status === 'warnung' ? platzhalterOption(feld.status, feld.aktuelleId, '') : ''}<option value=""${feld.status === 'leer' ? ' selected' : ''}>— aus —</option>`
+        : platzhalterOption(feld.status, feld.aktuelleId, '— nicht gesetzt —');
     return `<form class="setting" method="post" action="/config/kanal">
         <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
         <input type="hidden" name="feld" value="${escapeHtml(feld.schluessel)}">
         <label for="${escapeHtml(id)}">${escapeHtml(feld.label)}</label>
-        <select id="${escapeHtml(id)}" name="kanal" required class="status-${feld.status}">
-            ${platzhalterOption(feld.status, feld.aktuelleId, '— nicht gesetzt —')}${optionen}
+        <select id="${escapeHtml(id)}" name="kanal"${feld.abschaltbar ? '' : ' required'} class="status-${feld.status}">
+            ${platzhalter}${optionen}
         </select>
         <button type="submit">Speichern</button>
     </form>`;
@@ -568,7 +572,7 @@ export function renderRollenhinweisHinweis(): string {
     Rolle sichtbar sein, sonst führt der Link ins Leere.</p>
     <p class="feld-hinweis">Ist ein Kanal für den Willkommensgruß gesetzt, schreibt der Bot dort bei jedem
     Beitritt: „Willkommen, @Name! ${escapeHtml(WILLKOMMENS_TEXT)}" Auch dieser Kanal muss ohne Rolle
-    sichtbar sein. Die Hauptrolle ist die Rolle, die den Server öffnet: /diagnose zählt, wer sie nicht hat.
+    sichtbar sein, und mit „— aus —" schaltest du den Gruß wieder ab. Die Hauptrolle ist die Rolle, die den Server öffnet: /diagnose zählt, wer sie nicht hat.
     Ohne Hauptrolle zählt es, wer gar keine Rolle hat.</p>`;
 }
 
@@ -828,6 +832,7 @@ const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
     'rollenhinweis-kanal': {bereich: 'rollenhinweis', text: 'Rollenhinweis-Kanal gespeichert.'},
     'rollenhinweis-rollenkanal': {bereich: 'rollenhinweis', text: 'Kanal mit dem Rollen-Button gespeichert.'},
     'rollenhinweis-willkommen': {bereich: 'rollenhinweis', text: 'Kanal für den Willkommensgruß gespeichert.'},
+    'rollenhinweis-willkommen-entfernt': {bereich: 'rollenhinweis', text: 'Willkommensgruß abgeschaltet.'},
     'rollenhinweis-hauptrolle': {bereich: 'rollenhinweis', text: 'Hauptrolle gespeichert.'},
     'rollenhinweis-hauptrolle-entfernt': {bereich: 'rollenhinweis', text: 'Hauptrolle entfernt.'},
     'twitch-rolle': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle gespeichert.'},
@@ -931,6 +936,11 @@ export async function handleKanalSpeichern(req: Request, res: Response): Promise
     }
 
     const kanalId = typeof body.kanal === 'string' ? body.kanal : '';
+    if (kanalId === '' && await entferneKanal(feld)) {
+        zurueckZumBereich(res, `${feld}-entfernt`);
+        return;
+    }
+
     if (!istGueltigerTextKanal(kanalId)) {
         res.status(400).type('html').send(renderPage(eingabeFehlerBody('Unbekannter Kanal – bitte einen Kanal aus der Liste wählen.')));
         return;
@@ -941,7 +951,7 @@ export async function handleKanalSpeichern(req: Request, res: Response): Promise
 }
 
 // Speichert eine Rollen-Einstellung (per "feld" benannt, wie bei den Kanaelen). Leerer Wert =
-// Rolle entfernen (beide Rollen sind optional). Reihenfolge wie ueberall: CSRF → Feld-Whitelist →
+// Rolle entfernen (alle Rollen sind optional). Reihenfolge wie ueberall: CSRF → Feld-Whitelist →
 // Rollen-Whitelist → speichern → Redirect.
 export async function handleRolleSpeichern(req: Request, res: Response): Promise<void> {
     const userId = res.locals.configUserId as string;

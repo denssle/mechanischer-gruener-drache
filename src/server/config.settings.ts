@@ -66,6 +66,8 @@ interface KanalService {
     label: string;
     lade: () => Promise<string | null>;
     speichere: (kanalId: string) => Promise<void>;
+    // Nur wo "aus" ein gültiger Zustand ist. Das Formular bietet dann eine leere Option an.
+    entferne?: () => Promise<void>;
 }
 
 const KANAL_SERVICES: Record<string, KanalService> = {
@@ -118,6 +120,7 @@ const KANAL_SERVICES: Record<string, KanalService> = {
         label: 'Kanal für den Willkommensgruß',
         lade: () => rollenhinweisService.getWillkommensKanal(),
         speichere: (id) => rollenhinweisService.setWillkommensKanal(id),
+        entferne: () => rollenhinweisService.removeWillkommensKanal(),
     },
 };
 
@@ -126,6 +129,7 @@ export interface KanalFeld {
     label: string;
     aktuelleId: string | null;
     status: FeldStatus;
+    abschaltbar?: boolean;
 }
 
 export function istKanalFeld(schluessel: string): boolean {
@@ -139,7 +143,13 @@ export function istKanalFeld(schluessel: string): boolean {
 export async function ladeKanalFelder(): Promise<KanalFeld[]> {
     return Promise.all(Object.entries(KANAL_SERVICES).map(async ([schluessel, service]) => {
         const aktuelleId = await service.lade();
-        return {schluessel, label: service.label, aktuelleId, status: await kanalStatus(aktuelleId)};
+        return {
+            schluessel,
+            label: service.label,
+            aktuelleId,
+            status: await kanalStatus(aktuelleId),
+            abschaltbar: service.entferne !== undefined,
+        };
     }));
 }
 
@@ -153,6 +163,14 @@ async function kanalStatus(channelId: string | null): Promise<FeldStatus> {
 
 export async function speichereKanal(schluessel: string, kanalId: string): Promise<void> {
     await KANAL_SERVICES[schluessel].speichere(kanalId);
+}
+
+// false = dieses Feld lässt sich nicht abschalten, der Aufrufer meldet dann einen Eingabefehler.
+export async function entferneKanal(schluessel: string): Promise<boolean> {
+    const entferne = KANAL_SERVICES[schluessel].entferne;
+    if (!entferne) return false;
+    await entferne();
+    return true;
 }
 
 export interface RollenOption {

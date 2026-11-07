@@ -42,7 +42,7 @@ vi.mock('../services/fehlerMeldung.service.js', () => ({
     default: {getChannel: vi.fn(async () => null), setChannel: vi.fn()}
 }));
 vi.mock('../services/rollenhinweis.service.js', () => ({
-    default: {getChannel: vi.fn(async () => null), setChannel: vi.fn(), getRollenKanal: vi.fn(async () => null), setRollenKanal: vi.fn(), getWillkommensKanal: vi.fn(async () => null), setWillkommensKanal: vi.fn(), getHauptrolle: vi.fn(async () => null), setHauptrolle: vi.fn(), removeHauptrolle: vi.fn()}
+    default: {getChannel: vi.fn(async () => null), setChannel: vi.fn(), getRollenKanal: vi.fn(async () => null), setRollenKanal: vi.fn(), getWillkommensKanal: vi.fn(async () => null), setWillkommensKanal: vi.fn(), removeWillkommensKanal: vi.fn(), getHauptrolle: vi.fn(async () => null), setHauptrolle: vi.fn(), removeHauptrolle: vi.fn()}
 }));
 vi.mock('../services/event.service.js', () => ({
     default: {getEvent: vi.fn(), setEvent: vi.fn(), clearEvent: vi.fn()}
@@ -67,6 +67,7 @@ import {ableiteEmoji, GRUSS_EMOJIS} from '../handlers/greeting.handler.js';
 import {EMOJI_SHORTCODES} from '../data/emoji-shortcodes.js';
 import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
+import rollenhinweisService from '../services/rollenhinweis.service.js';
 import eventService from '../services/event.service.js';
 import pingPongService from '../services/pingPong.service.js';
 import bashService from '../services/bash.service.js';
@@ -90,6 +91,7 @@ import {
     holeTextKanaele,
     istRollenFeld,
     ladeRollenFelder,
+    entferneKanal,
     istGueltigerTextKanal,
     istGueltigeRolle,
     istGueltigesMitglied,
@@ -261,7 +263,13 @@ describe('config.settings – Twitch-Rolle (bearbeiten)', () => {
         expect(istGueltigeRolle('fremd')).toBe(false);
     });
 
-    it('ladeRollenFelder liefert beide Rollen mit ID + Zustand (ok / leer / warnung)', async () => {
+    it('entferneKanal schaltet nur Felder ab, die das vorsehen', async () => {
+        expect(await entferneKanal('rollenhinweis-willkommen')).toBe(true);
+        expect(rollenhinweisService.removeWillkommensKanal).toHaveBeenCalled();
+        expect(await entferneKanal('protokoll')).toBe(false);
+    });
+
+    it('ladeRollenFelder liefert alle Rollen mit ID + Zustand (ok / leer / warnung)', async () => {
         mitRollen();
 
         (twitchUserService.getNotificationRole as any).mockResolvedValue('r1');
