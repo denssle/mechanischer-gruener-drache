@@ -556,6 +556,11 @@ export function renderSpielweltHinweis(): string {
 
 // Wie beim Spielwelt-Bereich: ohne Erklärung stünde hier ein Dropdown ohne erkennbaren Zweck. Der
 // Antworttext steht mit drin, damit man sieht, was die Leute zu lesen bekommen.
+export function renderFehlerKanalHinweis(): string {
+    return `<p class="feld-hinweis">Optional: Fehler des Bots kommen dort gesammelt an, höchstens alle zehn
+    Minuten und nur mit der ersten Zeile. Ein Kanal nur für Admins passt am besten.</p>`;
+}
+
 export function renderRollenhinweisHinweis(): string {
     return `<p class="feld-hinweis">Wer in diesem Kanal schreibt und noch gar keine Rolle hat, bekommt
     vom Bot einmalig (pro Person, für immer) diese Antwort: „${escapeHtml(ROLLENHINWEIS_TEXT)}"
@@ -682,7 +687,7 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
             kanal('sport-kanal') + renderSportAdmin(daten.mitglieder, daten.legacyKilometer, csrf) + renderMeilensteinListe(daten.meilensteine, csrf),
             meldungFuer('sport')) +
         renderBereich('protokoll', 'Nachrichten-Protokoll',
-            kanal('protokoll'),
+            kanal('protokoll') + kanal('fehler-kanal') + renderFehlerKanalHinweis(),
             meldungFuer('protokoll')) +
         renderBereich('morgengruss', 'Morgengruß',
             kanal('morgengruss-kanal') + renderMorgengrussLernen(csrf) + renderMorgengrussEmojiLink(daten.anzahlEmojiEintraege),
@@ -809,6 +814,7 @@ export async function requireConfigAuth(req: Request, res: Response, next: () =>
 // nie ausgegeben. Die Kanal-Schlüssel sind dieselben wie in KANAL_SERVICES (config.settings.ts).
 const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
     'protokoll': {bereich: 'protokoll', text: 'Protokoll-Kanal gespeichert.'},
+    'fehler-kanal': {bereich: 'protokoll', text: 'Kanal für Bot-Fehler gespeichert.'},
     'twitch-kanal': {bereich: 'twitch', text: 'Twitch-Benachrichtigungskanal gespeichert.'},
     'sport-kanal': {bereich: 'sport', text: 'Sport-Ankündigungskanal gespeichert.'},
     'morgengruss-kanal': {bereich: 'morgengruss', text: 'Morgengruß-Kanal gespeichert.'},

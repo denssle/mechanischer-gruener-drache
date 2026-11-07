@@ -139,6 +139,12 @@ Testabdeckung anzeigen (via `@vitest/coverage-v8`):
 npm run test:coverage
 ```
 
+### Redis-Integrationstest
+Alle anderen Tests mocken Redis. Dieser läuft gegen ein echtes Redis unter `~/.redis/sock` (die CI startet dafür einen Docker-Container) und wird sonst übersprungen. Er benutzt nur Keys mit dem Prefix `QS_TEST:` und löscht sie wieder:
+```bash
+npm run test:redis
+```
+
 ### Typecheck
 Type-Check inklusive der Testdateien – die sind bewusst nicht Teil von `npm run build` (keine `*.test.js` in `dist/`), Typfehler dort fallen also **nur** hier auf. Läuft in der CI als eigener Step:
 ```bash
@@ -159,6 +165,10 @@ Um den Webhook-Server lokal manuell zu testen:
    npm run build:scripts
    node dist-scripts/test-twitch-webhook.js notify
    ```
+
+## 🔧 Betrieb
+
+Überwachung und Backup stehen in [docs/betrieb.md](docs/betrieb.md).
 
 ## ✅ Fortschritt / Todo
 

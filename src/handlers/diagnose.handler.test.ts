@@ -29,6 +29,7 @@ vi.mock('../services/greeting.service.js', () => ({ default: greeting }));
 vi.mock('../services/geburtstag.service.js', () => ({ default: geburtstag }));
 vi.mock('../services/drachen.service.js', () => ({ default: drachen }));
 vi.mock('../services/rollenhinweis.service.js', () => ({ default: rollenhinweis }));
+vi.mock('../services/fehlerMeldung.service.js', () => ({ default: { getChannel: vi.fn(async () => null) } }));
 vi.mock('../services/event.service.js', () => ({ default: event }));
 vi.mock('../services/pingPong.service.js', () => ({ default: pingPong }));
 vi.mock('../services/discordOAuth.service.js', () => oauth);

@@ -10,6 +10,7 @@ import greetingService from '../services/greeting.service.js';
 import geburtstagService from '../services/geburtstag.service.js';
 import drachenService from '../services/drachen.service.js';
 import rollenhinweisService from '../services/rollenhinweis.service.js';
+import fehlerMeldungService from '../services/fehlerMeldung.service.js';
 import eventService from '../services/event.service.js';
 import pingPongService from '../services/pingPong.service.js';
 import bashService, {BashAenderung, parseIsoDatum} from '../services/bash.service.js';
@@ -72,6 +73,11 @@ const KANAL_SERVICES: Record<string, KanalService> = {
         label: 'Protokoll-Kanal',
         lade: () => loggingService.getLogChannel(),
         speichere: (id) => loggingService.setLogChannel(id),
+    },
+    'fehler-kanal': {
+        label: 'Kanal für Bot-Fehler',
+        lade: () => fehlerMeldungService.getChannel(),
+        speichere: (id) => fehlerMeldungService.setChannel(id),
     },
     'twitch-kanal': {
         label: 'Twitch-Benachrichtigungskanal',
