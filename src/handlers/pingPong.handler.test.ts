@@ -1242,6 +1242,24 @@ describe('PingPongHandler', () => {
                 expect(hochgezaehlt.filter(key => key.startsWith('PING_PONG:PECHSTRAEHNE:'))).toHaveLength(1);
             });
 
+            // Die Nachricht trägt Discords Zeitstempel der Lobby-Eröffnung, nicht den des Spiels.
+            it('hängt den Zeitpunkt des Spiels als Discord-Timestamp an', async () => {
+                vi.useFakeTimers({toFake: ['Date']});
+                vi.setSystemTime(new Date('2026-10-23T18:30:00Z'));
+                try {
+                    scoresInRedis({});
+                    const interaction = mockButton('pingpong-rundlauf:starten:111', '111',
+                        lobbyInhalt(['111', '222', '333']));
+
+                    await pingPongHandler.handleRundlaufButton(interaction);
+
+                    const unix = Math.floor(new Date('2026-10-23T18:30:00Z').getTime() / 1000);
+                    expect(interaction.update.mock.calls[0][0].content).toContain(`<t:${unix}:f>`);
+                } finally {
+                    vi.useRealTimers();
+                }
+            });
+
             it('sollte Fehler abfangen', async () => {
                 vi.mocked(redisService.get).mockRejectedValue(new Error('Redis kaputt'));
                 const interaction = mockButton('pingpong-rundlauf:starten:111', '111',
