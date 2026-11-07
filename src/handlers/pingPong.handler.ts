@@ -189,8 +189,12 @@ export function rundlaufListenEintrag(guildId: string | null, channelId: string,
     return `${guildId}:${channelId}:${messageId}`;
 }
 
-// Mehr Zeilen passen nicht sicher in eine Nachricht - und so viele offene Runden wären ohnehin Karteileichen.
+// Mehr Zeilen passen nicht sicher in eine Nachricht.
 const MAX_GELISTETE_RUNDLAEUFE = 15;
+
+// Lobbys laufen nie ab, auch eine vergessene bleibt offen. Nach einer Woche fliegt sie aus der
+// Liste (spielbar bleibt sie), sonst füllen Karteileichen die Liste für immer.
+const RUNDLAUF_LISTE_MAX_ALTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Unter drei Leuten ist es kein Rundlauf, sondern ein Duell (dafür gibt es `herausfordern`).
 // Die Obergrenze hält Nachricht und Punkteverteilung im Rahmen - an einer Platte ist irgendwann
@@ -688,13 +692,24 @@ class PingPongHandler {
     // so stimmt die Teilnehmerzahl, und nur so fällt auf, was inzwischen gelöscht oder (falls das
     // Austragen beim Start mal scheiterte) längst gespielt ist. Das wird dabei gleich aufgeräumt.
     async handleRundlaeufe(interaction: ChatInputCommandInteraction) {
+        // Bis zu 15 Lobbys werden einzeln bei Discord geholt, nach einem Neustart ohne Cache. Das
+        // kann die 3 Sekunden reißen, in denen eine Interaction beantwortet sein muss.
+        await interaction.deferReply({flags: MessageFlags.Ephemeral});
+
         try {
-            const eintraege = await redisService.getSortedSetAll(PING_PONG_KEYS.rundlaufOffen);
+            // Neueste zuerst: getSortedSetAll liefert aufsteigend, und nach dem Limit ist Schluss.
+            const eintraege = (await redisService.getSortedSetAll(PING_PONG_KEYS.rundlaufOffen)).reverse();
+            const aeltesteErlaubte = Date.now() - RUNDLAUF_LISTE_MAX_ALTER_MS;
             const zeilen: string[] = [];
 
-            for (const {value} of eintraege) {
+            for (const {value, score} of eintraege) {
                 const [guildId, channelId, messageId] = value.split(':');
                 if (guildId !== interaction.guildId) continue;
+
+                if (score < aeltesteErlaubte) {
+                    await redisService.removeFromSortedSet(PING_PONG_KEYS.rundlaufOffen, value);
+                    continue;
+                }
 
                 const lobby = await this.holeRundlaufLobby(interaction.client, value, channelId, messageId);
                 if (!lobby) continue;
@@ -710,13 +725,10 @@ class PingPongHandler {
                 : 'Gerade ist kein Rundlauf offen. Mit `/pingpong rundlauf` machst du selbst einen auf.';
 
             // Ephemer (eine Nachschlage-Antwort, kein Kanalpost) - die Mentions zeigen nur Namen.
-            return interaction.reply({content, flags: MessageFlags.Ephemeral, allowedMentions: {parse: []}});
+            return interaction.editReply({content, allowedMentions: {parse: []}});
         } catch (error) {
             console.error('Fehler beim Auflisten der offenen Rundläufe:', error);
-            return interaction.reply({
-                content: 'Es gab einen Fehler beim Ausführen des Befehls.',
-                flags: MessageFlags.Ephemeral
-            });
+            return interaction.editReply('Es gab einen Fehler beim Ausführen des Befehls.');
         }
     }
 

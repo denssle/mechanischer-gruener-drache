@@ -1141,12 +1141,14 @@ describe('PingPongHandler', () => {
                 return {
                     guildId: 'g1',
                     client: {channels: {fetch: vi.fn().mockResolvedValue({isTextBased: () => true, messages: {fetch}})}},
-                    reply: vi.fn(),
+                    deferReply: vi.fn().mockResolvedValue(undefined),
+                    editReply: vi.fn().mockResolvedValue(undefined),
                 } as any;
             };
 
             const offeneEintraege = (...werte: string[]) =>
-                vi.mocked(redisService.getSortedSetAll).mockResolvedValue(werte.map((value, i) => ({value, score: i})) as any);
+                vi.mocked(redisService.getSortedSetAll).mockResolvedValue(
+                    werte.map((value, i) => ({value, score: Date.now() - 1000 + i})) as any);
 
             const unbekannteNachricht = () => new DiscordAPIError(
                 {code: RESTJSONErrorCodes.UnknownMessage, message: 'Unknown Message'},
@@ -1158,11 +1160,11 @@ describe('PingPongHandler', () => {
 
                 await pingPongHandler.handleRundlaeufe(interaction);
 
-                const antwort = interaction.reply.mock.calls[0][0];
+                const antwort = interaction.editReply.mock.calls[0][0];
                 expect(antwort.content).toContain(`<@111>s Runde – 2/${MAX_RUNDLAUF} an der Platte`);
                 expect(antwort.content).toContain('https://discord.com/channels/g1/c1/m1');
                 expect(antwort.content).toContain('<t:1700000000:R>');
-                expect(antwort.flags).toBe(MessageFlags.Ephemeral);
+                expect(interaction.deferReply).toHaveBeenCalledWith({flags: MessageFlags.Ephemeral});
                 expect(antwort.allowedMentions).toEqual({parse: []});
             });
 
@@ -1172,8 +1174,47 @@ describe('PingPongHandler', () => {
 
                 await pingPongHandler.handleRundlaeufe(interaction);
 
-                expect(interaction.reply.mock.calls[0][0].content).toContain('kein Rundlauf offen');
+                expect(interaction.editReply.mock.calls[0][0].content).toContain('kein Rundlauf offen');
                 expect(interaction.client.channels.fetch).not.toHaveBeenCalled();
+            });
+
+            // Sorted Set kommt aufsteigend. Oldest first hieße: alte Karteileichen verdrängen neue Runden.
+            it('zeigt am Limit die neuesten Runden, nicht die ältesten', async () => {
+                const ids = Array.from({length: 16}, (_, i) => `m${i}`);
+                offeneEintraege(...ids.map(id => `g1:c1:${id}`));
+                const interaction = mockListe(Object.fromEntries(ids.map(id => [id, lobby(id, ['111'])])));
+
+                await pingPongHandler.handleRundlaeufe(interaction);
+
+                const content = interaction.editReply.mock.calls[0][0].content;
+                expect(content.match(/https:/g)).toHaveLength(15);
+                expect(content.indexOf('/m15')).toBeLessThan(content.indexOf('/m14'));
+                expect(content).not.toMatch(/\/m0\b/);
+            });
+
+            it('wirft Runden nach einer Woche aus der Liste, ohne sie bei Discord zu holen', async () => {
+                const achtTage = 8 * 24 * 60 * 60 * 1000;
+                vi.mocked(redisService.getSortedSetAll).mockResolvedValue([
+                    {value: 'g1:c1:m1', score: Date.now() - achtTage},
+                    {value: 'g1:c1:m2', score: Date.now()},
+                ] as any);
+                const interaction = mockListe({m1: lobby('m1', ['111']), m2: lobby('m2', ['222'])});
+
+                await pingPongHandler.handleRundlaeufe(interaction);
+
+                expect(redisService.removeFromSortedSet).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_OFFEN', 'g1:c1:m1');
+                const content = interaction.editReply.mock.calls[0][0].content;
+                expect(content).toContain('/m2');
+                expect(content).not.toContain('/m1');
+            });
+
+            it('meldet einen Redis-Fehler über die aufgeschobene Antwort', async () => {
+                vi.mocked(redisService.getSortedSetAll).mockRejectedValue(new Error('Redis kaputt'));
+                const interaction = mockListe({});
+
+                await pingPongHandler.handleRundlaeufe(interaction);
+
+                expect(interaction.editReply).toHaveBeenCalledWith('Es gab einen Fehler beim Ausführen des Befehls.');
             });
 
             // Scheiterte das Austragen beim Start, erkennt man die fertige Runde an den fehlenden Buttons.
@@ -1189,7 +1230,7 @@ describe('PingPongHandler', () => {
 
                 expect(redisService.removeFromSortedSet).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_OFFEN', 'g1:c1:m1');
                 expect(redisService.removeFromSortedSet).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_OFFEN', 'g1:c1:m9');
-                const content = interaction.reply.mock.calls[0][0].content;
+                const content = interaction.editReply.mock.calls[0][0].content;
                 expect(content).toContain('1. <@333>s Runde');
                 expect(content).not.toContain('/m1');
             });
@@ -1202,7 +1243,7 @@ describe('PingPongHandler', () => {
                 await pingPongHandler.handleRundlaeufe(interaction);
 
                 expect(redisService.removeFromSortedSet).not.toHaveBeenCalled();
-                expect(interaction.reply.mock.calls[0][0].content).toContain('kein Rundlauf offen');
+                expect(interaction.editReply.mock.calls[0][0].content).toContain('kein Rundlauf offen');
             });
 
             it('baut den Listeneintrag aus Gilde, Kanal und Nachricht', () => {
