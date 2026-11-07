@@ -192,6 +192,9 @@ export function rundlaufListenEintrag(guildId: string | null, channelId: string,
 // Mehr Zeilen passen nicht sicher in eine Nachricht.
 const MAX_GELISTETE_RUNDLAEUFE = 15;
 
+// Der Lock muss nur die Zeit bis zum Entfernen der Buttons abdecken (Muster DOPPEL_LOCK_SECONDS).
+const RUNDLAUF_LOCK_SECONDS = 60;
+
 // Lobbys laufen nie ab, auch eine vergessene bleibt offen. Nach einer Woche fliegt sie aus der
 // Liste (spielbar bleibt sie), sonst füllen Karteileichen die Liste für immer.
 const RUNDLAUF_LISTE_MAX_ALTER_MS = 7 * 24 * 60 * 60 * 1000;
@@ -872,8 +875,7 @@ class PingPongHandler {
                 });
             }
 
-            await interaction.update(await this.spieleUndWerteRundlaufAus(teilnehmer));
-            return this.vergissOffenenRundlauf(interaction.message);
+            return await this.starteRundlauf(interaction, teilnehmer);
         } catch (error) {
             console.error('Fehler beim Austragen des Ping-Pong-Rundlaufs:', error);
             if (!interaction.replied) {
@@ -882,6 +884,37 @@ class PingPongHandler {
                     flags: MessageFlags.Ephemeral
                 }).catch(() => {});
             }
+        }
+    }
+
+    // Erst die Buttons weg, dann buchen. Der Lock fängt den Doppelklick ab, die Reihenfolge den Rest:
+    // scheitert das Buchen mittendrin, gibt es keinen Start-Button mehr, der die schon gebuchten
+    // Punkte ein zweites Mal vergeben könnte. Deshalb auch kein Rückweg in die Lobby.
+    async starteRundlauf(interaction: ButtonInteraction, teilnehmer: string[]) {
+        const lock = PING_PONG_KEYS.rundlaufStart(interaction.message.id);
+
+        if (!await redisService.setIfAbsent(lock, '1', RUNDLAUF_LOCK_SECONDS)) {
+            return interaction.reply({content: 'Der Rundlauf läuft schon.', flags: MessageFlags.Ephemeral});
+        }
+
+        try {
+            await interaction.update({content: 'Der Rundlauf läuft ...', components: []});
+        } catch (error) {
+            // Noch ist nichts gebucht und die Lobby unverändert: ein neuer Klick darf es versuchen.
+            await redisService.delete(lock);
+            throw error;
+        }
+
+        await this.vergissOffenenRundlauf(interaction.message);
+
+        try {
+            await interaction.editReply(await this.spieleUndWerteRundlaufAus(teilnehmer));
+        } catch (error) {
+            console.error('Fehler beim Auswerten des Ping-Pong-Rundlaufs:', error);
+            await interaction.editReply(
+                'Beim Auswerten ist etwas schiefgelaufen, die Runde ist beendet. '
+                + 'Ein Teil der Punkte kann schon gebucht sein.'
+            ).catch(() => {});
         }
     }
 

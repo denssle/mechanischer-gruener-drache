@@ -981,6 +981,7 @@ describe('PingPongHandler', () => {
             message: {...lobbyNachricht, content: inhalt},
             update: vi.fn(),
             reply: vi.fn().mockResolvedValue(undefined),
+            editReply: vi.fn().mockResolvedValue(undefined),
             replied: false,
         } as any);
 
@@ -1351,7 +1352,7 @@ describe('PingPongHandler', () => {
 
                 await pingPongHandler.handleRundlaufButton(interaction);
 
-                const ergebnis = interaction.update.mock.calls[0][0];
+                const ergebnis = interaction.editReply.mock.calls[0][0];
                 expect(redisService.removeFromSortedSet).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_OFFEN', 'g1:c1:m1');
                 expect(ergebnis.components).toEqual([]);
                 // Jeder Teilnehmer steht mit einem Platz in der Ergebnisliste.
@@ -1375,8 +1376,8 @@ describe('PingPongHandler', () => {
 
                 await pingPongHandler.handleRundlaufButton(interaction);
 
-                expect(interaction.update.mock.calls[0][0].content).not.toContain('-1 Punkte');
-                expect(interaction.update.mock.calls[0][0].content).toContain('0 Punkte');
+                expect(interaction.editReply.mock.calls[0][0].content).not.toContain('-1 Punkte');
+                expect(interaction.editReply.mock.calls[0][0].content).toContain('0 Punkte');
             });
 
             // Das Finale ist das einzige echte Match - die Serie hängt daran, nicht am Rausfliegen.
@@ -1406,19 +1407,68 @@ describe('PingPongHandler', () => {
                     await pingPongHandler.handleRundlaufButton(interaction);
 
                     const unix = Math.floor(new Date('2026-10-23T18:30:00Z').getTime() / 1000);
-                    expect(interaction.update.mock.calls[0][0].content).toContain(`<t:${unix}:f>`);
+                    expect(interaction.editReply.mock.calls[0][0].content).toContain(`<t:${unix}:f>`);
                 } finally {
                     vi.useRealTimers();
                 }
             });
 
-            it('sollte Fehler abfangen', async () => {
+            it('trägt einen Doppelklick nur einmal aus', async () => {
+                vi.mocked(redisService.setIfAbsent).mockResolvedValue(false);
+                scoresInRedis({});
+                const interaction = mockButton('pingpong-rundlauf:starten:111', '111',
+                    lobbyInhalt(['111', '222', '333']));
+
+                await pingPongHandler.handleRundlaufButton(interaction);
+
+                expect(redisService.setIfAbsent).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_START:m1', '1', expect.any(Number));
+                expect(redisService.set).not.toHaveBeenCalled();
+                expect(interaction.update).not.toHaveBeenCalled();
+                expect(interaction.reply.mock.calls[0][0].content).toContain('läuft schon');
+            });
+
+            it('nimmt die Buttons weg, bevor Punkte gebucht werden', async () => {
+                scoresInRedis({});
+                const reihenfolge: string[] = [];
+                vi.mocked(redisService.set).mockImplementation(async (_key: string, value: string) => {
+                    reihenfolge.push('buchen');
+                    return value as any;
+                });
+                const interaction = mockButton('pingpong-rundlauf:starten:111', '111',
+                    lobbyInhalt(['111', '222', '333']));
+                interaction.update.mockImplementation(async () => {
+                    reihenfolge.push('buttons-weg');
+                });
+
+                await pingPongHandler.handleRundlaufButton(interaction);
+
+                expect(interaction.update.mock.calls[0][0].components).toEqual([]);
+                expect(reihenfolge[0]).toBe('buttons-weg');
+                expect(reihenfolge).toContain('buchen');
+            });
+
+            // Teilbuchung: ein zweiter Durchlauf würde die Punkte doppelt vergeben.
+            it('lässt nach gescheitertem Buchen keinen zweiten Start zu', async () => {
                 vi.mocked(redisService.get).mockRejectedValue(new Error('Redis kaputt'));
                 const interaction = mockButton('pingpong-rundlauf:starten:111', '111',
                     lobbyInhalt(['111', '222', '333']));
 
                 await pingPongHandler.handleRundlaufButton(interaction);
 
+                expect(interaction.update.mock.calls[0][0].components).toEqual([]);
+                expect(redisService.delete).not.toHaveBeenCalled();
+                expect(interaction.editReply.mock.calls[0][0]).toContain('schiefgelaufen');
+            });
+
+            it('gibt den Lock frei, wenn schon das Entfernen der Buttons scheitert', async () => {
+                const interaction = mockButton('pingpong-rundlauf:starten:111', '111',
+                    lobbyInhalt(['111', '222', '333']));
+                interaction.update.mockRejectedValue(new Error('Unknown interaction'));
+
+                await pingPongHandler.handleRundlaufButton(interaction);
+
+                expect(redisService.delete).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_START:m1');
+                expect(redisService.set).not.toHaveBeenCalled();
                 expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
             });
         });
