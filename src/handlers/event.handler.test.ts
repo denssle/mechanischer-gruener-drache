@@ -100,8 +100,8 @@ describe('EventHandler', () => {
 
             await eventHandler.handleCountdown(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('bis zum nächsten Event'));
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('LAN-Party'));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('bis zum nächsten Event'), allowedMentions: {parse: []}}));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('LAN-Party')}));
         });
 
         it('zeigt den Countdown ohne Titel neutral (ohne Gedankenstrich-Teil)', async () => {
@@ -110,7 +110,7 @@ describe('EventHandler', () => {
 
             await eventHandler.handleCountdown(interaction);
 
-            const reply = interaction.reply.mock.calls[0][0];
+            const reply = interaction.reply.mock.calls[0][0].content;
             expect(reply).toContain('bis zum nächsten Event!');
             expect(reply).not.toContain('–');
         });
@@ -121,7 +121,7 @@ describe('EventHandler', () => {
 
             await eventHandler.handleCountdown(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('so weit'));
+            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('so weit'), allowedMentions: {parse: []}}));
         });
     });
 

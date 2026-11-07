@@ -3,6 +3,7 @@ import client from '../client.js';
 import config from '../../config.json' with {type: 'json'};
 import geburtstagService, {Geburtstag} from '../services/geburtstag.service.js';
 import {ALTERS_ZEILEN, GEBURTSTAGS_GLUECKWUENSCHE} from '../data/geburtstagsglueckwuensche.js';
+import {formatTag} from '../services/zeit.service.js';
 
 // Geburtstagskalender: jede:r trägt den eigenen Geburtstag selbst ein (Jahr optional), der Bot
 // gratuliert am Tag im konfigurierten Kanal (gesetzt über /config). Angestoßen vom EINEN 60-s-Timer
@@ -308,14 +309,6 @@ class GeburtstagHandler {
         }
         return channel;
     }
-}
-
-// Lokales Datum als YYYY-MM-DD (Host läuft auf Europe/Berlin) - Tagesmarker wie bei Sport/Anstupser.
-function formatTag(date: Date): string {
-    const jahr = date.getFullYear();
-    const monat = String(date.getMonth() + 1).padStart(2, '0');
-    const tag = String(date.getDate()).padStart(2, '0');
-    return `${jahr}-${monat}-${tag}`;
 }
 
 export default new GeburtstagHandler();

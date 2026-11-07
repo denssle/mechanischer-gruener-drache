@@ -21,7 +21,6 @@ import client from '../client.js';
 import {DM_GESCHLOSSEN} from '../services/dm.service.js';
 import anstupserHandler, {
     ANSTUPSER_TEXT,
-    formatTag,
     istAnstupserZeit,
     STUNDE,
     MINUTE,
@@ -63,10 +62,6 @@ describe('AnstupserHandler', () => {
         ])('ist zu %s:%s nicht dran', (stunde, minute) => {
             expect(istAnstupserZeit(new Date(2026, 6, 26, stunde, minute))).toBe(false);
         });
-    });
-
-    it('formatTag baut ein lokales YYYY-MM-DD', () => {
-        expect(formatTag(new Date(2026, 0, 5, 13, 37))).toBe('2026-01-05');
     });
 
     describe('handleAn', () => {

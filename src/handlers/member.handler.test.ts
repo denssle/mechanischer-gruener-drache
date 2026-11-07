@@ -21,6 +21,10 @@ import client from '../client.js';
 import userService from '../services/user.service.js';
 import memberHandler from './member.handler.js';
 
+// Direkt nach dem Import festhalten: die Registrierung passiert als Seiteneffekt, und clearAllMocks
+// in einem beforeEach räumte die Aufrufe sonst weg.
+const registrierungen = [...vi.mocked(client.on).mock.calls] as unknown as [string, (...args: unknown[]) => void][];
+
 const mockMember = (id: string) => ({ id, user: { tag: `user-${id}#0000` } } as any);
 
 // client.guilds.cache ist im echten discord.js readonly - im Mock ist es ein
@@ -107,5 +111,23 @@ describe('MemberHandler', () => {
 
             expect(userService.saveUser).not.toHaveBeenCalled();
         });
+    });
+});
+
+describe('Registrierung der async-Handler', () => {
+    it.each([
+        ['guildMemberUpdate', 'handleGuildMemberUpdate'],
+        ['userUpdate', 'handleUserUpdate'],
+    ] as const)('%s fängt eine Rejection ab, statt den Prozess zu riskieren', async (ereignis, methode) => {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const handler = vi.spyOn(memberHandler, methode).mockRejectedValue(new Error('kaputt'));
+        const listener = registrierungen.find(([name]) => name === ereignis)![1];
+
+        listener({}, {});
+        await new Promise(resolve => setImmediate(resolve));
+
+        expect(consoleError).toHaveBeenCalled();
+        handler.mockRestore();
+        consoleError.mockRestore();
     });
 });

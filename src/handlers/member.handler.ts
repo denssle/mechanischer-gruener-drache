@@ -50,7 +50,17 @@ const memberHandler = new MemberHandler();
 
 client.on(Events.GuildMemberAdd, memberHandler.handleGuildMemberAdd);
 client.on(Events.GuildMemberRemove, memberHandler.handleGuildMemberRemove);
-client.on(Events.GuildMemberUpdate, memberHandler.handleGuildMemberUpdate);
-client.on(Events.UserUpdate, memberHandler.handleUserUpdate);
+// Die beiden oberen sind synchron, ein Promise gibt es dort nicht. Die async-Handler bekommen ihr
+// .catch an der Registrierung, auch wenn sie intern fangen (siehe CLAUDE.md, Stolperfallen).
+client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
+    memberHandler.handleGuildMemberUpdate(oldMember, newMember).catch((error) => {
+        console.error('Fehler im Member-Handler (GuildMemberUpdate):', error);
+    });
+});
+client.on(Events.UserUpdate, (oldUser, newUser) => {
+    memberHandler.handleUserUpdate(oldUser, newUser).catch((error) => {
+        console.error('Fehler im Member-Handler (UserUpdate):', error);
+    });
+});
 
 export default memberHandler;
