@@ -69,11 +69,12 @@ export function rundeMinuten(minuten: number): number {
 // ("ich bin gerade 12 km") - beides würde fälschlich als Radfahren eingetragen.
 const AKTIVITAET_PATTERNS: Record<SportActivity, RegExp> = {
     laufen: /\b(lauf|gelaufen|renn|gerannt|jogg)/i,
-    radfahren: /\b(rad|fahrrad|geradelt|bike|velo)/i,
+    radfahren: /\b(rad|fahrrad|geradelt|bike|velo|spinning)/i,
     schwimmen: /\b(schwimm|geschwommen|schwomm)/i,
-    wandern: /\b(wander|gewandert)/i,
+    wandern: /\b(wander|gewandert|spazier)/i,
     skifahren: /\b(ski|langlauf)/i,
-    krafttraining: /\b(krafttraining|kraftsport|hantel|gewichtheben)/i,
+    krafttraining: /\b(krafttraining|kraftsport|kraftcircle|hantel|gewichtheben|crossfit|gym\b)/i,
+    yoga: /\b(yoga|autogen|fu(?:ß|ss)reflex)/i,
 };
 
 // Zieht die erste Kilometer-Angabe aus einem Text: "+12 km", "+12km", "+12,5 km", "+12 Kilometer".

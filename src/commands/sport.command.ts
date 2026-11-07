@@ -1,5 +1,6 @@
 import {ChatInputCommandInteraction, SlashCommandBuilder} from 'discord.js';
 import sportHandler from '../handlers/sport.handler.js';
+import {SportActivities} from '../types/sport.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -12,14 +13,7 @@ export default {
                 .setName('aktivitaet')
                 .setDescription('Art der Aktivität')
                 .setRequired(true)
-                .addChoices(
-                    {name: '🏃 Laufen', value: 'laufen'},
-                    {name: '🚴 Radfahren', value: 'radfahren'},
-                    {name: '🏊 Schwimmen', value: 'schwimmen'},
-                    {name: '🚶 Wandern', value: 'wandern'},
-                    {name: '⛷️ Skifahren', value: 'skifahren'},
-                    {name: '💪 Krafttraining', value: 'krafttraining'},
-                ))
+                .addChoices(...Object.entries(SportActivities).map(([value, name]) => ({name, value}))))
             .addNumberOption(option => option
                 .setName('kilometer')
                 .setDescription('Anzahl der Kilometer')
