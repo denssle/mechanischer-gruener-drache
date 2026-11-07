@@ -137,97 +137,28 @@ function standardAktivitaet(istKilometer: boolean): SportActivity {
     return istKilometer ? DEFAULT_AKTIVITAET : 'krafttraining';
 }
 
-// Seit 2026-10-21 passt jede Einheit zu jeder Sportart ("+240 min schwimmen" wurde vorher als
-// Widerspruch verworfen, weil Schwimmen nur Kilometer kannte). Damit gibt es keinen Grund mehr,
-// eine Nachricht zu verwerfen - zugeordnet wird nur noch, WELCHE Sportart zu welcher Angabe gehört.
+// Trennt eine Nachricht in Stücke. Ein Komma nur, wenn keine Ziffer folgt: "+12,5 km" bleibt ganz.
+const STUECK_TRENNER = /,(?!\d)|;|\n|\b(?:und|danach|dann)\b/gi;
+
+// Jede "+Zahl Einheit" wird gutgeschrieben, die Sportart ist nur die Beschriftung. Die Regel: Die
+// Nachricht wird an Trennern geteilt, und in jedem Stück bekommt die n-te Angabe das n-te Sportwort,
+// egal ob es davor oder dahinter steht. Fehlt eins, gilt der Standard (unbekanntes "Yoga" genauso).
 export function erkenneSportLeistungen(text: string): ErkannteSportLeistung[] {
     const leistungen: ErkannteSportLeistung[] = [];
 
-    const matches = [...text.matchAll(
-        /\+\s*(\d+(?:[.,]\d+)?)\s*(km\b|kilometer\b|min\b|minuten\b)/gi
-    )];
+    for (const stueck of text.split(STUECK_TRENNER)) {
+        const woerter = findeAktivitaetsWoerter(stueck);
+        const angaben = stueck.matchAll(/\+\s*(\d+(?:[.,]\d+)?)\s*(km\b|kilometer\b|min\b|minuten\b)/gi);
 
-    if (matches.length === 0) return [];
+        for (const [i, angabe] of [...angaben].entries()) {
+            const wert = parseFloat(angabe[1].replace(',', '.'));
+            const istKilometer = /^k/i.test(angabe[2]);
+            const aktivitaet = woerter[i]?.aktivitaet ?? standardAktivitaet(istKilometer);
 
-    // Steht bereits vor der ersten Leistungsangabe eine Sportart,
-    // wird die Nachricht als "Sportart + Leistung" gelesen.
-    const sportartStehtDavor =
-        findeAktivitaetsWoerter(text.slice(0, matches[0].index)).length > 0;
+            if (!Number.isFinite(wert) || wert <= 0) continue;
 
-    // Sportart, die im Abschnitt der vorigen Angabe stand, aber zur aktuellen gehört
-    // ("+5 km und Schwimmen +30 min").
-    let uebertrag: SportActivity | null = null;
-
-    // Bis hierhin ist der Text vergeben: ein Sportwort, das schon einer Angabe zugeordnet ist,
-    // darf nicht auch noch für die nächste gelten ("Rad +5 km, +10 km Laufen, +3 km").
-    let vergebenBis = 0;
-
-    for (let i = 0; i < matches.length; i++) {
-        const match = matches[i];
-        const wert = parseFloat(match[1].replace(',', '.'));
-        const einheit = match[2].toLowerCase();
-        const istKilometer = einheit === 'km' || einheit === 'kilometer';
-
-        let abschnitt: string;
-
-        if (sportartStehtDavor) {
-            // "Radfahren +5 km, Laufen +10 km"
-            // Jede Sportart gehört zur folgenden Leistungsangabe.
-            const ende = match.index + match[0].length;
-            const start = i === 0
-                ? 0
-                : Math.max(matches[i - 1].index + matches[i - 1][0].length, vergebenBis);
-
-            abschnitt = text.slice(start, match.index);
-
-            // Steht davor nichts, kann die Sportart auch dahinter stehen, bis zur nächsten Angabe:
-            // "Laufen +5 km, +30 min Schwimmen". Sonst bliebe nur der Standard.
-            if (findeAktivitaetsWoerter(abschnitt).length === 0) {
-                const dahinter = text.slice(ende, matches[i + 1]?.index ?? text.length);
-                const wort = findeAktivitaetsWoerter(dahinter)[0];
-
-                if (wort) {
-                    abschnitt = dahinter;
-                    vergebenBis = ende + wort.ende;
-                }
-            }
-        } else {
-            // "+5 km gelaufen, danach +20 km Rad"
-            // Normalerweise gehört die Sportart hinter die Leistungsangabe.
-            const start = match.index + match[0].length;
-            const ende = matches[i + 1]?.index ?? text.length;
-
-            abschnitt = text.slice(start, ende);
+            leistungen.push(istKilometer ? {aktivitaet, kilometer: wert} : {aktivitaet, minuten: wert});
         }
-
-        let naechsterUebertrag: SportActivity | null = null;
-
-        if (!sportartStehtDavor && i < matches.length - 1) {
-            // Sonderfall: "+5 km und Krafttraining +30 min". Das letzte Sportwort vor der
-            // nächsten Angabe gehört zu ihr, wenn es durch ein Trennwort von der aktuellen
-            // abgesetzt ist und danach nichts mehr kommt. Ohne Trennwort ("+2 km geschwommen
-            // +30 min") bleibt es bei der aktuellen Angabe.
-            const letztes = findeAktivitaetsWoerter(abschnitt).at(-1);
-
-            if (
-                letztes &&
-                /(?:,|\bund|\bdanach|\bdann)\s*$/i.test(abschnitt.slice(0, letztes.index)) &&
-                /^[\s,]*$/.test(abschnitt.slice(letztes.ende))
-            ) {
-                naechsterUebertrag = letztes.aktivitaet;
-                abschnitt = abschnitt.slice(0, letztes.index);
-            }
-        }
-
-        const genannt = findeAktivitaetsWoerter(abschnitt)[0]?.aktivitaet;
-        const aktivitaet = genannt ?? uebertrag ?? standardAktivitaet(istKilometer);
-        uebertrag = naechsterUebertrag;
-
-        if (!Number.isFinite(wert) || wert <= 0) continue;
-
-        leistungen.push(istKilometer
-            ? {aktivitaet, kilometer: wert}
-            : {aktivitaet, minuten: wert});
     }
 
     return leistungen;
