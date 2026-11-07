@@ -3,13 +3,15 @@ import {describe, it, expect, vi, beforeEach} from 'vitest';
 const rollenhinweisService = vi.hoisted(() => ({
     getChannel: vi.fn(),
     getRollenKanal: vi.fn(),
+    getWillkommensKanal: vi.fn(),
     markiereHingewiesen: vi.fn(),
     vergiss: vi.fn(),
 }));
 vi.mock('../services/rollenhinweis.service.js', () => ({default: rollenhinweisService}));
 
 import {Collection} from 'discord.js';
-import rollenhinweisHandler, {ROLLENHINWEIS_TEXT, rollenhinweisText} from './rollenhinweis.handler.js';
+import config from '../../config.json' with {type: 'json'};
+import rollenhinweisHandler, {ROLLENHINWEIS_TEXT, rollenhinweisText, willkommensText} from './rollenhinweis.handler.js';
 
 const GUILD_ID = 'guild-1';
 const KANAL_ID = 'kanal-hinweis';
@@ -130,5 +132,70 @@ describe('RollenhinweisHandler.handleMessage', () => {
         await expect(rollenhinweisHandler.handleMessage(message)).rejects.toThrow('Redis weg');
 
         expect(rollenhinweisService.vergiss).toHaveBeenCalledWith('user-1');
+    });
+});
+
+describe('Willkommensgruß', () => {
+    const send = vi.fn();
+    const fetch = vi.fn();
+    const mockMember = (bot = false, guildId = config.GUILD_ID) =>
+        ({id: 'neu-1', user: {bot}, guild: {id: guildId, channels: {fetch}}}) as any;
+
+    beforeEach(() => {
+        vi.resetAllMocks();
+        rollenhinweisService.getWillkommensKanal.mockResolvedValue('kanal-gruss');
+        rollenhinweisService.getRollenKanal.mockResolvedValue(null);
+        fetch.mockResolvedValue({isSendable: () => true, send});
+    });
+
+    it('begrüßt und pingt genau die neue Person', async () => {
+        rollenhinweisService.getRollenKanal.mockResolvedValue('kanal-rollen');
+
+        await rollenhinweisHandler.handleBeitritt(mockMember());
+
+        expect(fetch).toHaveBeenCalledWith('kanal-gruss');
+        expect(send).toHaveBeenCalledWith({
+            content: willkommensText('neu-1', 'kanal-rollen'),
+            allowedMentions: {users: ['neu-1']},
+        });
+    });
+
+    it('verlinkt den Rollen-Kanal nur, wenn er gesetzt ist', () => {
+        expect(willkommensText('neu-1', 'kanal-rollen')).toContain('Hol dir in <#kanal-rollen> eine Rolle');
+        expect(willkommensText('neu-1', null)).toContain('Hol dir eine Rolle');
+    });
+
+    it('begrüßt keine Bots', async () => {
+        await rollenhinweisHandler.handleBeitritt(mockMember(true));
+
+        expect(send).not.toHaveBeenCalled();
+    });
+
+    it('ignoriert Beitritte auf anderen Servern', async () => {
+        await rollenhinweisHandler.handleBeitritt(mockMember(false, 'anderer-server'));
+
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('bleibt ohne Kanal still', async () => {
+        rollenhinweisService.getWillkommensKanal.mockResolvedValue(null);
+
+        await rollenhinweisHandler.handleBeitritt(mockMember());
+
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('überspringt Kanäle, in die man nicht schreiben kann', async () => {
+        fetch.mockResolvedValue({isSendable: () => false, send});
+
+        await rollenhinweisHandler.handleBeitritt(mockMember());
+
+        expect(send).not.toHaveBeenCalled();
+    });
+
+    it('vermerkt niemanden als hingewiesen, die Antwort im Hinweis-Kanal bleibt möglich', async () => {
+        await rollenhinweisHandler.handleBeitritt(mockMember());
+
+        expect(rollenhinweisService.markiereHingewiesen).not.toHaveBeenCalled();
     });
 });

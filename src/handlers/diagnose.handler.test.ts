@@ -14,7 +14,13 @@ const character = vi.hoisted(() => ({ getAllLinks: vi.fn(), getRoster: vi.fn() }
 const oauth = vi.hoisted(() => ({ oauthConfigured: vi.fn() }));
 const geburtstag = vi.hoisted(() => ({ getChannel: vi.fn(async () => null) }));
 const drachen = vi.hoisted(() => ({ getChannel: vi.fn(async () => null) }));
-const rollenhinweis = vi.hoisted(() => ({ getChannel: vi.fn(async () => null), getRollenKanal: vi.fn(async (): Promise<string | null> => null) }));
+const rollenhinweis = vi.hoisted(() => ({
+    getChannel: vi.fn(async (): Promise<string | null> => null),
+    getRollenKanal: vi.fn(async (): Promise<string | null> => null),
+    getWillkommensKanal: vi.fn(async (): Promise<string | null> => null),
+    getHauptrolle: vi.fn(async (): Promise<string | null> => null),
+    getHingewiesene: vi.fn(async (): Promise<string[]> => []),
+}));
 const session = vi.hoisted(() => ({ sessionConfigured: vi.fn() }));
 const pingPong = vi.hoisted(() => ({ getLastSeason: vi.fn(), getChampionRole: vi.fn() }));
 const channelsFetch = vi.hoisted(() => vi.fn());
@@ -40,7 +46,8 @@ vi.mock('../services/character.service.js', async (importOriginal) => {
     return { ...actual, default: character };
 });
 
-import diagnoseHandler from './diagnose.handler.js';
+import {Collection, PermissionFlagsBits} from 'discord.js';
+import diagnoseHandler, {zaehleOhneRolle} from './diagnose.handler.js';
 import config from '../../config.json' with { type: 'json' };
 
 function makeInteraction(isAdmin = true) {
@@ -54,6 +61,49 @@ function makeInteraction(isAdmin = true) {
 }
 
 const report = (interaction: any) => interaction.editReply.mock.calls[0][0] as string;
+
+const TAG = 24 * 60 * 60 * 1000;
+const JETZT = Date.UTC(2026, 10, 7);
+
+// Rollen-Cache wie bei discord.js: @everyone (ID = Guild-ID) ist immer drin.
+const mockMitglied = (id: string, rollen: string[] = [], vorTagen = 1, bot = false) => ({
+    id,
+    user: {bot},
+    joinedTimestamp: JETZT - vorTagen * TAG,
+    roles: {cache: new Collection([config.GUILD_ID, ...rollen].map(rolle => [rolle, {id: rolle}]))},
+}) as any;
+
+const mockGuild = (mitglieder: any[] = [], rollen: string[] = []) => ({
+    id: config.GUILD_ID,
+    roles: {cache: new Map(rollen.map(rolle => [rolle, {id: rolle}])), everyone: {id: config.GUILD_ID}},
+    members: {
+        me: {permissions: {has: () => true}},
+        fetch: vi.fn(async () => new Map(mitglieder.map(mitglied => [mitglied.id, mitglied]))),
+    },
+});
+
+describe('zaehleOhneRolle', () => {
+    const hatRolle = (mitglied: any) => mitglied.roles.cache.has('haupt');
+
+    it('teilt nach Beitritt auf und lässt Bots und Leute mit Rolle weg', () => {
+        const stand = zaehleOhneRolle([
+            mockMitglied('a', [], 30),
+            mockMitglied('b', [], 31),
+            mockMitglied('c', [], 365),
+            mockMitglied('d', [], 366),
+            mockMitglied('e', ['haupt'], 1),
+            mockMitglied('bot', [], 1, true),
+        ], hatRolle, new Set(['b', 'e']), JETZT);
+
+        expect(stand).toEqual({gesamt: 5, ohneRolle: 4, letzte30Tage: 1, letztesJahr: 2, aelter: 1, hingewiesen: 1});
+    });
+
+    it('zählt ein fehlendes Beitrittsdatum als alt', () => {
+        const stand = zaehleOhneRolle([{...mockMitglied('a'), joinedTimestamp: null}], hatRolle, new Set(), JETZT);
+
+        expect(stand.aelter).toBe(1);
+    });
+});
 
 describe('DiagnoseHandler', () => {
     beforeEach(() => {
@@ -80,7 +130,126 @@ describe('DiagnoseHandler', () => {
         session.sessionConfigured.mockReturnValue(true);
         // Standard: Bot darf das Audit-Log lesen
         guildsCache.clear();
-        guildsCache.set(config.GUILD_ID, { members: { me: { permissions: { has: () => true } } } });
+        guildsCache.set(config.GUILD_ID, mockGuild());
+    });
+
+    describe('Mitglieder ohne Rolle', () => {
+        beforeEach(() => {
+            rollenhinweis.getHauptrolle.mockResolvedValue(null);
+            rollenhinweis.getHingewiesene.mockResolvedValue([]);
+            rollenhinweis.getWillkommensKanal.mockResolvedValue(null);
+            rollenhinweis.getChannel.mockResolvedValue(null);
+            rollenhinweis.getRollenKanal.mockResolvedValue(null);
+        });
+
+        it('zählt ohne Hauptrolle, wer gar keine Rolle hat', async () => {
+            guildsCache.set(config.GUILD_ID, mockGuild([mockMitglied('a'), mockMitglied('b', ['twitch'])]));
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Hauptrolle: ℹ️ nicht gesetzt');
+            expect(report(interaction)).toContain('Ohne Rolle: 1 von 2 (ohne Bots)');
+        });
+
+        it('zählt mit Hauptrolle auch Leute, die nur eine andere Rolle haben', async () => {
+            rollenhinweis.getHauptrolle.mockResolvedValue('haupt');
+            rollenhinweis.getHingewiesene.mockResolvedValue(['a']);
+            guildsCache.set(config.GUILD_ID, mockGuild(
+                [mockMitglied('a'), mockMitglied('b', ['twitch']), mockMitglied('c', ['haupt'])],
+                ['haupt', 'twitch'],
+            ));
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Hauptrolle: ✅ <@&haupt>');
+            expect(report(interaction)).toContain('Ohne Rolle: 2 von 3 (ohne Bots)');
+            expect(report(interaction)).toContain('Rollenhinweis bekommen: 1, noch nicht: 1');
+        });
+
+        it('fällt bei einer gelöschten Hauptrolle auf "gar keine Rolle" zurück', async () => {
+            rollenhinweis.getHauptrolle.mockResolvedValue('weg');
+            guildsCache.set(config.GUILD_ID, mockGuild([mockMitglied('a'), mockMitglied('b', ['twitch'])]));
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('aber nicht (mehr) vorhanden');
+            expect(report(interaction)).toContain('Ohne Rolle: 1 von 2 (ohne Bots)');
+        });
+
+        it('überlebt einen gescheiterten Abruf der Mitglieder', async () => {
+            const guild = mockGuild();
+            guild.members.fetch.mockRejectedValue(new Error('Rate limit'));
+            guildsCache.set(config.GUILD_ID, guild);
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('⚠️ Mitglieder konnten nicht ausgewertet werden.');
+            expect(report(interaction)).toContain('**Config-Seite (/config)**');
+        });
+
+        // Der Bot (members.me) und @everyone (roles.everyone) bekommen getrennte Rechte, damit die
+        // Tests sehen, wer gemeint ist.
+        const mockKanal = (rechteOhneRolle: bigint[], rechteBot: bigint[]) => ({
+            id: 'kanal',
+            permissionsFor: (wer: {id?: string}) => ({
+                has: (recht: bigint) => (wer.id === config.GUILD_ID ? rechteOhneRolle : rechteBot).includes(recht),
+            }),
+        });
+        const {ViewChannel, SendMessages, ReadMessageHistory} = PermissionFlagsBits;
+
+        it('warnt, wenn Leute ohne Rolle den Willkommens-Kanal nicht sehen', async () => {
+            rollenhinweis.getWillkommensKanal.mockResolvedValue('kanal-gruss');
+            channelsFetch.mockResolvedValue(mockKanal([], [ViewChannel, SendMessages]));
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Willkommensgruß: ⚠️ <#kanal-gruss>, Leuten ohne Rolle fehlt: Kanal sehen, Nachrichtenverlauf lesen');
+        });
+
+        it('warnt, wenn der Bot im Willkommens-Kanal nicht schreiben darf', async () => {
+            rollenhinweis.getWillkommensKanal.mockResolvedValue('kanal-gruss');
+            channelsFetch.mockResolvedValue(mockKanal([ViewChannel, ReadMessageHistory], [ViewChannel]));
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Willkommensgruß: ⚠️ <#kanal-gruss>, mir fehlt: Nachrichten senden');
+        });
+
+        it('warnt, wenn Leute ohne Rolle im Hinweis-Kanal nicht schreiben dürfen', async () => {
+            rollenhinweis.getChannel.mockResolvedValue('kanal-hinweis');
+            channelsFetch.mockResolvedValue(mockKanal([ViewChannel], [ViewChannel, SendMessages, ReadMessageHistory]));
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Rollenhinweis-Kanal: ⚠️ <#kanal-hinweis>, Leuten ohne Rolle fehlt: Nachrichten senden');
+        });
+
+        it('warnt, wenn Leute ohne Rolle den Verlauf im Rollen-Kanal nicht lesen dürfen', async () => {
+            rollenhinweis.getRollenKanal.mockResolvedValue('kanal-rollen');
+            channelsFetch.mockResolvedValue(mockKanal([ViewChannel], [ViewChannel]));
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Kanal mit dem Rollen-Button: ⚠️ <#kanal-rollen>, Leuten ohne Rolle fehlt: Nachrichtenverlauf lesen');
+        });
+
+        it('zeigt ein Grün, wenn alle nötigen Rechte da sind', async () => {
+            rollenhinweis.getWillkommensKanal.mockResolvedValue('kanal-gruss');
+            channelsFetch.mockResolvedValue(mockKanal([ViewChannel, ReadMessageHistory], [ViewChannel, SendMessages]));
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Willkommensgruß: ✅ <#kanal-gruss>');
+        });
     });
 
     it('teilt einen langen Bericht auf, ohne Zeilen zu verlieren', async () => {

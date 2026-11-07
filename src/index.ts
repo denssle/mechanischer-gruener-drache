@@ -79,6 +79,12 @@ client.on(Events.MessageCreate, (message) => {
         console.error('Fehler im Rollenhinweis-Handler:', error);
     });
 });
+// Willkommensgruß: erreicht auch die, die nie schreiben. Eigene Zuständigkeit, eigene Registrierung.
+client.on(Events.GuildMemberAdd, (member) => {
+    rollenhinweisHandler.handleBeitritt(member).catch((error) => {
+        console.error('Fehler beim Willkommensgruß:', error);
+    });
+});
 // Alle Logging-Registrierungen mit .catch(): die Handler fangen ihre Fehler zwar selbst (bei jedem
 // ist `try {` die erste Anweisung), aber das ist Disziplin IM Handler - eine Zeile vor dem try oder
 // ein neuer Handler ohne try würde als unhandled rejection den kompletten Prozess killen (siehe

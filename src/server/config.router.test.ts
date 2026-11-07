@@ -42,6 +42,7 @@ vi.mock('./config.settings.js', () => ({
     istGueltigerTextKanal: vi.fn((id: string) => id === 'c1'),
     istKanalFeld: vi.fn((feld: string) => feld === 'protokoll'),
     speichereKanal: vi.fn(() => Promise.resolve()),
+    entferneKanal: vi.fn(() => Promise.resolve(false)),
     holeRollen: vi.fn(() => [{id: 'r1', name: 'Abonnenten'}]),
     ladeRollenFelder: vi.fn(() => Promise.resolve([
         {schluessel: 'twitch-rolle', label: 'Twitch-Benachrichtigungsrolle', aktuelleId: 'r1', status: 'ok'},
@@ -348,6 +349,32 @@ describe('config.router', () => {
             expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=protokoll#bereich-protokoll');
         });
 
+        it('schaltet ein abschaltbares Feld mit leerem Wert ab', async () => {
+            (settings.istKanalFeld as any).mockReturnValueOnce(true);
+            (settings.entferneKanal as any).mockResolvedValueOnce(true);
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleKanalSpeichern(
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), feld: 'rollenhinweis-willkommen', kanal: ''}), res
+            );
+
+            expect(settings.entferneKanal).toHaveBeenCalledWith('rollenhinweis-willkommen');
+            expect(settings.speichereKanal).not.toHaveBeenCalled();
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=rollenhinweis-willkommen-entfernt#bereich-rollenhinweis');
+        });
+
+        it('lehnt einen leeren Wert bei einem Pflichtfeld ab', async () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+
+            await handleKanalSpeichern(
+                gueltigeAnfrage({_csrf: createCsrfToken('12345'), feld: 'protokoll', kanal: ''}), res
+            );
+
+            expect(res.status).toHaveBeenCalledWith(400);
+        });
+
         it('lehnt ein fehlendes/falsches CSRF-Token ab und speichert nicht', async () => {
             const res = mockResponse();
             res.locals.configUserId = '12345';
@@ -401,6 +428,16 @@ describe('config.router', () => {
     // Ein <select> selektiert immer irgendetwas: ohne Platzhalter stünde bei "nicht gesetzt" der
     // erste Kanal im Feld und sähe aus, als wäre er konfiguriert. Bis 2026-07-26 war das so - die
     // read-only-Tabelle darüber verdeckte es.
+    it('renderKanalFormular bietet bei abschaltbaren Feldern "aus" an und verlangt keine Auswahl', () => {
+        const html = renderKanalFormular(
+            {schluessel: 'rollenhinweis-willkommen', label: 'Gruß', aktuelleId: null, status: 'leer', abschaltbar: true},
+            [{id: 'c1', name: 'allgemein'}], 'token',
+        );
+
+        expect(html).toContain('<option value="" selected>— aus —</option>');
+        expect(html).not.toContain(' required');
+    });
+
     it('renderKanalFormular wählt bei "nicht gesetzt" keinen Kanal vor', () => {
         const html = renderKanalFormular(
             {schluessel: 'protokoll', label: 'Protokoll-Kanal', aktuelleId: null, status: 'leer'},
