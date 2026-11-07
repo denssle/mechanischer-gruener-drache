@@ -34,6 +34,13 @@ vi.mock('../services/logBuffer.service.js', () => ({
     getLogEntries: vi.fn(() => [])
 }));
 
+vi.mock('../handlers/rollenDm.handler.js', () => ({
+    default: {
+        holeStand: vi.fn(() => Promise.resolve({text: null, wuerdenAngeschrieben: 0, ausstehend: 0, angeschrieben: 0, nichtZugestellt: 0})),
+        starte: vi.fn(() => Promise.resolve(true)),
+        brichAb: vi.fn(() => Promise.resolve()),
+    },
+}));
 vi.mock('./config.settings.js', () => ({
     holeTextKanaele: vi.fn(() => [{id: 'c1', name: 'allgemein'}]),
     ladeKanalFelder: vi.fn(() => Promise.resolve([
@@ -78,6 +85,7 @@ vi.mock('./config.settings.js', () => ({
 import client from '../client.js';
 import * as oauth from '../services/discordOAuth.service.js';
 import * as settings from './config.settings.js';
+import rollenDmHandler from '../handlers/rollenDm.handler.js';
 import greetingHandler from '../handlers/greeting.handler.js';
 import * as logBuffer from '../services/logBuffer.service.js';
 import {createCsrfToken, signSession, verifyCsrfToken, SESSION_COOKIE, STATE_COOKIE} from './config.session.js';
@@ -87,6 +95,8 @@ import {
     handleConfigPage,
     handleEventSpeichern,
     handleKanalSpeichern,
+    handleRollenDm,
+    renderRollenDm,
     handleLogin,
     handleLogout,
     handleLogs,
@@ -331,6 +341,83 @@ describe('config.router', () => {
 
         it('meldet den fehlenden Morgengruß-Kanal als Warnung', () => {
             expect(leseMeldung(mockRequest({query: {morgengruss: 'kein-kanal'}}) as any)?.art).toBe('warnung');
+        });
+    });
+
+    describe('handleRollenDm', () => {
+        const anfrage = (body: Record<string, string>) => mockRequest({body: {_csrf: createCsrfToken('12345'), ...body}});
+        const antwort = () => {
+            const res = mockResponse();
+            res.locals.configUserId = '12345';
+            return res;
+        };
+
+        it('startet nur mit Häkchen', async () => {
+            const res = antwort();
+
+            await handleRollenDm(anfrage({aktion: 'starten'}), res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(rollenDmHandler.starte).not.toHaveBeenCalled();
+        });
+
+        it('startet mit Häkchen und leitet zurück', async () => {
+            const res = antwort();
+
+            await handleRollenDm(anfrage({aktion: 'starten', bestaetigt: 'ja'}), res);
+
+            expect(rollenDmHandler.starte).toHaveBeenCalled();
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=rollen-dm-gestartet#bereich-rollenhinweis');
+        });
+
+        it('meldet fehlende Voraussetzungen', async () => {
+            (rollenDmHandler.starte as any).mockResolvedValueOnce(false);
+            const res = antwort();
+
+            await handleRollenDm(anfrage({aktion: 'starten', bestaetigt: 'ja'}), res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+        });
+
+        it('bricht ab', async () => {
+            const res = antwort();
+
+            await handleRollenDm(anfrage({aktion: 'abbrechen'}), res);
+
+            expect(rollenDmHandler.brichAb).toHaveBeenCalled();
+            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=rollen-dm-abgebrochen#bereich-rollenhinweis');
+        });
+
+        it('lehnt ein falsches CSRF-Token ab', async () => {
+            const res = antwort();
+
+            await handleRollenDm(mockRequest({body: {aktion: 'starten', bestaetigt: 'ja'}}), res);
+
+            expect(res.status).toHaveBeenCalledWith(403);
+            expect(rollenDmHandler.starte).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('renderRollenDm', () => {
+        const stand = {text: 'Hallo <b>', wuerdenAngeschrieben: 84, ausstehend: 0, angeschrieben: 0, nichtZugestellt: 0};
+
+        it('zeigt Anzahl und escapten Text, gestartet wird nur mit Häkchen', () => {
+            const html = renderRollenDm(stand, 'token');
+
+            expect(html).toContain('Ein Start schreibt 84 Personen an');
+            expect(html).toContain('Hallo &lt;b&gt;');
+            expect(html).toContain('name="bestaetigt" value="ja" required');
+        });
+
+        it('bietet während der Runde nur den Abbruch an', () => {
+            const html = renderRollenDm({...stand, ausstehend: 5}, 'token');
+
+            expect(html).toContain('value="abbrechen"');
+            expect(html).not.toContain('value="starten"');
+        });
+
+        it('bietet ohne Voraussetzungen keinen Start an', () => {
+            expect(renderRollenDm({...stand, text: null}, 'token')).not.toContain('value="starten"');
         });
     });
 

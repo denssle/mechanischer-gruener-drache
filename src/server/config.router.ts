@@ -6,6 +6,7 @@ import client from '../client.js';
 import greetingHandler from '../handlers/greeting.handler.js';
 import {GRATULATIONS_STUNDE} from '../handlers/geburtstag.handler.js';
 import {ROLLENHINWEIS_TEXT, WILLKOMMENS_TEXT} from '../handlers/rollenhinweis.handler.js';
+import rollenDmHandler, {RollenDmStand} from '../handlers/rollenDm.handler.js';
 import {getLogEntries, LogEntry} from '../services/logBuffer.service.js';
 import {
     buildAuthorizeUrl,
@@ -639,6 +640,38 @@ export interface Meldung {
     art: 'ok' | 'warnung';
 }
 
+// Bewusst zwei Hürden: die Vorschau zeigt Text und Anzahl, und gestartet wird nur mit Häkchen. Ist die
+// Runde einmal gelaufen, lässt sie sich nicht mehr zurückholen.
+export function renderRollenDm(stand: RollenDmStand, csrfToken: string): string {
+    const verlauf = `<p class="feld-hinweis">Einmalige Erinnerung per DM: bisher angeschrieben ${stand.angeschrieben},
+        davon nicht zustellbar ${stand.nichtZugestellt}, noch ausstehend ${stand.ausstehend}.</p>`;
+
+    if (stand.ausstehend > 0) {
+        return `${verlauf}<form class="setting" method="post" action="/config/rollen-dm">
+            <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+            <input type="hidden" name="aktion" value="abbrechen">
+            <span class="pseudo-label">Die Runde läuft, eine DM alle 10 Minuten zwischen 17 und 20 Uhr</span>
+            <button type="submit">Abbrechen</button>
+        </form>`;
+    }
+    if (stand.text === null) {
+        return `${verlauf}<p class="feld-hinweis">Zum Starten brauche ich die Hauptrolle und den Kanal mit dem
+            Rollen-Button.</p>`;
+    }
+    if (stand.wuerdenAngeschrieben === 0) {
+        return `${verlauf}<p class="feld-hinweis">Gerade gibt es niemanden anzuschreiben.</p>`;
+    }
+    return `${verlauf}<p class="feld-hinweis">Ein Start schreibt ${stand.wuerdenAngeschrieben} Personen an, die keine
+        Hauptrolle haben und seit mindestens 30 Tagen da sind. Jede bekommt diese DM höchstens einmal: „${escapeHtml(stand.text)}"</p>
+        <form class="setting" method="post" action="/config/rollen-dm">
+            <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
+            <input type="hidden" name="aktion" value="starten">
+            <label><input type="checkbox" name="bestaetigt" value="ja" required>
+                Ja, ${stand.wuerdenAngeschrieben} Personen ungefragt anschreiben</label>
+            <button type="submit">Runde starten</button>
+        </form>`;
+}
+
 export interface ConfigSeiteDaten {
     kanalFelder: KanalFeld[];
     kanaele: KanalOption[];
@@ -653,6 +686,7 @@ export interface ConfigSeiteDaten {
     anzahlEmojiEintraege: number;
     // Ebenfalls nur die Anzahl - die Zitate selbst liegen auf /config/bash.
     anzahlZitate: number;
+    rollenDm?: RollenDmStand;
     csrfToken: string;
     meldung?: Meldung;
 }
@@ -708,7 +742,8 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
             meldungFuer('spielwelt')) +
         renderBereich('rollenhinweis', 'Rollenhinweis',
             kanal('rollenhinweis-kanal') + kanal('rollenhinweis-rollenkanal') + kanal('rollenhinweis-willkommen') +
-                rolle('rollenhinweis-hauptrolle') + renderRollenhinweisHinweis(),
+                rolle('rollenhinweis-hauptrolle') + renderRollenhinweisHinweis() +
+                (daten.rollenDm ? renderRollenDm(daten.rollenDm, csrf) : ''),
             meldungFuer('rollenhinweis')) +
         renderBereich('pingpong', 'Ping-Pong',
             rolle('pingpong-champion') + renderPingPongHinweis(),
@@ -833,6 +868,8 @@ const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
     'rollenhinweis-rollenkanal': {bereich: 'rollenhinweis', text: 'Kanal mit dem Rollen-Button gespeichert.'},
     'rollenhinweis-willkommen': {bereich: 'rollenhinweis', text: 'Kanal für den Willkommensgruß gespeichert.'},
     'rollenhinweis-willkommen-entfernt': {bereich: 'rollenhinweis', text: 'Willkommensgruß abgeschaltet.'},
+    'rollen-dm-gestartet': {bereich: 'rollenhinweis', text: 'Runde gestartet.'},
+    'rollen-dm-abgebrochen': {bereich: 'rollenhinweis', text: 'Runde abgebrochen, offene DMs gehen nicht mehr raus.'},
     'rollenhinweis-hauptrolle': {bereich: 'rollenhinweis', text: 'Hauptrolle gespeichert.'},
     'rollenhinweis-hauptrolle-entfernt': {bereich: 'rollenhinweis', text: 'Hauptrolle entfernt.'},
     'twitch-rolle': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle gespeichert.'},
@@ -885,7 +922,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
         const userId = res.locals.configUserId as string;
         // Parallel: die Abfragen hängen nicht voneinander ab, und jede ist mindestens ein
         // Redis-Roundtrip (ladeKanalFelder zusätzlich vier channels.fetch).
-        const [kanalFelder, rollenFelder, eventFelder, mitglieder, legacyKilometer, meilensteine, anzahlZitate] = await Promise.all([
+        const [kanalFelder, rollenFelder, eventFelder, mitglieder, legacyKilometer, meilensteine, anzahlZitate, rollenDm] = await Promise.all([
             ladeKanalFelder(),
             ladeRollenFelder(),
             holeEventFelder(),
@@ -893,6 +930,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
             holeLegacyKilometer(),
             holeMeilensteine(),
             anzahlBashZitate(),
+            rollenDmHandler.holeStand(),
         ]);
         const html = renderConfigSeite({
             kanalFelder,
@@ -905,6 +943,7 @@ export async function handleConfigPage(req: Request, res: Response): Promise<voi
             meilensteine,
             anzahlEmojiEintraege: mitglieder.length,
             anzahlZitate,
+            rollenDm,
             csrfToken: createCsrfToken(userId),
             meldung: leseMeldung(req),
         });
@@ -1192,6 +1231,35 @@ export async function handleBashSpeichern(req: Request, res: Response): Promise<
 // Morgengruß: stößt den Historien-Scan an (früher /morgengruss lernen). CSRF zuerst, dann scannen -
 // der Scan (greetingHandler.lerneAusHistorie) löst den Kanal selbst auf und liefert null, wenn keiner
 // gesetzt/abrufbar ist. Ergebnis per Redirect (PRG), damit ein Reload nicht erneut scannt.
+// Das Häkchen wird hier noch einmal geprüft: `required` im Formular ist nur Komfort.
+export async function handleRollenDm(req: Request, res: Response): Promise<void> {
+    const userId = res.locals.configUserId as string;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const token = typeof body._csrf === 'string' ? body._csrf : undefined;
+
+    if (!verifyCsrfToken(userId, token)) {
+        res.status(403).type('html').send(renderPage(forbiddenBody('Ungültiges oder fehlendes CSRF-Token.')));
+        return;
+    }
+
+    if (body.aktion === 'abbrechen') {
+        await rollenDmHandler.brichAb();
+        zurueckZumBereich(res, 'rollen-dm-abgebrochen');
+        return;
+    }
+
+    if (body.aktion !== 'starten' || body.bestaetigt !== 'ja') {
+        res.status(400).type('html').send(renderPage(eingabeFehlerBody('Der Start muss bestätigt werden.')));
+        return;
+    }
+
+    if (!await rollenDmHandler.starte()) {
+        res.status(400).type('html').send(renderPage(eingabeFehlerBody('Hauptrolle oder Kanal mit dem Rollen-Button fehlen.')));
+        return;
+    }
+    zurueckZumBereich(res, 'rollen-dm-gestartet');
+}
+
 export async function handleMorgengrussLernen(req: Request, res: Response): Promise<void> {
     const userId = res.locals.configUserId as string;
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -1334,6 +1402,7 @@ configRouter.get('/config', geschuetzt,
 
 postRoute('/config/kanal', handleKanalSpeichern, 'Fehler beim Speichern des Kanals');
 postRoute('/config/rolle', handleRolleSpeichern, 'Fehler beim Speichern der Rolle');
+postRoute('/config/rollen-dm', handleRollenDm, 'Fehler bei der Rollen-DM-Runde');
 postRoute('/config/event', handleEventSpeichern, 'Fehler beim Speichern des Events');
 postRoute('/config/sport', handleSportSpeichern, 'Fehler beim Speichern der Sport-Einstellung');
 postRoute('/config/morgengruss', handleMorgengrussLernen, 'Fehler beim Morgengruß-Lernen', 'Lernen fehlgeschlagen.');

@@ -69,7 +69,7 @@ Diese Dinge haben **mehrere Abnehmer** – ihre ausführliche Begründung steht 
 - **`passtAufKernNamen`/`findInRoster`/`findLinkForName`/`findLinksInText`/`getRoster`/`getAllLinks`** (`character.service.ts`) – die Titel-Präfix-Falle liegt an **einer** Stelle. Abnehmer: `online`, `ereignisse`, `beobachten`, `drachen`, `diagnose`, `character`. Details: [Charakter](docs/features/charakter.md).
 - **`onlineService.getOnline()`** (`online.service.ts`) – ein Fetch, zwei Listen. Abnehmer: `online`, `character` (Aktivitätszeile), `onlinePoll`. Details: [Spielwelt-Infos](docs/features/spielwelt-info.md).
 - **`onlinePoll.handler.ts`** – der gemeinsame 5-Minuten-Abruf der Kriegerliste. Abnehmer: `beobachten`, `drachen`. **Ein neuer Abnehmer** = `brauchtOnlineStand()` + Verarbeitungsmethode am eigenen Handler + zwei Zeilen im Poller. Details: [Beobachtung & Drachen](docs/features/beobachten-und-drachen.md).
-- **`dm.service.ts` (`sendeDm`, `DM_GESCHLOSSEN`)** – Abnehmer: `anstupser`, `beobachten`. Details: [Anstupser](docs/features/anstupser.md).
+- **`dm.service.ts` (`sendeDm`, `DM_GESCHLOSSEN`)** – Abnehmer: `anstupser`, `beobachten`, `rollenDm`. Details: [Anstupser](docs/features/anstupser.md).
 - **`greetingHandler.holePersoenlicheEmojis`/`emojiFuerNachricht`** – Rangfolge manuell > gelernt > abgeleitet. Abnehmer: Morgengruß selbst + `/pingpong bestenliste`; **muss mit `holeMorgengrussEmojis` (config.settings) gleich bleiben**, die schreibt die Rangfolge wegen der Herkunft-Spalte selbst aus. Details: [Morgengruß](docs/features/morgengruss.md).
 - **`ankuendigungskanal.service.ts`** – gemeinsamer Zugriff auf den konfigurierten Sport-Ankündigungskanal. Abnehmer: Sport-Meilensteine, täglicher Aktivitätsstand und Camp-Fortschritt.
 - **`monatsSchluessel`/`formatMonat`** (`pingPongSeason.handler.ts`) – Abnehmer: `pingPong.handler` (Überschrift der Bestenliste), `diagnose`. `PING_PONG_KEYS` (`pingPong.service.ts`) teilen sich beide Ping-Pong-Handler. Details: [Ping-Pong](docs/features/pingpong.md).
@@ -107,7 +107,7 @@ Die Detail-Doku je Feature liegt in eigenen Dateien – **jede enthält die Desi
 - [Zitatsammlung](docs/features/bash.md) – `/bash`, Erfassen per Rechtsklick auf eine Nachricht (Kontextmenü + Modal)
 - [Tipps & Nettigkeiten](docs/features/tipps.md) – ephemere Zeilen an Slash-Command-Antworten
 - [Hilfe](docs/features/hilfe.md) – `/hilfe`, `/spielwelt`, Gruppen-`hilfe`, die abgeleiteten Hilfe-Tests
-- [Rollenhinweis](docs/features/rollenhinweis.md) – einmaliger Hinweis an Leute ohne Rolle im konfigurierten Kanal
+- [Rollenhinweis](docs/features/rollenhinweis.md) – einmaliger Hinweis an Leute ohne Rolle im konfigurierten Kanal, Willkommensgruß, einmalige DM-Runde
 - [Diagnose](docs/features/diagnose.md) – `/diagnose` (Admin-Gesundheitscheck)
 - [Web-Konfigurationsseite](docs/features/config-seite.md) – `/config` samt Discord-OAuth-Login, Log-Ansicht
 

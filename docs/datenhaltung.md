@@ -71,6 +71,9 @@ steht in [Betrieb](betrieb.md); es enthält dieselben Daten und landet in `~/bac
 | `ROLLENHINWEIS:ROLLENKANAL` | Channel-ID des Kanals mit dem Rollen-Button, auf den der Hinweis verlinkt | bis zum Überschreiben | Rollenhinweis (optional, gesetzt über `/config`) |
 | `ROLLENHINWEIS:WILLKOMMENSKANAL` | Channel-ID des Kanals für den Willkommensgruß | bis zum Überschreiben | Rollenhinweis (optional, gesetzt über `/config`) |
 | `ROLLENHINWEIS:HAUPTROLLE` | Rollen-ID der Rolle, die den Server öffnet | bis zum Entfernen | Zählung in `/diagnose` (optional, gesetzt über `/config`) |
+| `ROLLENHINWEIS:DM_WARTESCHLANGE` (Set) | User-IDs, die in der laufenden Rollen-Erinnerung noch dran sind | bis zum Versand oder Abbruch | Einmalige DM-Runde |
+| `ROLLENHINWEIS:DM_ANGESCHRIEBEN` (Set) | User-IDs, die die Rollen-Erinnerung schon bekommen haben | dauerhaft | „höchstens einmal pro Person" |
+| `ROLLENHINWEIS:DM_NICHT_ZUGESTELLT` (Set) | User-IDs, bei denen die DM nicht ankam | dauerhaft | Anzeige auf `/config` |
 | `ROLLENHINWEIS:HINGEWIESEN` (Set) | User-IDs, die den Rollenhinweis schon bekommen haben | dauerhaft | „nur einmal pro Person" |
 | `GEBURTSTAG:DATEN` (Hash userId→Datum) | **Geburtstag**, ausschließlich selbst eingetragen (`/geburtstag setzen`): Tag + Monat, **Jahr nur, wenn die Person es freiwillig angibt** (`TT.MM` bzw. `TT.MM.JJJJ`) | bis `/geburtstag entfernen` | Glückwunsch am Tag, `/geburtstag liste` |
 | `GEBURTSTAG:CHANNEL` | Channel-ID des Geburtstagskanals | bis zum Überschreiben | Glückwunsch-Post (gesetzt über `/config`) |
