@@ -449,10 +449,33 @@ describe('SportHandler', () => {
         });
     });
 
+    describe('Sportarten aus dem Chat', () => {
+        it.each([
+            ['+30 min Yoga', 'yoga'],
+            ['+20 min Autogenes Training', 'yoga'],
+            ['+15 min Fußreflexzonenmassage', 'yoga'],
+            ['+15 min Fussreflexzonenmassage', 'yoga'],
+            ['+60 min CrossFit', 'krafttraining'],
+            ['+45 min Kraftcircle', 'krafttraining'],
+            ['+60 min Gym', 'krafttraining'],
+            ['+60 min Krafttraining', 'krafttraining'],
+            ['+3 km Spaziergang', 'wandern'],
+            ['+30 min spazieren', 'wandern'],
+            ['+45 min Spinning', 'radfahren'],
+        ])('%s zählt als %s', (text, erwartet) => {
+            expect(erkenneSportLeistungen(text)[0].aktivitaet).toBe(erwartet);
+        });
+
+        it('liest Gymnasium nicht als Gym', () => {
+            expect(siehtNachSportAus('+30 Gymnasium')).toBe(false);
+        });
+    });
+
     describe('Stücke: n-te Angabe bekommt das n-te Sportwort', () => {
         it.each([
             // Jede Angabe wird gutgeschrieben, auch mit einem Wort, das der Bot nicht kennt.
-            ['+40 km Rad, +60 min Yoga', [{aktivitaet: 'radfahren', kilometer: 40}, {aktivitaet: 'krafttraining', minuten: 60}]],
+            ['+40 km Rad, +60 min Yoga', [{aktivitaet: 'radfahren', kilometer: 40}, {aktivitaet: 'yoga', minuten: 60}]],
+            ['+40 km Rad, +60 min Tanzen', [{aktivitaet: 'radfahren', kilometer: 40}, {aktivitaet: 'krafttraining', minuten: 60}]],
             ['+12,5 km Rad, +30 min Schwimmen', [{aktivitaet: 'radfahren', kilometer: 12.5}, {aktivitaet: 'schwimmen', minuten: 30}]],
             ['+5 km\n+30 min Schwimmen', [{aktivitaet: 'laufen', kilometer: 5}, {aktivitaet: 'schwimmen', minuten: 30}]],
             ['Laufen +5 km, +30 min Schwimmen', [{aktivitaet: 'laufen', kilometer: 5}, {aktivitaet: 'schwimmen', minuten: 30}]],

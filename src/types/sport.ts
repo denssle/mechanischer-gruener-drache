@@ -11,9 +11,10 @@ export const SportActivities = {
     laufen: '🏃 Laufen',
     radfahren: '🚴 Radfahren',
     schwimmen: '🏊 Schwimmen',
-    wandern: '🚶 Wandern',
+    wandern: '🚶 Wandern & Spazieren',
     skifahren: '⛷️ Skifahren',
     krafttraining: '💪 Krafttraining',
+    yoga: '🧘 Yoga & Entspannung',
 } as const;
 
 export type SportActivity = keyof typeof SportActivities;
