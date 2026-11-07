@@ -44,6 +44,8 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `PING_PONG:REKORD_HIGHSCORE` (Sorted Set) | Dieselben Serien-Rekorde nochmal ranglistenfähig (Quelle bleibt `PING_PONG:REKORD:<userId>`) | dauerhaft, **nicht** vom Season-Reset betroffen | `/pingpong serienrekorde` |
 | `PING_PONG:PECHSTRAEHNE:<userId>`, `PING_PONG:PECHREKORD:<userId>` | Laufende Niederlagenserie (bei einem Sieg gelöscht) und längste je erlittene | dauerhaft | Duell-Ergebnis |
 | `PING_PONG:PECHREKORD_HIGHSCORE` (Sorted Set) | Dieselben Pech-Rekorde ranglistenfähig (Quelle bleibt `PING_PONG:PECHREKORD:<userId>`) | dauerhaft, **nicht** vom Season-Reset betroffen | `/pingpong pechstraehnen` |
+| `PING_PONG:RUNDLAUF_OFFEN` (Sorted Set) | Wo offene Rundlauf-Lobbys liegen (`guildId:channelId:messageId`, Score = Eröffnungszeit) – nur IDs, Teilnehmer stehen in der Nachricht | bis Start/Absage der Runde, sonst bis zur nächsten Abfrage nach 7 Tagen oder nachdem die Nachricht gelöscht wurde | `/pingpong rundlaeufe` |
+| `PING_PONG:RUNDLAUF_START:{messageId}` | Lock gegen doppelten Start einer Rundlauf-Lobby | 60 Sekunden | Doppelklick auf Start |
 | `PING_PONG:DOPPEL_START:<messageId>` | Lock, dass das Doppel dieser Lobby schon gestartet wurde (gegen doppelte Matches bei gleichzeitigen Klicks) | 60 Sekunden (TTL) | `/pingpong doppel` |
 | `TIPP:COOLDOWN:<userId>` | Marker, dass die Person heute schon einen Tipp gesehen hat | 24 Stunden (TTL) | gelegentliche Tipps/Nettigkeiten |
 | `TIPP:USED_COMMANDS:<userId>` | Set der Slash-Command-**Namen**, die die Person je benutzt hat (keine Argumente, keine Inhalte, keine Zeitpunkte) | dauerhaft | Tipps nur zu noch nie benutzten Befehlen |
@@ -64,6 +66,9 @@ Replikation, keine Verschlüsselung im Ruhezustand – ein privater Hobby-Server
 | `GREETING:LAST_DAY_BY_USER` (Hash userId→Tag) | Tag (YYYY-MM-DD) der zuletzt begrüßten ersten Nachricht **je Person** | bis zum Überschreiben | Doppelgruß-Schutz (jede Person einmal pro Tag). *(Vorgänger `GREETING:LAST_DAY` war ein String-Marker; umbenannt, um die WRONGTYPE-Kollision beim Wechsel auf einen Hash zu vermeiden.)* |
 | `GREETING:EMOJI` (Hash userId→Emoji) | persönliches Morgengruß-Emoji, aus der Chat-Historie gelernt (nur die Emoji-Kennung, keine Nachrichten) | bis zum Überschreiben (Lern-Button auf `/config`) | persönlicher Morgengruß (Zuordnung dort auch einsehbar) |
 | `GREETING:EMOJI_MANUELL` (Hash userId→Emoji) | persönliches Morgengruß-Emoji, auf `/config` **von Hand** gesetzt (nur die Emoji-Kennung) | bis zum Überschreiben (nur über das Formular auf `/config`) | persönlicher Morgengruß – schlägt das Gelernte, damit der Lern-Button eine Handeingabe nicht überschreibt |
+| `ROLLENHINWEIS:CHANNEL` | Channel-ID des Rollenhinweis-Kanals | bis zum Überschreiben | Rollenhinweis (gesetzt über `/config`) |
+| `ROLLENHINWEIS:ROLLENKANAL` | Channel-ID des Kanals mit dem Rollen-Button, auf den der Hinweis verlinkt | bis zum Überschreiben | Rollenhinweis (optional, gesetzt über `/config`) |
+| `ROLLENHINWEIS:HINGEWIESEN` (Set) | User-IDs, die den Rollenhinweis schon bekommen haben | dauerhaft | „nur einmal pro Person" |
 | `GEBURTSTAG:DATEN` (Hash userId→Datum) | **Geburtstag**, ausschließlich selbst eingetragen (`/geburtstag setzen`): Tag + Monat, **Jahr nur, wenn die Person es freiwillig angibt** (`TT.MM` bzw. `TT.MM.JJJJ`) | bis `/geburtstag entfernen` | Glückwunsch am Tag, `/geburtstag liste` |
 | `GEBURTSTAG:CHANNEL` | Channel-ID des Geburtstagskanals | bis zum Überschreiben | Glückwunsch-Post (gesetzt über `/config`) |
 | `GEBURTSTAG:LAST_DAY` | Tag (YYYY-MM-DD) der zuletzt geposteten Glückwunsch-Runde | bis zum Überschreiben | Doppelpost-Schutz |

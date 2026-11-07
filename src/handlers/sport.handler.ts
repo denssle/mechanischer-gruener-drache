@@ -13,8 +13,6 @@ import {
     ErkannteSportLeistung,
     SportActivities,
     SportActivity,
-    istDistanzAktivitaet,
-    istMinutenAktivitaet,
 } from '../types/sport.js';
 
 import campHandler from './camp.handler.js';
@@ -27,6 +25,12 @@ export const DEFAULT_AKTIVITAET: SportActivity = 'laufen';
 // Quittung der Auto-Erfassung. Funktionaler Statusmarker (wie im Audit-Log), keine Deko - er ist
 // die einzige Rückmeldung, die ohne eigenen Post im Kanal auskommt.
 export const BESTAETIGUNGS_REAKTION = '✅';
+
+// Rückfrage der Auto-Erfassung (seit 2026-10-21): die Nachricht sieht nach einem Eintrag aus, der
+// Parser versteht sie aber nicht. Vorher blieb sie einfach ohne Reaktion - von außen nicht von
+// "Bot ist kaputt" zu unterscheiden. Ebenfalls funktionaler Marker, verschwindet nach erfolgreicher
+// Korrektur wieder.
+export const RUECKFRAGE_REAKTION = '❓';
 
 // Lokales Datum als YYYY-MM-DD (Host läuft auf Europe/Berlin, wie beim Event-Feature).
 // Bewusst aus den lokalen Datumsteilen gebaut statt toISOString(), das in UTC umrechnet und
@@ -65,11 +69,12 @@ export function rundeMinuten(minuten: number): number {
 // ("ich bin gerade 12 km") - beides würde fälschlich als Radfahren eingetragen.
 const AKTIVITAET_PATTERNS: Record<SportActivity, RegExp> = {
     laufen: /\b(lauf|gelaufen|renn|gerannt|jogg)/i,
-    radfahren: /\b(rad|fahrrad|geradelt|bike|velo)/i,
+    radfahren: /\b(rad|fahrrad|geradelt|bike|velo|spinning)/i,
     schwimmen: /\b(schwimm|geschwommen|schwomm)/i,
-    wandern: /\b(wander|gewandert)/i,
+    wandern: /\b(wander|gewandert|spazier)/i,
     skifahren: /\b(ski|langlauf)/i,
-    krafttraining: /\b(krafttraining|kraftsport|hantel|gewichtheben)/i,
+    krafttraining: /\b(krafttraining|kraftsport|kraftcircle|hantel|gewichtheben|crossfit|gym\b)/i,
+    yoga: /\b(yoga|autogen|fu(?:ß|ss)reflex)/i,
 };
 
 // Zieht die erste Kilometer-Angabe aus einem Text: "+12 km", "+12km", "+12,5 km", "+12 Kilometer".
@@ -101,131 +106,82 @@ export function parseMinuten(text: string): number | null {
     return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-// Erkennt die Aktivität anhand von Schlüsselwörtern.
-// Optional kann die Suche auf bestimmte Sportarten eingeschränkt werden.
-// Ohne Treffer: DEFAULT_AKTIVITAET bei normaler Suche, null bei eingeschränkter Suche.
-export function erkenneAktivitaet(
-    text: string,
-    erlaubteAktivitaeten?: SportActivity[]
-): SportActivity | null {
+// Alle Sportwörter eines Textes samt Position. `ende` reicht bis zum Wortende, nicht nur bis zum
+// Ende des Musters ("Schwimm|en") - sonst sähe der Rest des Wortes wie weiterer Text aus.
+interface AktivitaetsWort {
+    aktivitaet: SportActivity;
+    index: number;
+    ende: number;
+}
+
+function findeAktivitaetsWoerter(text: string): AktivitaetsWort[] {
+    const woerter: AktivitaetsWort[] = [];
+
     for (const [aktivitaet, pattern] of Object.entries(AKTIVITAET_PATTERNS) as [SportActivity, RegExp][]) {
-        if (
-            (!erlaubteAktivitaeten || erlaubteAktivitaeten.includes(aktivitaet)) &&
-            pattern.test(text)
-        ) {
-            return aktivitaet;
+        for (const treffer of text.matchAll(new RegExp(pattern.source, 'gi'))) {
+            const rest = /^\p{L}*/u.exec(text.slice(treffer.index + treffer[0].length))![0];
+            woerter.push({aktivitaet, index: treffer.index, ende: treffer.index + treffer[0].length + rest.length});
         }
     }
 
-    return erlaubteAktivitaeten ? null : DEFAULT_AKTIVITAET;
+    return woerter.sort((a, b) => a.index - b.index);
 }
 
+// Erkennt die Aktivität anhand des ERSTEN Sportworts im Text (nach Position, nicht nach der
+// Reihenfolge in AKTIVITAET_PATTERNS). Ohne Treffer: DEFAULT_AKTIVITAET.
+export function erkenneAktivitaet(text: string): SportActivity {
+    return findeAktivitaetsWoerter(text)[0]?.aktivitaet ?? DEFAULT_AKTIVITAET;
+}
+
+// Ohne Sportart: Kilometer gelten als Laufen, Minuten als Krafttraining.
+function standardAktivitaet(istKilometer: boolean): SportActivity {
+    return istKilometer ? DEFAULT_AKTIVITAET : 'krafttraining';
+}
+
+// Trennt eine Nachricht in Stücke. Ein Komma nur, wenn keine Ziffer folgt: "+12,5 km" bleibt ganz.
+const STUECK_TRENNER = /,(?!\d)|;|\n|\b(?:und|danach|dann)\b/gi;
+
+// Jede "+Zahl Einheit" wird gutgeschrieben, die Sportart ist nur die Beschriftung. Die Regel: Die
+// Nachricht wird an Trennern geteilt, und in jedem Stück bekommt die n-te Angabe das n-te Sportwort,
+// egal ob es davor oder dahinter steht. Fehlt eins, gilt der Standard (unbekanntes "Yoga" genauso).
 export function erkenneSportLeistungen(text: string): ErkannteSportLeistung[] {
     const leistungen: ErkannteSportLeistung[] = [];
 
-    const matches = [...text.matchAll(
-        /\+\s*(\d+(?:[.,]\d+)?)\s*(km\b|kilometer\b|min\b|minuten\b)/gi
-    )];
+    for (const stueck of text.split(STUECK_TRENNER)) {
+        const woerter = findeAktivitaetsWoerter(stueck);
+        const angaben = stueck.matchAll(/\+\s*(\d+(?:[.,]\d+)?)\s*(km\b|kilometer\b|min\b|minuten\b)/gi);
 
-    if (matches.length === 0) return [];
+        for (const [i, angabe] of [...angaben].entries()) {
+            const wert = parseFloat(angabe[1].replace(',', '.'));
+            const istKilometer = /^k/i.test(angabe[2]);
+            const aktivitaet = woerter[i]?.aktivitaet ?? standardAktivitaet(istKilometer);
 
-    const alleAktivitaeten = Object.keys(SportActivities) as SportActivity[];
+            if (!Number.isFinite(wert) || wert <= 0) continue;
 
-    // Steht bereits vor der ersten Leistungsangabe eine Sportart,
-    // wird die Nachricht als "Sportart + Leistung" gelesen.
-    const textVorErsterAngabe = text.slice(0, matches[0].index);
-    const sportartStehtDavor =
-        erkenneAktivitaet(textVorErsterAngabe, alleAktivitaeten) !== null;
-
-    for (let i = 0; i < matches.length; i++) {
-        const match = matches[i];
-        const wert = parseFloat(match[1].replace(',', '.'));
-        const einheit = match[2].toLowerCase();
-
-        if (!Number.isFinite(wert) || wert <= 0) continue;
-
-        const istKilometer =
-            einheit === 'km' || einheit === 'kilometer';
-
-        const erlaubteAktivitaeten = alleAktivitaeten.filter(aktivitaet =>
-            istKilometer
-                ? istDistanzAktivitaet(aktivitaet)
-                : istMinutenAktivitaet(aktivitaet)
-        );
-
-        let abschnitt: string;
-
-        if (sportartStehtDavor) {
-            // "Radfahren +5 km, Laufen +10 km"
-            // Jede Sportart gehört zur folgenden Leistungsangabe.
-            const start = i === 0
-                ? 0
-                : matches[i - 1].index + matches[i - 1][0].length;
-
-            abschnitt = text.slice(start, match.index);
-        } else {
-            // "+5 km gelaufen, danach +20 km Rad"
-            // Normalerweise gehört die Sportart hinter die Leistungsangabe.
-            const start = match.index + match[0].length;
-            const ende = matches[i + 1]?.index ?? text.length;
-
-            abschnitt = text.slice(start, ende);
-
-            // Sonderfall innerhalb einer grundsätzlich nachgestellten Nachricht:
-            // "+5 km und Krafttraining +30 min"
-            //
-            // Steht unmittelbar vor der nächsten Leistungsangabe eine Sportart,
-            // gehört sie zur nächsten Angabe und darf nicht der aktuellen
-            // zugerechnet werden.
-            if (i < matches.length - 1) {
-                const naechsteAktivitaet =
-                    erkenneAktivitaet(abschnitt, alleAktivitaeten);
-
-                if (naechsteAktivitaet) {
-                    const pattern = AKTIVITAET_PATTERNS[naechsteAktivitaet];
-                    const treffer = pattern.exec(abschnitt);
-
-                    if (treffer) {
-                        const nachAktivitaet =
-                            abschnitt.slice(treffer.index + treffer[0].length);
-
-                        // Nach dem Sportwort stehen nur noch Trennzeichen/Wörter
-                        // bis zur nächsten +Leistung: dann gehört die Sportart
-                        // zur nächsten Angabe.
-                        if (/^\s*$|^\s*(?:,|und|danach)*\s*$/i.test(nachAktivitaet)) {
-                            abschnitt = abschnitt.slice(0, treffer.index);
-                        }
-                    }
-                }
-            }
-        }
-
-        const passendeAktivitaet =
-            erkenneAktivitaet(abschnitt, erlaubteAktivitaeten);
-
-        const genannteAktivitaet =
-            erkenneAktivitaet(abschnitt, alleAktivitaeten);
-
-        // Eine ausdrücklich genannte Sportart mit falscher Einheit
-        // macht die gesamte Nachricht ungültig.
-        if (!passendeAktivitaet && genannteAktivitaet) {
-            return [];
-        }
-
-        if (istKilometer) {
-            leistungen.push({
-                aktivitaet: passendeAktivitaet ?? DEFAULT_AKTIVITAET,
-                kilometer: wert,
-            });
-        } else {
-            leistungen.push({
-                aktivitaet: passendeAktivitaet ?? 'krafttraining',
-                minuten: wert,
-            });
+            leistungen.push(istKilometer ? {aktivitaet, kilometer: wert} : {aktivitaet, minuten: wert});
         }
     }
 
     return leistungen;
+}
+
+// Sieht eine Nachricht nach einem gemeinten Eintrag aus, den der Parser nicht versteht? Entweder
+// eine Einheit, die wir nicht kennen ("+2 h", "+500 m"), oder eine Zahl direkt am Sportwort
+// ("+240 schwimmen", "Schwimmen +240"). Ein Sportwort irgendwo im Satz reicht bewusst nicht, und die
+// nackte +1 ist eine Zusage, keine Leistung: "+1 fürs Radfahren" und "+1 Laufgruppe?" bleiben ohne ❓.
+export function siehtNachSportAus(text: string): boolean {
+    if (/\+\s*\d+(?:[.,]\d+)?\s*(?:h|std|stunden?|m|meter|mins?|minute|kilometern)\b/i.test(text)) return true;
+
+    const woerter = findeAktivitaetsWoerter(text);
+
+    return [...text.matchAll(/\+\s*(\d+(?:[.,]\d+)?)\s*/g)].some(zahl => {
+        if (parseFloat(zahl[1].replace(',', '.')) === 1) return false;
+
+        const zahlEnde = zahl.index + zahl[0].length;
+
+        return woerter.some(wort =>
+            wort.index === zahlEnde || /^[\s:]*$/.test(text.slice(wort.ende, zahl.index)) && wort.ende <= zahl.index);
+    });
 }
 
 // Exportiert wie CHARAKTER_HELP/SPIELWELT_HELP, damit ein Test die km-Beispiele darin gegen den
@@ -243,7 +199,9 @@ export const SPORT_HILFE =
     `Im Sport-Kanal genügt auch eine normale Nachricht: „+12 km gelaufen", „+45 min Krafttraining" ` +
     `oder „+10 km Radfahren +60 min Krafttraining" werden automatisch eingetragen – erkennbar an der Reaktion ` +
     `${BESTAETIGUNGS_REAKTION} an der Nachricht. Das „+" vor Kilometern und Aktivitätsminuten ist nötig; ` +
-    `vergessen? Nachricht einfach bearbeiten, das zählt auch. Ohne erkennbare Sportart wird Laufen angenommen.`;
+    `vergessen? Nachricht einfach bearbeiten, das zählt auch. Jede Sportart geht mit Kilometern oder Minuten; ohne ` +
+    `erkennbare Sportart zählen Kilometer als Laufen und Minuten als Krafttraining. Ein ${RUECKFRAGE_REAKTION} heißt: ` +
+    `gesehen, aber nicht verstanden – dann die Angabe in „km" oder „min" schreiben.`;
 
 class SportHandler {
     // Auto-Listener: erfasst Kilometer und Aktivitätsminuten aus normalen Chat-Nachrichten - aber NUR im konfigurierten
@@ -288,11 +246,16 @@ class SportHandler {
         const kanalId = await sportService.getAnnouncementChannel();
         if (!kanalId || message.channelId !== kanalId) return;
 
+        if (this.hatBereitsQuittung(message)) return;
+
         const leistungen = erkenneSportLeistungen(message.content);
 
-        if (leistungen.length === 0) return;
-
-        if (this.hatBereitsQuittung(message)) return;
+        if (leistungen.length === 0) {
+            if (siehtNachSportAus(message.content) && !this.hatEigeneReaktion(message, RUECKFRAGE_REAKTION)) {
+                await message.react(RUECKFRAGE_REAKTION);
+            }
+            return;
+        }
 
         for (const leistung of leistungen) {
             await sportService.addEntry(
@@ -310,6 +273,7 @@ class SportHandler {
         }
 
         await message.react(BESTAETIGUNGS_REAKTION);
+        await this.entferneRueckfrage(message);
 
         if (leistungen.some(leistung => leistung.kilometer !== undefined)) {
             await this.announceReachedMilestones();
@@ -319,7 +283,24 @@ class SportHandler {
     // Hat der Bot diese Nachricht schon quittiert? `me` = "diese Reaktion stammt (auch) von mir" -
     // eine ✅ von einem anderen Mitglied zählt also nicht als Quittung.
     private hatBereitsQuittung(message: Message): boolean {
-        return message.reactions.cache.get(BESTAETIGUNGS_REAKTION)?.me === true;
+        return this.hatEigeneReaktion(message, BESTAETIGUNGS_REAKTION);
+    }
+
+    private hatEigeneReaktion(message: Message, emoji: string): boolean {
+        return message.reactions.cache.get(emoji)?.me === true;
+    }
+
+    // Nach erfolgreicher Korrektur soll nicht ✅ UND ❓ an der Nachricht hängen. Fehlertolerant: der
+    // Eintrag ist zu diesem Zeitpunkt schon gespeichert und quittiert. users.remove() ohne Argument
+    // entfernt die Reaktion des Bots selbst.
+    private async entferneRueckfrage(message: Message): Promise<void> {
+        if (!this.hatEigeneReaktion(message, RUECKFRAGE_REAKTION)) return;
+
+        try {
+            await message.reactions.cache.get(RUECKFRAGE_REAKTION)!.users.remove();
+        } catch (error) {
+            console.warn('Sport: Rückfrage-Reaktion konnte nicht entfernt werden:', error);
+        }
     }
 
     async handleEintragen(interaction: ChatInputCommandInteraction) {
@@ -331,20 +312,6 @@ class SportHandler {
             (minuten === null || minuten === 0)) {
             return interaction.reply({
                 content: 'Bitte gib Kilometer, Minuten oder beides an.',
-                flags: MessageFlags.Ephemeral,
-            });
-        }
-
-        if (istDistanzAktivitaet(aktivitaet) && minuten !== null && minuten > 0) {
-            return interaction.reply({
-                content: 'Distanzaktivitäten können nur mit Kilometern eingetragen werden.',
-                flags: MessageFlags.Ephemeral,
-            });
-        }
-
-        if (istMinutenAktivitaet(aktivitaet) && kilometer !== null && kilometer > 0) {
-            return interaction.reply({
-                content: 'Minutenaktivitäten können nur mit Aktivitätsminuten eingetragen werden.',
                 flags: MessageFlags.Ephemeral,
             });
         }
@@ -439,22 +406,6 @@ class SportHandler {
             return interaction.reply(
                 'Du hast noch keinen Eintrag, den ich korrigieren könnte.'
             );
-        }
-
-        const aktivitaet = letzterEintrag.activity as SportActivity;
-
-        if (istDistanzAktivitaet(aktivitaet) && minuten !== null && minuten > 0) {
-            return interaction.reply({
-                content: 'Distanzaktivitäten können nur mit Kilometern bearbeitet werden.',
-                flags: MessageFlags.Ephemeral,
-            });
-        }
-
-        if (istMinutenAktivitaet(aktivitaet) && kilometer !== null && kilometer > 0) {
-            return interaction.reply({
-                content: 'Minutenaktivitäten können nur mit Aktivitätsminuten bearbeitet werden.',
-                flags: MessageFlags.Ephemeral,
-            });
         }
 
         const entry = await sportService.editLastEntry(

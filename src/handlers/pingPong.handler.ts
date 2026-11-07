@@ -4,7 +4,11 @@ import {
     ButtonInteraction,
     ButtonStyle,
     ChatInputCommandInteraction,
-    MessageFlags
+    Client,
+    DiscordAPIError,
+    Message,
+    MessageFlags,
+    RESTJSONErrorCodes
 } from "discord.js";
 import redisService from "../services/redis.service.js";
 import userService from "../services/user.service.js";
@@ -178,6 +182,22 @@ export function formatSerie({siegerId, verliererId, serie, istNeuerRekord, beend
 // Marker: so kann der übrige Text geändert werden, ohne dass das Parsen bricht.
 const RUNDLAUF_PREFIX = 'pingpong-rundlauf:';
 const TEILNEHMER_MARKER = 'An der Platte';
+
+// /pingpong rundlaeufe braucht einen Wegweiser zu den Lobbys (siehe PING_PONG_KEYS.rundlaufOffen).
+// Mit der Gilde vorn, damit die Liste nur Runden des eigenen Servers zeigt.
+export function rundlaufListenEintrag(guildId: string | null, channelId: string, messageId: string): string {
+    return `${guildId}:${channelId}:${messageId}`;
+}
+
+// Mehr Zeilen passen nicht sicher in eine Nachricht.
+const MAX_GELISTETE_RUNDLAEUFE = 15;
+
+// Der Lock muss nur die Zeit bis zum Entfernen der Buttons abdecken (Muster DOPPEL_LOCK_SECONDS).
+const RUNDLAUF_LOCK_SECONDS = 60;
+
+// Lobbys laufen nie ab, auch eine vergessene bleibt offen. Nach einer Woche fliegt sie aus der
+// Liste (spielbar bleibt sie), sonst füllen Karteileichen die Liste für immer.
+const RUNDLAUF_LISTE_MAX_ALTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Unter drei Leuten ist es kein Rundlauf, sondern ein Duell (dafür gibt es `herausfordern`).
 // Die Obergrenze hält Nachricht und Punkteverteilung im Rahmen - an einer Platte ist irgendwann
@@ -630,16 +650,116 @@ class PingPongHandler {
                 return interaction.reply({content: abfuhr, flags: MessageFlags.Ephemeral});
             }
 
-            return interaction.reply({
+            const antwort = await interaction.reply({
                 content: this.baueLobbyText(interaction.user.id, [interaction.user.id]),
                 components: [this.baueRundlaufButtons(interaction.user.id)],
+                withResponse: true,
             });
+            const lobby = antwort.resource?.message;
+            if (lobby) {
+                await this.merkeOffenenRundlauf(lobby);
+            }
         } catch (error) {
             console.error('Fehler beim Eröffnen des Ping-Pong-Rundlaufs:', error);
+            if (interaction.replied) return;
             return interaction.reply({
                 content: 'Es gab einen Fehler beim Ausführen des Befehls.',
                 flags: MessageFlags.Ephemeral
             });
+        }
+    }
+
+    // Trägt die Lobby in die Liste für /pingpong rundlaeufe ein. Scheitert das, ist die Runde
+    // trotzdem spielbar - sie fehlt nur in der Liste. Deshalb hier gefangen statt im Eröffnen,
+    // dessen catch sonst eine Fehlermeldung hinter die schon gepostete Lobby hängen würde.
+    async merkeOffenenRundlauf(lobby: Message) {
+        try {
+            await redisService.setSortedSet(PING_PONG_KEYS.rundlaufOffen,
+                rundlaufListenEintrag(lobby.guildId, lobby.channelId, lobby.id), lobby.createdTimestamp);
+        } catch (error) {
+            console.error('Rundlauf konnte nicht in die Liste der offenen Runden:', error);
+        }
+    }
+
+    async vergissOffenenRundlauf(lobby: Message) {
+        try {
+            await redisService.removeFromSortedSet(PING_PONG_KEYS.rundlaufOffen,
+                rundlaufListenEintrag(lobby.guildId, lobby.channelId, lobby.id));
+        } catch (error) {
+            // Halb so wild: /pingpong rundlaeufe erkennt die fertige Runde an den fehlenden Buttons.
+            console.error('Rundlauf konnte nicht aus der Liste der offenen Runden:', error);
+        }
+    }
+
+    // Alle offenen Rundläufe dieses Servers als Sprungmarken. Jede Lobby wird frisch geholt - nur
+    // so stimmt die Teilnehmerzahl, und nur so fällt auf, was inzwischen gelöscht oder (falls das
+    // Austragen beim Start mal scheiterte) längst gespielt ist. Das wird dabei gleich aufgeräumt.
+    async handleRundlaeufe(interaction: ChatInputCommandInteraction) {
+        // Bis zu 15 Lobbys werden einzeln bei Discord geholt, nach einem Neustart ohne Cache. Das
+        // kann die 3 Sekunden reißen, in denen eine Interaction beantwortet sein muss.
+        await interaction.deferReply({flags: MessageFlags.Ephemeral});
+
+        try {
+            // Neueste zuerst: getSortedSetAll liefert aufsteigend, und nach dem Limit ist Schluss.
+            const eintraege = (await redisService.getSortedSetAll(PING_PONG_KEYS.rundlaufOffen)).reverse();
+            const aeltesteErlaubte = Date.now() - RUNDLAUF_LISTE_MAX_ALTER_MS;
+            const zeilen: string[] = [];
+
+            for (const {value, score} of eintraege) {
+                const [guildId, channelId, messageId] = value.split(':');
+                if (guildId !== interaction.guildId) continue;
+
+                if (score < aeltesteErlaubte) {
+                    await redisService.removeFromSortedSet(PING_PONG_KEYS.rundlaufOffen, value);
+                    continue;
+                }
+
+                const lobby = await this.holeRundlaufLobby(interaction.client, value, channelId, messageId);
+                if (!lobby) continue;
+
+                const teilnehmer = parseTeilnehmer(lobby.content);
+                zeilen.push(`${zeilen.length + 1}. <@${teilnehmer[0]}>s Runde – ${teilnehmer.length}/${MAX_RUNDLAUF} `
+                    + `an der Platte, eröffnet <t:${Math.floor(lobby.createdTimestamp / 1000)}:R> – ${lobby.url}`);
+                if (zeilen.length >= MAX_GELISTETE_RUNDLAEUFE) break;
+            }
+
+            const content = zeilen.length > 0
+                ? `**Offene Rundläufe**\n\n${zeilen.join('\n')}`
+                : 'Gerade ist kein Rundlauf offen. Mit `/pingpong rundlauf` machst du selbst einen auf.';
+
+            // Ephemer (eine Nachschlage-Antwort, kein Kanalpost) - die Mentions zeigen nur Namen.
+            return interaction.editReply({content, allowedMentions: {parse: []}});
+        } catch (error) {
+            console.error('Fehler beim Auflisten der offenen Rundläufe:', error);
+            return interaction.editReply('Es gab einen Fehler beim Ausführen des Befehls.');
+        }
+    }
+
+    // Die Lobby-Nachricht, oder null, wenn sie nicht mehr offen ist. Aus der Liste fliegt sie nur,
+    // wenn das sicher ist (Nachricht/Kanal gelöscht, Buttons weg) - ein Netzwerkfehler oder ein
+    // fehlendes Leserecht lässt den Eintrag stehen, sonst verschwände eine laufende Runde.
+    async holeRundlaufLobby(discord: Client, eintrag: string, channelId: string, messageId: string): Promise<Message | null> {
+        try {
+            const kanal = await discord.channels.fetch(channelId);
+            if (!kanal?.isTextBased()) {
+                await redisService.removeFromSortedSet(PING_PONG_KEYS.rundlaufOffen, eintrag);
+                return null;
+            }
+            const lobby = await kanal.messages.fetch(messageId);
+            if (lobby.components.length === 0) {
+                await redisService.removeFromSortedSet(PING_PONG_KEYS.rundlaufOffen, eintrag);
+                return null;
+            }
+            return lobby;
+        } catch (error) {
+            const weg = error instanceof DiscordAPIError && (error.code === RESTJSONErrorCodes.UnknownMessage
+                || error.code === RESTJSONErrorCodes.UnknownChannel);
+            if (weg) {
+                await redisService.removeFromSortedSet(PING_PONG_KEYS.rundlaufOffen, eintrag);
+            } else {
+                console.warn(`Rundlauf-Lobby ${eintrag} nicht abrufbar:`, error);
+            }
+            return null;
         }
     }
 
@@ -694,10 +814,11 @@ class PingPongHandler {
                         flags: MessageFlags.Ephemeral
                     });
                 }
-                return interaction.update({
+                await interaction.update({
                     content: `<@${eroeffnerId}> sagt den Rundlauf ab. Die Platte bleibt heute leer.`,
                     components: []
                 });
+                return this.vergissOffenenRundlauf(interaction.message);
             }
 
             if (aktion === 'beitreten') {
@@ -754,7 +875,7 @@ class PingPongHandler {
                 });
             }
 
-            return interaction.update(await this.spieleUndWerteRundlaufAus(teilnehmer));
+            return await this.starteRundlauf(interaction, teilnehmer);
         } catch (error) {
             console.error('Fehler beim Austragen des Ping-Pong-Rundlaufs:', error);
             if (!interaction.replied) {
@@ -763,6 +884,37 @@ class PingPongHandler {
                     flags: MessageFlags.Ephemeral
                 }).catch(() => {});
             }
+        }
+    }
+
+    // Erst die Buttons weg, dann buchen. Der Lock fängt den Doppelklick ab, die Reihenfolge den Rest:
+    // scheitert das Buchen mittendrin, gibt es keinen Start-Button mehr, der die schon gebuchten
+    // Punkte ein zweites Mal vergeben könnte. Deshalb auch kein Rückweg in die Lobby.
+    async starteRundlauf(interaction: ButtonInteraction, teilnehmer: string[]) {
+        const lock = PING_PONG_KEYS.rundlaufStart(interaction.message.id);
+
+        if (!await redisService.setIfAbsent(lock, '1', RUNDLAUF_LOCK_SECONDS)) {
+            return interaction.reply({content: 'Der Rundlauf läuft schon.', flags: MessageFlags.Ephemeral});
+        }
+
+        try {
+            await interaction.update({content: 'Der Rundlauf läuft ...', components: []});
+        } catch (error) {
+            // Noch ist nichts gebucht und die Lobby unverändert: ein neuer Klick darf es versuchen.
+            await redisService.delete(lock);
+            throw error;
+        }
+
+        await this.vergissOffenenRundlauf(interaction.message);
+
+        try {
+            await interaction.editReply(await this.spieleUndWerteRundlaufAus(teilnehmer));
+        } catch (error) {
+            console.error('Fehler beim Auswerten des Ping-Pong-Rundlaufs:', error);
+            await interaction.editReply(
+                'Beim Auswerten ist etwas schiefgelaufen, die Runde ist beendet. '
+                + 'Ein Teil der Punkte kann schon gebucht sein.'
+            ).catch(() => {});
         }
     }
 
@@ -791,12 +943,17 @@ class PingPongHandler {
         // gegen niemanden verloren.
         const serienZeile = formatSerie(await this.verarbeiteSerie(siegerId, finalVerliererId));
 
+        // Discord zeigt an der Nachricht nur, wann die Lobby eröffnet wurde - bis zum Start
+        // können Stunden vergehen. Der Timestamp rendert beim Betrachter in dessen Ortszeit.
+        const gespieltUm = Math.floor(Date.now() / 1000);
+
         return {
             content: `**<@${siegerId}> gewinnt den Rundlauf.**\n`
                 + `Im Finale gegen <@${finalVerliererId}> steht es am Ende ${finalSatz.siegerPunkte}:${finalSatz.verliererPunkte}. `
                 + `${randomDuellFlavor()}\n\n`
                 + zeilen.join('\n')
-                + (serienZeile ? `\n\n${serienZeile}` : ''),
+                + (serienZeile ? `\n\n${serienZeile}` : '')
+                + `\n\n_Gespielt <t:${gespieltUm}:f>._`,
             components: []
         };
     }
@@ -1308,6 +1465,7 @@ class PingPongHandler {
             + `dann fliegt Runde für Runde einer raus, bis die letzten beiden das Finale ausspielen. `
             + `Punkte nach Platzierung – die vorderen Plätze gewinnen, die hinteren zahlen drauf, `
             + `die beiden Finalisten bekommen **+${RUNDLAUF_FINAL_BONUS}** extra (mindestens ${MIN_RUNDLAUF}, höchstens ${MAX_RUNDLAUF} Leute)\n` +
+            `**/pingpong rundlaeufe** – Alle offenen Rundläufe mit Link zum Mitmachen\n` +
             `**/pingpong doppel** – Doppel zu viert, ein Match auf ${POINTS_TO_WIN} gewonnene Ballwechsel: mit \`partner\` `
             + `spielt ihr als festes Team (Partner und optional \`gegner1\`/\`gegner2\` sagen per Button zu, freie Plätze `
             + `besetzt, wer zuerst klickt), ohne Partner lost der Bot die Teams aus, sobald vier dabei sind. `

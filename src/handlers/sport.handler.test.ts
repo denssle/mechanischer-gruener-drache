@@ -42,7 +42,7 @@ vi.mock('../client.js', () => ({
 
 import sportService from '../services/sport.service.js';
 import client from '../client.js';
-import sportHandler, { parseKilometer, parseMinuten, erkenneAktivitaet, erkenneSportLeistungen, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, formatTag, rundeKilometer, rundeMinuten, SPORT_HILFE } from './sport.handler.js';
+import sportHandler, { parseKilometer, parseMinuten, erkenneAktivitaet, erkenneSportLeistungen, siehtNachSportAus, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, RUECKFRAGE_REAKTION, formatTag, rundeKilometer, rundeMinuten, SPORT_HILFE } from './sport.handler.js';
 import { HELP_TEXT } from './hilfe.handler.js';
 import campHandler from './camp.handler.js';
 
@@ -183,9 +183,12 @@ describe('SportHandler', () => {
                 );
         });
 
-        // Distanzaktivitäten dürfen keine Aktivitätsminuten enthalten.
-        it('lehnt Aktivitätsminuten bei einer Distanzaktivität ab', async () => {
-
+        // Seit 2026-10-21 passt jede Einheit zu jeder Sportart.
+        it.each([
+            ['radfahren', 10, 60],
+            ['schwimmen', null, 240],
+            ['krafttraining', 3, null],
+        ])('trägt %s mit %s km und %s min ein', async (aktivitaet, km, min) => {
             const interaction = {
                 user: {
                     id: 'user-123',
@@ -193,10 +196,10 @@ describe('SportHandler', () => {
                     displayAvatarURL: vi.fn().mockReturnValue('https://cdn/avatar.png'),
                 },
                 options: {
-                    getString: vi.fn().mockReturnValue('radfahren'),
+                    getString: vi.fn().mockReturnValue(aktivitaet),
                     getNumber: vi.fn((name: string) => {
-                        if (name === 'kilometer') return 10;
-                        if (name === 'minuten') return 60;
+                        if (name === 'kilometer') return km;
+                        if (name === 'minuten') return min;
                         return null;
                     }),
                 },
@@ -205,41 +208,9 @@ describe('SportHandler', () => {
 
             await sportHandler.handleEintragen(interaction);
 
-            expect(sportService.addEntry).not.toHaveBeenCalled();
-
-            expect(interaction.reply).toHaveBeenCalledWith({
-                content: 'Distanzaktivitäten können nur mit Kilometern eingetragen werden.',
-                flags: MessageFlags.Ephemeral,
-            });
+            expect(sportService.addEntry).toHaveBeenCalledWith('user-123', aktivitaet, km ?? 0, min ?? undefined);
         });
 
-        it('lehnt Kilometer bei einer Minutenaktivität ab', async () => {
-            const interaction = {
-                user: {
-                    id: 'user-123',
-                    displayName: 'Testläufer',
-                    displayAvatarURL: vi.fn().mockReturnValue('https://cdn/avatar.png'),
-                },
-                options: {
-                    getString: vi.fn().mockReturnValue('krafttraining'),
-                    getNumber: vi.fn((name: string) => {
-                        if (name === 'kilometer') return 10;
-                        if (name === 'minuten') return 60;
-                        return null;
-                    }),
-                },
-                reply: vi.fn(),
-            } as any;
-
-            await sportHandler.handleEintragen(interaction);
-
-            expect(sportService.addEntry).not.toHaveBeenCalled();
-
-            expect(interaction.reply).toHaveBeenCalledWith({
-                content: 'Minutenaktivitäten können nur mit Aktivitätsminuten eingetragen werden.',
-                flags: MessageFlags.Ephemeral,
-            });
-        });
 
         //  Einträge ohne Kilometer oder Minuten dürfen keinen Eintrag erzeugen.
         it('lehnt einen Eintrag ohne Kilometer und Minuten ab', async () => {
@@ -478,6 +449,51 @@ describe('SportHandler', () => {
         });
     });
 
+    describe('Sportarten aus dem Chat', () => {
+        it.each([
+            ['+30 min Yoga', 'yoga'],
+            ['+20 min Autogenes Training', 'yoga'],
+            ['+15 min Fußreflexzonenmassage', 'yoga'],
+            ['+15 min Fussreflexzonenmassage', 'yoga'],
+            ['+60 min CrossFit', 'krafttraining'],
+            ['+45 min Kraftcircle', 'krafttraining'],
+            ['+60 min Gym', 'krafttraining'],
+            ['+60 min Krafttraining', 'krafttraining'],
+            ['+3 km Spaziergang', 'wandern'],
+            ['+30 min spazieren', 'wandern'],
+            ['+45 min Spinning', 'radfahren'],
+        ])('%s zählt als %s', (text, erwartet) => {
+            expect(erkenneSportLeistungen(text)[0].aktivitaet).toBe(erwartet);
+        });
+
+        it('liest Gymnasium nicht als Gym', () => {
+            expect(siehtNachSportAus('+30 Gymnasium')).toBe(false);
+        });
+    });
+
+    describe('Stücke: n-te Angabe bekommt das n-te Sportwort', () => {
+        it.each([
+            // Jede Angabe wird gutgeschrieben, auch mit einem Wort, das der Bot nicht kennt.
+            ['+40 km Rad, +60 min Yoga', [{aktivitaet: 'radfahren', kilometer: 40}, {aktivitaet: 'yoga', minuten: 60}]],
+            ['+40 km Rad, +60 min Tanzen', [{aktivitaet: 'radfahren', kilometer: 40}, {aktivitaet: 'krafttraining', minuten: 60}]],
+            ['+12,5 km Rad, +30 min Schwimmen', [{aktivitaet: 'radfahren', kilometer: 12.5}, {aktivitaet: 'schwimmen', minuten: 30}]],
+            ['+5 km\n+30 min Schwimmen', [{aktivitaet: 'laufen', kilometer: 5}, {aktivitaet: 'schwimmen', minuten: 30}]],
+            ['Laufen +5 km, +30 min Schwimmen', [{aktivitaet: 'laufen', kilometer: 5}, {aktivitaet: 'schwimmen', minuten: 30}]],
+            ['Gelaufen +5 km und +10 km Rad', [{aktivitaet: 'laufen', kilometer: 5}, {aktivitaet: 'radfahren', kilometer: 10}]],
+            // Ein Wort gilt für genau eine Angabe, die dritte fällt auf den Standard zurück.
+            ['Rad +5 km, +10 km Schwimmen, +3 km', [
+                {aktivitaet: 'radfahren', kilometer: 5},
+                {aktivitaet: 'schwimmen', kilometer: 10},
+                {aktivitaet: 'laufen', kilometer: 3},
+            ]],
+            // Unverändert: davor gewinnt, und ohne Sportwort bleibt es beim Standard.
+            ['Radfahren +5 km, Laufen +10 km', [{aktivitaet: 'radfahren', kilometer: 5}, {aktivitaet: 'laufen', kilometer: 10}]],
+            ['Rad +5 km und +30 min', [{aktivitaet: 'radfahren', kilometer: 5}, {aktivitaet: 'krafttraining', minuten: 30}]],
+        ])('%s', (text, erwartet) => {
+            expect(erkenneSportLeistungen(text)).toEqual(erwartet);
+        });
+    });
+
     describe('erkenneSportLeistungen', () => {
         it.each([
             [
@@ -569,7 +585,46 @@ describe('SportHandler', () => {
             ],
             [
                 '+30 min Laufen und +5 km Radfahren',
-                [],
+                [
+                    { aktivitaet: 'laufen', minuten: 30 },
+                    { aktivitaet: 'radfahren', kilometer: 5 },
+                ],
+            ],
+            // Der Auslöser für die freien Einheiten (2026-10-21): wurde als Widerspruch verworfen.
+            [
+                '+240min schwimmen. Los Bot, mach deinen Job',
+                [
+                    { aktivitaet: 'schwimmen', minuten: 240 },
+                ],
+            ],
+            [
+                '+10 km Krafttraining',
+                [
+                    { aktivitaet: 'krafttraining', kilometer: 10 },
+                ],
+            ],
+            // Durch ein Trennwort abgesetzte Sportart gehört zur NÄCHSTEN Angabe ...
+            [
+                '+5 km und Schwimmen +30 min',
+                [
+                    { aktivitaet: 'laufen', kilometer: 5 },
+                    { aktivitaet: 'schwimmen', minuten: 30 },
+                ],
+            ],
+            // ... ohne Trennwort bleibt sie bei der aktuellen.
+            [
+                '+2 km geschwommen +30 min',
+                [
+                    { aktivitaet: 'schwimmen', kilometer: 2 },
+                    { aktivitaet: 'krafttraining', minuten: 30 },
+                ],
+            ],
+            // Maßgeblich ist das erste Sportwort im Text, nicht die Reihenfolge der Muster.
+            [
+                '+5 km gewandert, später noch Rad',
+                [
+                    { aktivitaet: 'wandern', kilometer: 5 },
+                ],
             ],
         ])(
             'erkennt Sportleistungen aus "%s"',
@@ -578,14 +633,31 @@ describe('SportHandler', () => {
             }
         );
 
-        it('verwirft widersprüchliche Angaben', () => {
-            expect(erkenneSportLeistungen('+10 km Krafttraining')).toEqual([]);
-        });
 
-        it('verwirft Minuten mit expliziter Distanzaktivität', () => {
-            expect(erkenneSportLeistungen('+30 min Laufen')).toEqual([]);
-            expect(erkenneSportLeistungen('+45 min gelaufen')).toEqual([]);
-            expect(erkenneSportLeistungen('+30 min Radfahren')).toEqual([]);
+        it.each([
+            ['+240 schwimmen', true],
+            ['+2 h geschwommen', true],
+            ['+500 m', true],
+            ['+1,5 Stunden Rad', true],
+            ['+1, bin dabei', false],
+            ['heute 2 h geschwommen', false],
+            ['Moin zusammen', false],
+            // Zusagen und beiläufige Zahlen: das Sportwort steht nicht an der Zahl, oder es ist die +1.
+            ['+1 fürs Radfahren', false],
+            ['+1 Laufgruppe morgen?', false],
+            ['+1 bin beim Lauf dabei', false],
+            ['+2 Bier nach dem Laufen', false],
+            // Gemeinte Einträge, die der Parser nicht versteht.
+            ['+240 schwimmen', true],
+            ['Schwimmen +240', true],
+            ['Schwimmen: +240', true],
+            ['+3 Stunden wandern', true],
+            ['+500m geschwommen', true],
+            ['+30 mins laufen', true],
+            ['+1 Minute Hantel', true],
+            ['+10 Kilometern', true],
+        ])('siehtNachSportAus("%s") ist %s', (text, erwartet) => {
+            expect(siehtNachSportAus(text)).toBe(erwartet);
         });
     });
 
@@ -718,18 +790,35 @@ describe('SportHandler', () => {
             expect(message.react).not.toHaveBeenCalled();
         });
 
-        it('speichert bei einer widersprüchlichen Nachricht nichts und bestätigt sie nicht', async () => {
+        it('trägt Minuten bei einer Distanzsportart ein', async () => {
             vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
+            vi.mocked(sportService.addEntry).mockResolvedValue(mockEntry());
+            const message = mockMessage('+240min schwimmen. Los Bot, mach deinen Job');
 
-            const kilometerMessage = mockMessage('+10 km Krafttraining');
-            const minutenMessage = mockMessage('+30 min Laufen');
+            await sportHandler.handleMessage(message);
 
-            await sportHandler.handleMessage(kilometerMessage);
-            await sportHandler.handleMessage(minutenMessage);
+            expect(sportService.addEntry).toHaveBeenCalledWith('user-123', 'schwimmen', 0, 240);
+            expect(message.react).toHaveBeenCalledWith(BESTAETIGUNGS_REAKTION);
+        });
+
+        // Vorher blieb so eine Nachricht stumm - von außen nicht von "Bot kaputt" zu unterscheiden.
+        it('fragt per Reaktion zurück, wenn ein Eintrag gemeint, aber nicht verständlich ist', async () => {
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
+            const message = mockMessage('+2 h geschwommen');
+
+            await sportHandler.handleMessage(message);
 
             expect(sportService.addEntry).not.toHaveBeenCalled();
-            expect(kilometerMessage.react).not.toHaveBeenCalled();
-            expect(minutenMessage.react).not.toHaveBeenCalled();
+            expect(message.react).toHaveBeenCalledWith(RUECKFRAGE_REAKTION);
+        });
+
+        it('fragt bei normalem Gerede nicht zurück', async () => {
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('sport-kanal');
+            const message = mockMessage('+1, bin am Samstag dabei');
+
+            await sportHandler.handleMessage(message);
+
+            expect(message.react).not.toHaveBeenCalled();
         });
 
         // Quittiert wird nur per Reaktion: eine Antwort wäre ein Post im Kanal, den alle sehen,
@@ -851,6 +940,52 @@ describe('SportHandler', () => {
 
             expect(partiell.fetch).toHaveBeenCalled();
             expect(sportService.addEntry).toHaveBeenCalledWith('user-123', 'laufen', 8, undefined);
+        });
+
+        // Korrigiert nach einer Rückfrage: ✅ dran, das eigene ❓ wieder weg.
+        it('entfernt die eigene Rückfrage nach erfolgreicher Korrektur', async () => {
+            const message = mockMessage('+2 km geschwommen');
+            const remove = vi.fn();
+            message.reactions.cache.set(RUECKFRAGE_REAKTION, { me: true, users: { remove } });
+
+            await sportHandler.handleMessageUpdate(message);
+
+            expect(sportService.addEntry).toHaveBeenCalledWith('user-123', 'schwimmen', 2, undefined);
+            expect(message.react).toHaveBeenCalledWith(BESTAETIGUNGS_REAKTION);
+            expect(remove).toHaveBeenCalledWith();
+        });
+
+        // Der Eintrag ist zu dem Zeitpunkt schon gespeichert - ein Fehler beim Aufräumen darf nicht durchschlagen.
+        it('übersteht ein Scheitern beim Entfernen der Rückfrage', async () => {
+            const message = mockMessage('+2 km geschwommen');
+            message.reactions.cache.set(RUECKFRAGE_REAKTION, {
+                me: true,
+                users: { remove: vi.fn().mockRejectedValue(new Error('Missing Permissions')) },
+            });
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            await expect(sportHandler.handleMessageUpdate(message)).resolves.toBeUndefined();
+            expect(warn).toHaveBeenCalled();
+            warn.mockRestore();
+        });
+
+        // Bleibt die Nachricht unverständlich, kommt kein zweites ❓ dazu.
+        it('fragt bei erneut unverständlicher Bearbeitung nicht doppelt zurück', async () => {
+            const message = mockMessage('+2 h geschwommen');
+            message.reactions.cache.set(RUECKFRAGE_REAKTION, { me: true });
+
+            await sportHandler.handleMessageUpdate(message);
+
+            expect(message.react).not.toHaveBeenCalled();
+        });
+
+        // Eine bereits quittierte Nachricht, die nachträglich unverständlich wird, bekommt kein ❓.
+        it('fragt bei einer schon quittierten Nachricht nicht zurück', async () => {
+            const message = mockMessage('+2 h geschwommen', {}, true);
+
+            await sportHandler.handleMessageUpdate(message);
+
+            expect(message.react).not.toHaveBeenCalled();
         });
 
         it('ignoriert Bearbeitungen außerhalb des Sport-Kanals', async () => {
@@ -1197,66 +1332,28 @@ describe('SportHandler', () => {
             );
         });
 
-    it('lehnt Aktivitätsminuten beim Bearbeiten einer Distanzaktivität ab', async () => {
-        vi.mocked(sportService.getUserEntries).mockResolvedValue([
-            mockEntry({
-                activity: 'laufen',
-                kilometers: 10,
-            }),
-        ]);
-
-        const interaction = {
-            user: { id: 'user-123' },
-            options: {
-                getNumber: vi.fn((name: string) => {
-                    if (name === 'kilometer') return 15;
-                    if (name === 'minuten') return 60;
-                    return null;
-                }),
-            },
-            reply: vi.fn(),
-        } as any;
-
-        await sportHandler.handleBearbeiten(interaction);
-
-        expect(sportService.editLastEntry).not.toHaveBeenCalled();
-
-        expect(interaction.reply).toHaveBeenCalledWith({
-            content: 'Distanzaktivitäten können nur mit Kilometern bearbeitet werden.',
-            flags: MessageFlags.Ephemeral,
-        });
-    });
-
-        it('lehnt Kilometer beim Bearbeiten einer Minutenaktivität ab', async () => {
+        it('korrigiert Minuten auch bei einer Distanzsportart', async () => {
             vi.mocked(sportService.getUserEntries).mockResolvedValue([
-                mockEntry({
-                    activity: 'krafttraining',
-                    kilometers: 0,
-                    minutes: 30,
-                }),
+                mockEntry({ activity: 'schwimmen', kilometers: 2 }),
             ]);
+            vi.mocked(sportService.editLastEntry).mockResolvedValue(
+                mockEntry({ activity: 'schwimmen', kilometers: 2, minutes: 60 })
+            );
 
             const interaction = {
                 user: { id: 'user-123' },
                 options: {
-                    getNumber: vi.fn((name: string) => {
-                        if (name === 'kilometer') return 10;
-                        if (name === 'minuten') return 45;
-                        return null;
-                    }),
+                    getNumber: vi.fn((name: string) => (name === 'minuten' ? 60 : null)),
                 },
                 reply: vi.fn(),
             } as any;
 
             await sportHandler.handleBearbeiten(interaction);
 
-            expect(sportService.editLastEntry).not.toHaveBeenCalled();
-
-            expect(interaction.reply).toHaveBeenCalledWith({
-                content: 'Minutenaktivitäten können nur mit Aktivitätsminuten bearbeitet werden.',
-                flags: MessageFlags.Ephemeral,
-            });
+            expect(sportService.editLastEntry).toHaveBeenCalledWith('user-123', undefined, 60);
+            expect(interaction.reply).toHaveBeenCalledWith(expect.stringContaining('2 km · 60 min'));
         });
+
 
         it('erlaubt das Entfernen falscher Aktivitätsminuten aus einer Distanzaktivität', async () => {
             vi.mocked(sportService.getUserEntries).mockResolvedValue([

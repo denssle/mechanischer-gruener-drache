@@ -6,6 +6,7 @@ vi.mock('../handlers/pingPong.handler.js', () => ({
         handleAnsageduell: vi.fn(),
         handleTaktikduell: vi.fn(),
         handleRundlauf: vi.fn(),
+        handleRundlaeufe: vi.fn(),
         handleDoppel: vi.fn(),
         handlePingPongHighscore: vi.fn(),
         handleSerienrekorde: vi.fn(),
@@ -36,6 +37,7 @@ describe('ping.command', () => {
         ['ansageduell', 'handleAnsageduell'],
         ['taktikduell', 'handleTaktikduell'],
         ['rundlauf', 'handleRundlauf'],
+        ['rundlaeufe', 'handleRundlaeufe'],
         ['doppel', 'handleDoppel'],
         ['bestenliste', 'handlePingPongHighscore'],
         ['serienrekorde', 'handleSerienrekorde'],
@@ -75,6 +77,6 @@ describe('ping.command', () => {
     it('registriert alle im SlashCommandBuilder definierten Subcommands auch im Dispatch', () => {
         const definedSubcommands = pingCommand.data.options.map((option) => option.toJSON().name);
 
-        expect(definedSubcommands.sort()).toEqual(['ansageduell', 'bestenliste', 'doppel', 'herausfordern', 'hilfe', 'pechstraehnen', 'ruhmeshalle', 'rundlauf', 'serienrekorde', 'taktikduell']);
+        expect(definedSubcommands.sort()).toEqual(['ansageduell', 'bestenliste', 'doppel', 'herausfordern', 'hilfe', 'pechstraehnen', 'ruhmeshalle', 'rundlaeufe', 'rundlauf', 'serienrekorde', 'taktikduell']);
     });
 });

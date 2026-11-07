@@ -7,6 +7,7 @@ import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import geburtstagService from '../services/geburtstag.service.js';
 import drachenService from '../services/drachen.service.js';
+import rollenhinweisService from '../services/rollenhinweis.service.js';
 import eventService from '../services/event.service.js';
 import characterService, {CharacterLink, findInRoster} from '../services/character.service.js';
 import pingPongService from '../services/pingPong.service.js';
@@ -48,6 +49,9 @@ class DiagnoseHandler {
         lines.push(`Morgengruß-Kanal: ${await this.pruefeKanal(await greetingService.getChannel())}`);
         lines.push(`Geburtstagskanal: ${await this.pruefeKanal(await geburtstagService.getChannel())}`);
         lines.push(`Spielwelt-Ankündigungskanal: ${await this.pruefeKanal(await drachenService.getChannel())}`);
+        lines.push(`Rollenhinweis-Kanal: ${await this.pruefeKanal(await rollenhinweisService.getChannel())}`);
+        const rollenKanal = await rollenhinweisService.getRollenKanal();
+        lines.push(`Rollenhinweis, Kanal mit dem Rollen-Button: ${rollenKanal ? await this.pruefeKanal(rollenKanal) : 'ℹ️ nicht gesetzt (optional)'}`);
         lines.push(`Audit-Log-Zugriff: ${this.pruefeAuditLogRecht()}`);
 
         const event = await eventService.getEvent();

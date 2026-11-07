@@ -40,6 +40,9 @@ export default {
             .setName('rundlauf')
             .setDescription('Rundlauf (Chinesisch) fuer mehrere: wer den Ball nicht zurueckbringt, fliegt raus'))
         .addSubcommand(sub => sub
+            .setName('rundlaeufe')
+            .setDescription('Zeigt alle offenen Rundläufe mit Link zum Mitmachen'))
+        .addSubcommand(sub => sub
             .setName('doppel')
             .setDescription('Doppel zu viert: mit Partner feste Teams, ohne Partner lost der Bot die Teams aus')
             .addUserOption(option => option
@@ -82,6 +85,8 @@ export default {
                 return pingPongHandler.handleTaktikduell(interaction);
             case 'rundlauf':
                 return pingPongHandler.handleRundlauf(interaction);
+            case 'rundlaeufe':
+                return pingPongHandler.handleRundlaeufe(interaction);
             case 'doppel':
                 return pingPongHandler.handleDoppel(interaction);
             case 'bestenliste':
