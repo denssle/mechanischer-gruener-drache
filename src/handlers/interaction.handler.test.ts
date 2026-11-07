@@ -43,7 +43,7 @@ import bashHandler from './bash.handler.js';
 import buttonRoleHandler from './buttonRole.handler.js';
 import pingPongHandler from './pingPong.handler.js';
 import tippService, { kommtTippInFrage } from '../services/tipp.service.js';
-import { handleInteractionCreate, zeigeGelegentlichEinenTipp } from './interaction.handler.js';
+import { handleInteractionCreate, meldeFehler, zeigeGelegentlichEinenTipp } from './interaction.handler.js';
 
 const buttonInteraction = () => ({
     isButton: () => true,
@@ -178,6 +178,48 @@ describe('interaction.handler', () => {
             await expect(handleInteractionCreate(commandInteraction())).resolves.toBeUndefined();
 
             expect(consoleError).toHaveBeenCalled();
+            consoleError.mockRestore();
+        });
+    });
+
+    describe('meldeFehler', () => {
+        const antworten = (status: {deferred: boolean, replied: boolean}) => ({
+            ...status, reply: vi.fn(), editReply: vi.fn(), followUp: vi.fn(),
+        }) as any;
+
+        it('antwortet ephemer, wenn noch nichts geantwortet wurde', async () => {
+            const interaction = antworten({deferred: false, replied: false});
+
+            await meldeFehler(interaction);
+
+            expect(interaction.reply.mock.calls[0][0].content).toContain('schiefgelaufen');
+        });
+
+        // Sonst bliebe es beim ewigen "denkt nach ...".
+        it('ersetzt eine aufgeschobene Antwort', async () => {
+            const interaction = antworten({deferred: true, replied: false});
+
+            await meldeFehler(interaction);
+
+            expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('schiefgelaufen'));
+            expect(interaction.reply).not.toHaveBeenCalled();
+        });
+
+        it('hängt sich an eine schon gesendete Antwort', async () => {
+            const interaction = antworten({deferred: false, replied: true});
+
+            await meldeFehler(interaction);
+
+            expect(interaction.followUp).toHaveBeenCalled();
+        });
+
+        it('wirft nie, auch wenn die Interaction abgelaufen ist', async () => {
+            const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const interaction = antworten({deferred: false, replied: false});
+            interaction.reply.mockRejectedValue(new Error('Unknown interaction'));
+
+            await expect(meldeFehler(interaction)).resolves.toBeUndefined();
+
             consoleError.mockRestore();
         });
     });

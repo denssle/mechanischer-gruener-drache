@@ -288,9 +288,21 @@ describe('LoggingHandler', () => {
             await loggingHandler.handleMessageDelete(message as any);
 
             expect(client.channels.fetch).toHaveBeenCalledWith('log-channel-1');
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('User#0001'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('> Geheime Nachricht'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('<#source-channel>'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('User#0001')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('> Geheime Nachricht')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('<#source-channel>')}));
+        });
+
+        // Sonst ließe sich der Bot als Ping-Verstärker benutzen: schreiben, löschen, er wiederholt es.
+        it('pingt niemanden aus dem wiederholten Inhalt', async () => {
+            const send = vi.fn();
+            vi.mocked(loggingService.getLogChannel).mockResolvedValue('log-channel-1');
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+            const message = mockMessage({ content: '<@123> @everyone' });
+
+            await loggingHandler.handleMessageDelete(message as any);
+
+            expect(send.mock.calls[0][0].allowedMentions).toEqual({parse: []});
         });
 
         it('zeigt einen Fallback-Text für nicht gecachte Nachrichten', async () => {
@@ -301,8 +313,8 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleMessageDelete(message as any);
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Unbekannt'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('nicht verfügbar'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Unbekannt')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('nicht verfügbar')}));
         });
 
         it('holt den alten Inhalt aus dem Redis-Cache, wenn discord.js die Nachricht nicht mehr kennt', async () => {
@@ -316,10 +328,10 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleMessageDelete(message as any);
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('> Alte Nachricht'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('> Alte Nachricht')}));
             // Die Anhang-Zeile ist kein Nachrichteninhalt und bleibt deshalb außerhalb des Zitats.
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('\nAnhänge: bild.png'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('User#0001'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('\nAnhänge: bild.png')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('User#0001')}));
         });
 
         it('räumt den zwischengespeicherten Inhalt nach dem Loggen weg', async () => {
@@ -378,8 +390,8 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Alter Text'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Neuer Text'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Alter Text')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Neuer Text')}));
         });
 
         it('holt den alten Inhalt aus dem Redis-Cache und schreibt den neuen Stand zurück', async () => {
@@ -394,8 +406,8 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('**Vorher:**\n> Alter Text'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('**Nachher:**\n> Neuer Text'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('**Vorher:**\n> Alter Text')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('**Nachher:**\n> Neuer Text')}));
             // Für die nächste Bearbeitung ist der neue Stand der alte.
             expect(loggingService.cacheMessage).toHaveBeenCalledWith('message-1', {
                 authorTag: 'User#0001', content: 'Neuer Text', attachments: [],
@@ -434,8 +446,8 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleMessageUpdate(oldMessage as any, newMessage as any);
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('**Vorher:**\n> *nicht verfügbar*'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('**Nachher:**\n> Neuer Text'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('**Vorher:**\n> *nicht verfügbar*')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('**Nachher:**\n> Neuer Text')}));
         });
 
         it('ignoriert ein nachgeladenes Embed auf einer früher schon bearbeiteten Nachricht', async () => {
@@ -477,9 +489,9 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleGuildMemberAdd(mockMember());
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Neuling#0001'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('beigetreten'));
-            expect(send).not.toHaveBeenCalledWith(expect.stringContaining('Mal'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Neuling#0001')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('beigetreten')}));
+            expect(send).not.toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Mal')}));
         });
 
         it('nennt beim Wiederkommen, das wievielte Mal es ist', async () => {
@@ -490,7 +502,7 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleGuildMemberAdd(mockMember());
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('bereits zum 3. Mal'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('bereits zum 3. Mal')}));
         });
 
         it('fängt Fehler beim Loggen ab', async () => {
@@ -519,8 +531,8 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleGuildMemberRemove(mockMember());
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Ex-User#0002'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('verlassen'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Ex-User#0002')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('verlassen')}));
         });
 
         it('nennt die Mitgliedsdauer, wenn der Beitrittszeitpunkt bekannt ist', async () => {
@@ -530,7 +542,7 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleGuildMemberRemove(mockMember(Date.now() - 10 * 86400000));
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('war 10 Tage dabei'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('war 10 Tage dabei')}));
         });
 
         it('lässt die Dauer weg, wenn der Beitrittszeitpunkt fehlt', async () => {
@@ -565,7 +577,7 @@ describe('LoggingHandler', () => {
 
                 await loggingHandler.handleGuildMemberRemove(mitGuild(guild));
 
-                expect(send).toHaveBeenCalledWith(expect.stringContaining('wurde gekickt durch **Mod#1** (Grund: Regelverstoß)'));
+                expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('wurde gekickt durch **Mod#1** (Grund: Regelverstoß)')}));
             });
 
             it('nennt beim Kick auch die Mitgliedsdauer', async () => {
@@ -573,13 +585,13 @@ describe('LoggingHandler', () => {
 
                 await loggingHandler.handleGuildMemberRemove(mitGuild(guild, Date.now() - 3 * 86400000));
 
-                expect(send).toHaveBeenCalledWith(expect.stringContaining('war 3 Tage dabei'));
+                expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('war 3 Tage dabei')}));
             });
 
             it('bleibt bei freiwilligem Gehen bei der Austritts-Meldung', async () => {
                 await loggingHandler.handleGuildMemberRemove(mitGuild(mockGuild()));
 
-                expect(send).toHaveBeenCalledWith(expect.stringContaining('hat den Server verlassen'));
+                expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('hat den Server verlassen')}));
             });
 
             it('ignoriert einen alten Kick-Eintrag derselben Person', async () => {
@@ -587,7 +599,7 @@ describe('LoggingHandler', () => {
 
                 await loggingHandler.handleGuildMemberRemove(mitGuild(guild));
 
-                expect(send).toHaveBeenCalledWith(expect.stringContaining('hat den Server verlassen'));
+                expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('hat den Server verlassen')}));
             });
 
             it('schweigt bei einem Bann - den loggt handleGuildBanAdd', async () => {
@@ -603,7 +615,7 @@ describe('LoggingHandler', () => {
 
                 await loggingHandler.handleGuildMemberRemove(mitGuild(guild));
 
-                expect(send).toHaveBeenCalledWith(expect.stringContaining('hat den Server verlassen'));
+                expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('hat den Server verlassen')}));
             });
         });
     });
@@ -624,7 +636,7 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleAuditLogEntry(auditEintrag(AuditLogEvent.RoleDelete), {} as any);
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Rolle **Moderator** wurde gelöscht'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Rolle **Moderator** wurde gelöscht')}));
         });
 
         it('holt den Log-Channel gar nicht erst für uninteressante Einträge', async () => {
@@ -690,8 +702,8 @@ describe('LoggingHandler', () => {
             await loggingHandler.handleGuildMemberUpdate(oldMember, newMember);
 
             expect(send).toHaveBeenCalledTimes(1);
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Einwohner'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('erhalten'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Einwohner')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('erhalten')}));
         });
 
         it('loggt eine verlorene Rolle', async () => {
@@ -704,8 +716,8 @@ describe('LoggingHandler', () => {
             await loggingHandler.handleGuildMemberUpdate(oldMember, newMember);
 
             expect(send).toHaveBeenCalledTimes(1);
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Twitch'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('verloren'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Twitch')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('verloren')}));
         });
 
         it('fängt Fehler beim Loggen ab', async () => {
@@ -732,7 +744,7 @@ describe('LoggingHandler', () => {
 
                 await loggingHandler.handleGuildMemberUpdate(oldMember, newMember);
 
-                expect(send).toHaveBeenCalledWith(expect.stringContaining('erhalten durch **Admin#1**.'));
+                expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('erhalten durch **Admin#1**.')}));
             });
 
             it('nennt, wer stummgeschaltet hat', async () => {
@@ -743,7 +755,7 @@ describe('LoggingHandler', () => {
 
                 await loggingHandler.handleGuildMemberUpdate(oldMember, newMember);
 
-                expect(send).toHaveBeenCalledWith(expect.stringContaining('durch **Mod#1** (Grund: Ruhe)'));
+                expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('durch **Mod#1** (Grund: Ruhe)')}));
             });
 
             it('sagt nicht "durch sich selbst", wenn jemand den eigenen Nickname ändert', async () => {
@@ -767,8 +779,8 @@ describe('LoggingHandler', () => {
                 mockMember([], { nickname: 'Neu' })
             );
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Alt'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Neu'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Alt')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Neu')}));
         });
 
         it('loggt einen gesetzten Timeout', async () => {
@@ -781,7 +793,7 @@ describe('LoggingHandler', () => {
                 mockMember([], { communicationDisabledUntilTimestamp: Date.now() + 600000 })
             );
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('stummgeschaltet'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('stummgeschaltet')}));
         });
 
         it('loggt einen aufgehobenen Timeout', async () => {
@@ -794,7 +806,7 @@ describe('LoggingHandler', () => {
                 mockMember([], { communicationDisabledUntilTimestamp: null })
             );
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('aufgehoben'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('aufgehoben')}));
         });
     });
 
@@ -816,9 +828,9 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleGuildBanAdd(mockBan({ reason: 'Spam' }));
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Böser#0001'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('gebannt'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Spam'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Böser#0001')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('gebannt')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Spam')}));
         });
 
         it('fängt Fehler beim Loggen ab', async () => {
@@ -838,8 +850,8 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleGuildBanRemove(mockBan());
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('Böser#0001'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('aufgehoben'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('Böser#0001')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('aufgehoben')}));
         });
     });
 
@@ -865,8 +877,8 @@ describe('LoggingHandler', () => {
 
             await loggingHandler.handleMessageBulkDelete(mockMessages(3), { id: 'src-channel' } as any);
 
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('3'));
-            expect(send).toHaveBeenCalledWith(expect.stringContaining('<#src-channel>'));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('3')}));
+            expect(send).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('<#src-channel>')}));
         });
 
         it('fängt Fehler beim Loggen ab', async () => {

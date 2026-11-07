@@ -35,7 +35,8 @@ describe('NewsHandler', () => {
 
         await newsHandler.handleNews(interaction);
 
-        const reply = interaction.editReply.mock.calls[0][0];
+        const {content: reply, allowedMentions} = interaction.editReply.mock.calls[0][0];
+        expect(allowedMentions).toEqual({parse: []});
         expect(reply).toContain('Serverplot');
         expect(reply).toContain('19.04.2026 08:46');
         expect(reply).toContain('Ein Gesuch.');
@@ -50,7 +51,8 @@ describe('NewsHandler', () => {
 
         await newsHandler.handleNews(interaction);
 
-        const reply = interaction.editReply.mock.calls[0][0];
+        const {content: reply, allowedMentions} = interaction.editReply.mock.calls[0][0];
+        expect(allowedMentions).toEqual({parse: []});
         expect(reply).toContain('…');
         expect(reply.length).toBeLessThan(2000);
     });

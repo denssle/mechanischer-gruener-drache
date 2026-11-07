@@ -102,7 +102,7 @@ describe('CharacterHandler', () => {
             await characterHandler.handleVerknuepfen(interaction);
 
             expect(svc.linkCharacter).not.toHaveBeenCalled();
-            expect(interaction.editReply.mock.calls[0][0]).toContain('bereits');
+            expect(interaction.editReply.mock.calls[0][0].content).toContain('bereits');
         });
 
         it('meldet, wenn der Charakter nicht im Roster steht', async () => {
@@ -113,7 +113,32 @@ describe('CharacterHandler', () => {
             await characterHandler.handleVerknuepfen(interaction);
 
             expect(svc.linkCharacter).not.toHaveBeenCalled();
-            expect(interaction.editReply.mock.calls[0][0]).toContain('nicht in der Kriegerliste');
+            expect(interaction.editReply.mock.calls[0][0].content).toContain('nicht in der Kriegerliste');
+        });
+
+        // Sonst könnte man einen fremden Charakter verknüpfen und dessen Beobachtung freigeben.
+        it('verknüpft keinen Charakter, der schon jemand anderem zugeordnet ist', async () => {
+            svc.getLinkedName.mockResolvedValue(null);
+            svc.getRoster.mockResolvedValue([ACAINE]);
+            svc.getAllLinks.mockResolvedValue([{discordUserId: 'jemand', name: 'acaine'}]);
+            const interaction = makeInteraction('Acaine');
+
+            await characterHandler.handleVerknuepfen(interaction);
+
+            expect(svc.linkCharacter).not.toHaveBeenCalled();
+            const antwort = interaction.editReply.mock.calls[0][0];
+            expect(antwort.content).toContain('schon mit jemand anderem verknüpft');
+            expect(antwort.allowedMentions).toEqual({parse: []});
+        });
+
+        it('pingt nicht aus der öffentlich wiederholten Eingabe', async () => {
+            svc.getLinkedName.mockResolvedValue(null);
+            svc.getRoster.mockResolvedValue([ACAINE]);
+            const interaction = makeInteraction('<@123>');
+
+            await characterHandler.handleVerknuepfen(interaction);
+
+            expect(interaction.editReply.mock.calls[0][0].allowedMentions).toEqual({parse: []});
         });
 
         it('meldet einen Abruf-Fehler, statt zu crashen', async () => {

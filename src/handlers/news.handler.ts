@@ -18,9 +18,11 @@ class NewsHandler {
             text = text.slice(0, MAX_TEXT_LENGTH).trimEnd() + ' …';
         }
 
-        return interaction.editReply(
-            `**${news.title}**\n_${news.date}_\n\n${text}\n\nWeiterlesen: <${news.url}>`
-        );
+        // Gescrapter Text: was immer dort steht, soll niemanden anpingen.
+        return interaction.editReply({
+            content: `**${news.title}**\n_${news.date}_\n\n${text}\n\nWeiterlesen: <${news.url}>`,
+            allowedMentions: {parse: []},
+        });
     }
 }
 

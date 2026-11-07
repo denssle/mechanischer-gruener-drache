@@ -225,7 +225,9 @@ describe('PingPongHandler', () => {
         const mockButton = (customId: string, userId: string) => ({
             customId,
             user: {id: userId},
+            message: {id: 'duell-1'},
             update: vi.fn(),
+            editReply: vi.fn().mockResolvedValue(undefined),
             reply: vi.fn().mockResolvedValue(undefined),
             replied: false,
         } as any);
@@ -279,7 +281,7 @@ describe('PingPongHandler', () => {
             expect(redisService.setSortedSet).toHaveBeenCalledWith('PING_PONG', 'user-a', 11);
             expect(redisService.setSortedSet).toHaveBeenCalledWith('PING_PONG', 'user-b', 3);
 
-            const update = interaction.update.mock.calls[0][0];
+            const update = interaction.editReply.mock.calls[0][0];
             expect(update.content).toContain('<@user-a> gewinnt 3:0 gegen <@user-b>');
             expect(update.components).toEqual([]);
         });
@@ -294,7 +296,7 @@ describe('PingPongHandler', () => {
             // 10 + 1 (Sieg) + 1 (erfüllte Ansage)
             expect(redisService.set).toHaveBeenCalledWith('user-aPING_PONG', '12');
             expect(redisService.set).toHaveBeenCalledWith('user-bPING_PONG', '3');
-            expect(interaction.update.mock.calls[0][0].content).toContain('Ansage erfüllt');
+            expect(interaction.editReply.mock.calls[0][0].content).toContain('Ansage erfüllt');
         });
 
         it('zieht dem Herausforderer bei blamierter Ansage einen zweiten Punkt ab', async () => {
@@ -307,7 +309,7 @@ describe('PingPongHandler', () => {
             // 10 - 1 (Niederlage) - 1 (blamierte Ansage) = 8
             expect(redisService.set).toHaveBeenCalledWith('user-aPING_PONG', '8');
             expect(redisService.set).toHaveBeenCalledWith('user-bPING_PONG', '5');
-            expect(interaction.update.mock.calls[0][0].content).toContain('Große Klappe');
+            expect(interaction.editReply.mock.calls[0][0].content).toContain('Große Klappe');
         });
 
         it('spielt auch mit dem Ansage-Malus niemanden ins Minus', async () => {
@@ -328,7 +330,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handleDuellButton(interaction);
 
-            expect(interaction.update.mock.calls[0][0].content).not.toContain('Ansage');
+            expect(interaction.editReply.mock.calls[0][0].content).not.toContain('Ansage');
         });
 
         it('hängt die Siegesserie ans Ergebnis, sobald sie läuft', async () => {
@@ -339,7 +341,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handleDuellButton(interaction);
 
-            expect(interaction.update.mock.calls[0][0].content).toContain('**3 Duelle in Folge**');
+            expect(interaction.editReply.mock.calls[0][0].content).toContain('**3 Duelle in Folge**');
         });
 
         it('zieht den Verlierer nicht unter 0 Punkte', async () => {
@@ -358,6 +360,49 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handleDuellButton(interaction);
 
+            expect(interaction.update.mock.calls[0][0].components).toEqual([]);
+            expect(interaction.editReply.mock.calls[0][0]).toContain('schiefgelaufen');
+        });
+
+        it('trägt einen Doppelklick nur einmal aus', async () => {
+            vi.mocked(redisService.setIfAbsent).mockResolvedValue(false);
+            scoresInRedis({});
+            const interaction = mockButton('pingpong-duell:annehmen:user-a:user-b', 'user-b');
+
+            await pingPongHandler.handleDuellButton(interaction);
+
+            expect(redisService.setIfAbsent).toHaveBeenCalledWith('PING_PONG:SPIEL_START:duell-1', '1', expect.any(Number));
+            expect(redisService.set).not.toHaveBeenCalled();
+            expect(interaction.update).not.toHaveBeenCalled();
+            expect(interaction.reply.mock.calls[0][0].content).toContain('läuft schon');
+        });
+
+        it('nimmt die Buttons weg, bevor Punkte gebucht werden', async () => {
+            const reihenfolge: string[] = [];
+            scoresInRedis({});
+            vi.mocked(redisService.set).mockImplementation(async (_key: string, value: string) => {
+                reihenfolge.push('buchen');
+                return value as any;
+            });
+            const interaction = mockButton('pingpong-duell:annehmen:user-a:user-b', 'user-b');
+            interaction.update.mockImplementation(async () => {
+                reihenfolge.push('buttons-weg');
+            });
+
+            await pingPongHandler.handleDuellButton(interaction);
+
+            expect(reihenfolge[0]).toBe('buttons-weg');
+            expect(reihenfolge).toContain('buchen');
+        });
+
+        it('gibt den Lock frei, wenn schon das Entfernen der Buttons scheitert', async () => {
+            const interaction = mockButton('pingpong-duell:annehmen:user-a:user-b', 'user-b');
+            interaction.update.mockRejectedValue(new Error('Unknown interaction'));
+
+            await pingPongHandler.handleDuellButton(interaction);
+
+            expect(redisService.delete).toHaveBeenCalledWith('PING_PONG:SPIEL_START:duell-1');
+            expect(redisService.set).not.toHaveBeenCalled();
             expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
         });
     });
@@ -694,7 +739,9 @@ describe('PingPongHandler', () => {
         const mockButton = (customId: string, userId: string) => ({
             customId,
             user: {id: userId},
+            message: {id: 'duell-1'},
             update: vi.fn(),
+            editReply: vi.fn().mockResolvedValue(undefined),
             reply: vi.fn().mockResolvedValue(undefined),
             replied: false,
         } as any);
@@ -740,7 +787,7 @@ describe('PingPongHandler', () => {
             expect(redisService.set).toHaveBeenCalledWith('user-aPING_PONG', '6');
             expect(redisService.set).toHaveBeenCalledWith('user-bPING_PONG', '4');
 
-            const content = interaction.update.mock.calls[0][0].content;
+            const content = interaction.editReply.mock.calls[0][0].content;
             expect(content).toContain('<@user-a>: **Lupfer**');
             expect(content).toContain('<@user-b>: **Konter**');
             expect(content).toContain('**Lupfer** übertrumpft **Konter**');
@@ -754,7 +801,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handleTaktikButton(interaction);
 
-            const content = interaction.update.mock.calls[0][0].content;
+            const content = interaction.editReply.mock.calls[0][0].content;
             expect(content).toContain('Dieselbe Aktion');
             expect(content).toContain('3:0 für <@user-a>');
             expect(redisService.set).toHaveBeenCalledWith('user-aPING_PONG', '6');
@@ -766,7 +813,18 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handleTaktikButton(interaction);
 
-            expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
+            expect(interaction.update.mock.calls[0][0].components).toEqual([]);
+            expect(interaction.editReply.mock.calls[0][0]).toContain('schiefgelaufen');
+        });
+
+        it('trägt einen Doppelklick nur einmal aus', async () => {
+            vi.mocked(redisService.setIfAbsent).mockResolvedValue(false);
+            const interaction = mockButton('pingpong-taktik:konter:user-a:user-b:lupfer', 'user-b');
+
+            await pingPongHandler.handleTaktikButton(interaction);
+
+            expect(redisService.set).not.toHaveBeenCalled();
+            expect(interaction.update).not.toHaveBeenCalled();
         });
     });
 
@@ -980,8 +1038,8 @@ describe('PingPongHandler', () => {
             user: {id: userId},
             message: {...lobbyNachricht, content: inhalt},
             update: vi.fn(),
-            reply: vi.fn().mockResolvedValue(undefined),
             editReply: vi.fn().mockResolvedValue(undefined),
+            reply: vi.fn().mockResolvedValue(undefined),
             replied: false,
         } as any);
 
@@ -1421,7 +1479,7 @@ describe('PingPongHandler', () => {
 
                 await pingPongHandler.handleRundlaufButton(interaction);
 
-                expect(redisService.setIfAbsent).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_START:m1', '1', expect.any(Number));
+                expect(redisService.setIfAbsent).toHaveBeenCalledWith('PING_PONG:SPIEL_START:m1', '1', expect.any(Number));
                 expect(redisService.set).not.toHaveBeenCalled();
                 expect(interaction.update).not.toHaveBeenCalled();
                 expect(interaction.reply.mock.calls[0][0].content).toContain('läuft schon');
@@ -1467,7 +1525,7 @@ describe('PingPongHandler', () => {
 
                 await pingPongHandler.handleRundlaufButton(interaction);
 
-                expect(redisService.delete).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_START:m1');
+                expect(redisService.delete).toHaveBeenCalledWith('PING_PONG:SPIEL_START:m1');
                 expect(redisService.set).not.toHaveBeenCalled();
                 expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
             });
@@ -1487,6 +1545,7 @@ describe('PingPongHandler', () => {
             user: {id: userId},
             message: {id: 'msg-1', content: inhalt},
             update: vi.fn(),
+            editReply: vi.fn().mockResolvedValue(undefined),
             reply: vi.fn().mockResolvedValue(undefined),
             replied: false,
         } as any);
@@ -1648,7 +1707,7 @@ describe('PingPongHandler', () => {
 
                     await pingPongHandler.handleDoppelButton(interaction);
 
-                    const ergebnis = interaction.update.mock.calls[0][0];
+                    const ergebnis = interaction.editReply.mock.calls[0][0];
                     expect(ergebnis.components).toEqual([]);
                     expect(ergebnis.content).toContain('Das Los stellt die Teams');
                     for (const id of ['111', '222', '333', '444']) {
@@ -1664,7 +1723,7 @@ describe('PingPongHandler', () => {
 
                     await pingPongHandler.handleDoppelButton(interaction);
 
-                    expect(redisService.setIfAbsent).toHaveBeenCalledWith('PING_PONG:DOPPEL_START:msg-1', '1', expect.any(Number));
+                    expect(redisService.setIfAbsent).toHaveBeenCalledWith('PING_PONG:SPIEL_START:msg-1', '1', expect.any(Number));
                     expect(interaction.update).not.toHaveBeenCalled();
                     expect(redisService.set).not.toHaveBeenCalled();
                     expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
@@ -1720,7 +1779,7 @@ describe('PingPongHandler', () => {
 
                     await pingPongHandler.handleDoppelButton(interaction);
 
-                    const ergebnis = interaction.update.mock.calls[0][0];
+                    const ergebnis = interaction.editReply.mock.calls[0][0];
                     expect(ergebnis.components).toEqual([]);
                     expect(ergebnis.content).not.toContain('Das Los');
                     // Die festen Teams bleiben zusammen, egal wer gewinnt.
@@ -1756,7 +1815,8 @@ describe('PingPongHandler', () => {
 
                 await pingPongHandler.handleDoppelButton(interaction);
 
-                expect(interaction.reply).toHaveBeenCalledWith(expect.objectContaining({flags: MessageFlags.Ephemeral}));
+                expect(interaction.update.mock.calls[0][0].components).toEqual([]);
+                expect(interaction.editReply.mock.calls[0][0]).toContain('schiefgelaufen');
             });
         });
 

@@ -85,7 +85,10 @@ describe('TwitchHandler', () => {
 
             await twitchHandler.handleVerknuepfen(interaction);
 
-            expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining('nicht gefunden'));
+            expect(interaction.editReply).toHaveBeenCalledWith({
+                content: expect.stringContaining('nicht gefunden'),
+                allowedMentions: {parse: []},
+            });
             expect(twitchUserService.linkUser).not.toHaveBeenCalled();
         });
 

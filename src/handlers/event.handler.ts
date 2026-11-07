@@ -82,13 +82,15 @@ class EventHandler {
             const text = event.title
                 ? `**${event.title}** ist da – es ist so weit!`
                 : 'Es ist so weit – das Event ist da!';
-            return interaction.reply(`${text} (Termin war <t:${unix}:F>)`);
+            return interaction.reply({content: `${text} (Termin war <t:${unix}:F>)`, allowedMentions: {parse: []}});
         }
 
-        return interaction.reply(
-            `Noch **${formatRemaining(diffMs)}** bis zum nächsten Event${titelTeil}!\n` +
-            `Termin: <t:${unix}:F> (<t:${unix}:R>)`
-        );
+        // Der Titel ist Freitext von /config: kein Ping daraus, auch wenn er von Admins kommt.
+        return interaction.reply({
+            content: `Noch **${formatRemaining(diffMs)}** bis zum nächsten Event${titelTeil}!\n` +
+                `Termin: <t:${unix}:F> (<t:${unix}:R>)`,
+            allowedMentions: {parse: []},
+        });
     }
 
     async handleHilfe(interaction: ChatInputCommandInteraction) {

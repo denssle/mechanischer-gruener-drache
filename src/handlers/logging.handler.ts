@@ -449,10 +449,12 @@ class LoggingHandler {
         return await client.channels.fetch(channelId) as TextChannel | null;
     }
 
-    // Zentraler Weg, einen Log-Eintrag zu posten: kürzt auf das Discord-2000-Zeichen-Limit,
-    // damit ein langer Inhalt den Post nicht mit Fehler 50035 scheitern lässt.
+    // Zentraler Weg, einen Log-Eintrag zu posten: kürzt auf das Discord-2000-Zeichen-Limit, damit ein
+    // langer Inhalt den Post nicht mit Fehler 50035 scheitern lässt, und schaltet Erwähnungen aus.
     private async sendeLog(logChannel: TextChannel, inhalt: string): Promise<void> {
-        await logChannel.send(kuerzeFuerDiscord(inhalt));
+        // Log-Posts wiederholen fremden Text: gelöschte Nachrichten, Nicknames, Rollennamen, Bann-Gründe.
+        // Ohne das liefe jede Erwähnung darin ein zweites Mal, und zwar mit den Rechten des Bots.
+        await logChannel.send({content: kuerzeFuerDiscord(inhalt), allowedMentions: {parse: []}});
     }
 }
 

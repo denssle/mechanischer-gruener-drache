@@ -23,7 +23,11 @@ class TwitchHandler {
         // Twitch User suchen
         const twitchUser = await twitchService.getUserByLogin(twitchLogin);
         if (!twitchUser) {
-            return interaction.editReply(`Twitch-Channel **${twitchLogin}** nicht gefunden.`);
+            // Die Eingabe steht im öffentlichen Text, also kein Ping daraus.
+            return interaction.editReply({
+                content: `Twitch-Channel **${twitchLogin}** nicht gefunden.`,
+                allowedMentions: {parse: []},
+            });
         }
 
         // EventSub-Subscription registrieren

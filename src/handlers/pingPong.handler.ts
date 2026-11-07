@@ -192,9 +192,6 @@ export function rundlaufListenEintrag(guildId: string | null, channelId: string,
 // Mehr Zeilen passen nicht sicher in eine Nachricht.
 const MAX_GELISTETE_RUNDLAEUFE = 15;
 
-// Der Lock muss nur die Zeit bis zum Entfernen der Buttons abdecken (Muster DOPPEL_LOCK_SECONDS).
-const RUNDLAUF_LOCK_SECONDS = 60;
-
 // Lobbys laufen nie ab, auch eine vergessene bleibt offen. Nach einer Woche fliegt sie aus der
 // Liste (spielbar bleibt sie), sonst füllen Karteileichen die Liste für immer.
 const RUNDLAUF_LISTE_MAX_ALTER_MS = 7 * 24 * 60 * 60 * 1000;
@@ -302,14 +299,14 @@ export function formatDelta(delta: number): string {
 // Anders als beim Rundlauf gibt es KEINEN Start-Button: bei genau vier Plätzen ist klar, wann es
 // losgeht. Das hat eine Kehrseite - klicken der vierte und ein fünfter gleichzeitig, sähen beide
 // eine Lobby mit drei Leuten und würden beide ein Match auslösen. Deshalb der Lock in
-// PING_PONG_KEYS.doppelStart.
+// PING_PONG_KEYS.spielStart.
 const DOPPEL_PREFIX = 'pingpong-doppel:';
 const TEAM_1_MARKER = 'Team 1';
 const TEAM_2_MARKER = 'Team 2';
 const ZUSAGE_MARKER = 'Zusage fehlt';
 export const DOPPEL_GROESSE = 4;
 // Der Lock muss nur das Zeitfenster zwischen zwei Klicks abdecken; danach sind die Buttons ohnehin weg.
-const DOPPEL_LOCK_SECONDS = 60;
+const SPIEL_LOCK_SECONDS = 60;
 
 export type DoppelModus = 'fest' | 'offen';
 
@@ -476,33 +473,8 @@ class PingPongHandler {
                 });
             }
 
-            const {herausfordererPunkte, gegnerPunkte} = spieleDuell();
-            const herausfordererGewinnt = herausfordererPunkte > gegnerPunkte;
-            const siegerId = herausfordererGewinnt ? herausfordererId : gegnerId;
-            const verliererId = herausfordererGewinnt ? gegnerId : herausfordererId;
-
-            // Ansage-Duell: nur der Herausforderer hat angesagt. Erfüllt er sie, ist er der Sieger
-            // und bekommt den Bonus; verliert er, ist er der Verlierer und zahlt den Malus obendrauf.
-            const bonusFuerSieger = istAnsageDuell && herausfordererGewinnt ? ANSAGE_BONUS : 0;
-            const malusFuerVerlierer = istAnsageDuell && !herausfordererGewinnt ? ANSAGE_MALUS : 0;
-
-            const {punkteZeile, serienZeile} = await this.trageErgebnisEin(siegerId, verliererId,
-                bonusFuerSieger, -malusFuerVerlierer);
-
-            const satz = herausfordererGewinnt
-                ? `${herausfordererPunkte}:${gegnerPunkte}`
-                : `${gegnerPunkte}:${herausfordererPunkte}`;
-
-            const ansageZeile = formatAnsage(istAnsageDuell, herausfordererId, herausfordererGewinnt);
-
-            return interaction.update({
-                content: `**<@${siegerId}> gewinnt ${satz} gegen <@${verliererId}>.**\n`
-                    + `${randomDuellFlavor()}\n`
-                    + (ansageZeile ? `${ansageZeile}\n` : '')
-                    + punkteZeile
-                    + (serienZeile ? `\n${serienZeile}` : ''),
-                components: []
-            });
+            return await this.spieleEinmal(interaction, {belegt: 'Das Duell läuft schon.', laeuft: 'Das Duell läuft ...'},
+                () => this.werteDuellAus(herausfordererId, gegnerId, istAnsageDuell));
         } catch (error) {
             console.error('Fehler beim Austragen des Ping-Pong-Duells:', error);
             if (!interaction.replied) {
@@ -512,6 +484,38 @@ class PingPongHandler {
                 }).catch(() => {});
             }
         }
+    }
+
+    // Spielt ein angenommenes Duell und baut die Ergebnisnachricht.
+    async werteDuellAus(herausfordererId: string, gegnerId: string, istAnsageDuell: boolean)
+        : Promise<{content: string, components: []}> {
+        const {herausfordererPunkte, gegnerPunkte} = spieleDuell();
+        const herausfordererGewinnt = herausfordererPunkte > gegnerPunkte;
+        const siegerId = herausfordererGewinnt ? herausfordererId : gegnerId;
+        const verliererId = herausfordererGewinnt ? gegnerId : herausfordererId;
+
+        // Ansage-Duell: nur der Herausforderer hat angesagt. Erfüllt er sie, ist er der Sieger
+            // und bekommt den Bonus; verliert er, ist er der Verlierer und zahlt den Malus obendrauf.
+        const bonusFuerSieger = istAnsageDuell && herausfordererGewinnt ? ANSAGE_BONUS : 0;
+        const malusFuerVerlierer = istAnsageDuell && !herausfordererGewinnt ? ANSAGE_MALUS : 0;
+
+        const {punkteZeile, serienZeile} = await this.trageErgebnisEin(siegerId, verliererId,
+            bonusFuerSieger, -malusFuerVerlierer);
+
+        const satz = herausfordererGewinnt
+            ? `${herausfordererPunkte}:${gegnerPunkte}`
+            : `${gegnerPunkte}:${herausfordererPunkte}`;
+
+        const ansageZeile = formatAnsage(istAnsageDuell, herausfordererId, herausfordererGewinnt);
+
+        return {
+            content: `**<@${siegerId}> gewinnt ${satz} gegen <@${verliererId}>.**\n`
+                + `${randomDuellFlavor()}\n`
+                + (ansageZeile ? `${ansageZeile}\n` : '')
+                + punkteZeile
+                + (serienZeile ? `\n${serienZeile}` : ''),
+            components: []
+        };
     }
 
     // Punkte + Siegesserie nach einem entschiedenen Match - von allen drei Duell-Arten geteilt.
@@ -599,36 +603,9 @@ class PingPongHandler {
                 });
             }
 
-            const ausgang = entscheideTaktik(herausfordererAktion as TaktikAktion, gegnerAktion as TaktikAktion);
-
-            // Gleiche Aktion = Patt: dann entscheidet wie beim normalen Duell der Zufall.
-            const {herausfordererPunkte, gegnerPunkte} = spieleDuell();
-            const herausfordererGewinnt = ausgang === 'gleich'
-                ? herausfordererPunkte > gegnerPunkte
-                : ausgang === 'herausforderer';
-
-            const siegerId = herausfordererGewinnt ? herausfordererId : gegnerId;
-            const verliererId = herausfordererGewinnt ? gegnerId : herausfordererId;
-
-            const {punkteZeile, serienZeile} = await this.trageErgebnisEin(siegerId, verliererId);
-
-            const wahlZeile = `<@${herausfordererId}>: **${TAKTIK_LABELS[herausfordererAktion as TaktikAktion]}** `
-                + `· <@${gegnerId}>: **${TAKTIK_LABELS[gegnerAktion as TaktikAktion]}**`;
-
-            const entscheidung = ausgang === 'gleich'
-                ? `Dieselbe Aktion – der Ballwechsel entscheidet, ${herausfordererGewinnt ? herausfordererPunkte : gegnerPunkte}:`
-                    + `${herausfordererGewinnt ? gegnerPunkte : herausfordererPunkte} für <@${siegerId}>.`
-                : `**${TAKTIK_LABELS[(herausfordererGewinnt ? herausfordererAktion : gegnerAktion) as TaktikAktion]}** `
-                    + `übertrumpft **${TAKTIK_LABELS[(herausfordererGewinnt ? gegnerAktion : herausfordererAktion) as TaktikAktion]}**.`;
-
-            return interaction.update({
-                content: `${wahlZeile}\n`
-                    + `${entscheidung}\n`
-                    + `**<@${siegerId}> gewinnt gegen <@${verliererId}>.**\n`
-                    + punkteZeile
-                    + (serienZeile ? `\n${serienZeile}` : ''),
-                components: []
-            });
+            return await this.spieleEinmal(interaction, {belegt: 'Das Duell läuft schon.', laeuft: 'Das Duell läuft ...'},
+                () => this.werteTaktikAus(herausfordererId, gegnerId,
+                    herausfordererAktion as TaktikAktion, gegnerAktion as TaktikAktion));
         } catch (error) {
             console.error('Fehler beim Austragen des Ping-Pong-Taktikduells:', error);
             if (!interaction.replied) {
@@ -638,6 +615,42 @@ class PingPongHandler {
                 }).catch(() => {});
             }
         }
+    }
+
+    // Wertet ein angenommenes Taktikduell aus und baut die Ergebnisnachricht.
+    async werteTaktikAus(herausfordererId: string, gegnerId: string,
+                         herausfordererAktion: TaktikAktion, gegnerAktion: TaktikAktion)
+        : Promise<{content: string, components: []}> {
+        const ausgang = entscheideTaktik(herausfordererAktion, gegnerAktion);
+
+        // Gleiche Aktion = Patt: dann entscheidet wie beim normalen Duell der Zufall.
+        const {herausfordererPunkte, gegnerPunkte} = spieleDuell();
+        const herausfordererGewinnt = ausgang === 'gleich'
+            ? herausfordererPunkte > gegnerPunkte
+            : ausgang === 'herausforderer';
+
+        const siegerId = herausfordererGewinnt ? herausfordererId : gegnerId;
+        const verliererId = herausfordererGewinnt ? gegnerId : herausfordererId;
+
+        const {punkteZeile, serienZeile} = await this.trageErgebnisEin(siegerId, verliererId);
+
+        const wahlZeile = `<@${herausfordererId}>: **${TAKTIK_LABELS[herausfordererAktion]}** `
+            + `· <@${gegnerId}>: **${TAKTIK_LABELS[gegnerAktion]}**`;
+
+        const entscheidung = ausgang === 'gleich'
+            ? `Dieselbe Aktion – der Ballwechsel entscheidet, ${herausfordererGewinnt ? herausfordererPunkte : gegnerPunkte}:`
+                + `${herausfordererGewinnt ? gegnerPunkte : herausfordererPunkte} für <@${siegerId}>.`
+            : `**${TAKTIK_LABELS[herausfordererGewinnt ? herausfordererAktion : gegnerAktion]}** `
+                + `übertrumpft **${TAKTIK_LABELS[herausfordererGewinnt ? gegnerAktion : herausfordererAktion]}**.`;
+
+        return {
+            content: `${wahlZeile}\n`
+                + `${entscheidung}\n`
+                + `**<@${siegerId}> gewinnt gegen <@${verliererId}>.**\n`
+                + punkteZeile
+                + (serienZeile ? `\n${serienZeile}` : ''),
+            components: []
+        };
     }
 
     // Rundlauf: eine offene Lobby statt einer gezielten Herausforderung. Wer mitspielen will,
@@ -875,7 +888,10 @@ class PingPongHandler {
                 });
             }
 
-            return await this.starteRundlauf(interaction, teilnehmer);
+            return await this.spieleEinmal(interaction,
+                {belegt: 'Der Rundlauf läuft schon.', laeuft: 'Der Rundlauf läuft ...'},
+                () => this.spieleUndWerteRundlaufAus(teilnehmer),
+                () => this.vergissOffenenRundlauf(interaction.message));
         } catch (error) {
             console.error('Fehler beim Austragen des Ping-Pong-Rundlaufs:', error);
             if (!interaction.replied) {
@@ -887,32 +903,35 @@ class PingPongHandler {
         }
     }
 
-    // Erst die Buttons weg, dann buchen. Der Lock fängt den Doppelklick ab, die Reihenfolge den Rest:
-    // scheitert das Buchen mittendrin, gibt es keinen Start-Button mehr, der die schon gebuchten
-    // Punkte ein zweites Mal vergeben könnte. Deshalb auch kein Rückweg in die Lobby.
-    async starteRundlauf(interaction: ButtonInteraction, teilnehmer: string[]) {
-        const lock = PING_PONG_KEYS.rundlaufStart(interaction.message.id);
+    // Gemeinsamer Abschluss ALLER Spielarten: erst die Buttons weg, dann buchen. Der Lock fängt den
+    // Doppelklick ab, die Reihenfolge den Rest: scheitert das Buchen mittendrin, gibt es keinen Button
+    // mehr, der die schon gebuchten Punkte ein zweites Mal vergeben könnte. Deshalb auch kein Rückweg
+    // in die Lobby, halb gebucht ist besser als doppelt. Nur wenn schon das update scheitert, ist
+    // nichts passiert: dann wird der Lock frei, und ein neuer Klick darf es versuchen.
+    async spieleEinmal(interaction: ButtonInteraction, texte: {belegt: string, laeuft: string},
+                       auswerten: () => Promise<{content: string, components: []}>,
+                       nachButtons?: () => Promise<void>) {
+        const lock = PING_PONG_KEYS.spielStart(interaction.message.id);
 
-        if (!await redisService.setIfAbsent(lock, '1', RUNDLAUF_LOCK_SECONDS)) {
-            return interaction.reply({content: 'Der Rundlauf läuft schon.', flags: MessageFlags.Ephemeral});
+        if (!await redisService.setIfAbsent(lock, '1', SPIEL_LOCK_SECONDS)) {
+            return interaction.reply({content: texte.belegt, flags: MessageFlags.Ephemeral});
         }
 
         try {
-            await interaction.update({content: 'Der Rundlauf läuft ...', components: []});
+            await interaction.update({content: texte.laeuft, components: []});
         } catch (error) {
-            // Noch ist nichts gebucht und die Lobby unverändert: ein neuer Klick darf es versuchen.
             await redisService.delete(lock);
             throw error;
         }
 
-        await this.vergissOffenenRundlauf(interaction.message);
+        await nachButtons?.();
 
         try {
-            await interaction.editReply(await this.spieleUndWerteRundlaufAus(teilnehmer));
+            await interaction.editReply(await auswerten());
         } catch (error) {
-            console.error('Fehler beim Auswerten des Ping-Pong-Rundlaufs:', error);
+            console.error('Fehler beim Auswerten eines Ping-Pong-Spiels:', error);
             await interaction.editReply(
-                'Beim Auswerten ist etwas schiefgelaufen, die Runde ist beendet. '
+                'Beim Auswerten ist etwas schiefgelaufen, das Spiel ist beendet. '
                 + 'Ein Teil der Punkte kann schon gebucht sein.'
             ).catch(() => {});
         }
@@ -1187,16 +1206,9 @@ class PingPongHandler {
 
     // Der Lock verhindert, dass zwei gleichzeitige Klicks zwei Matches auslösen (siehe DOPPEL_PREFIX).
     async starteDoppel(interaction: ButtonInteraction, team1: string[], team2: string[], gelost: boolean) {
-        const erster = await redisService.setIfAbsent(PING_PONG_KEYS.doppelStart(interaction.message.id), '1',
-            DOPPEL_LOCK_SECONDS);
-        if (!erster) {
-            return interaction.reply({
-                content: 'Zu spät – das Doppel ist gerade voll geworden und läuft schon.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        return interaction.update(await this.spieleUndWerteDoppelAus(team1, team2, gelost));
+        return this.spieleEinmal(interaction,
+            {belegt: 'Zu spät – das Doppel ist gerade voll geworden und läuft schon.', laeuft: 'Das Doppel läuft ...'},
+            () => this.spieleUndWerteDoppelAus(team1, team2, gelost));
     }
 
     // Spielt das Match, schreibt Punkte und Serien fort und baut die Ergebnisnachricht. Getrennt vom

@@ -36,7 +36,7 @@ webhookServer.onRevocation((subscriptionId, reason) => {
     });
 });
 
-// Verwaltungsseite (erster "Hello World"-Entwurf) an dieselbe Express-App wie der Twitch-Webhook
+// Verwaltungsseite an dieselbe Express-App wie der Twitch-Webhook
 // haengen - ein Port, ein Server. Muss vor start() passieren. /config matcht nicht /twitch, der
 // Twitch-Raw-Body-Parser bleibt also unberuehrt.
 webhookServer.app.use(configRouter);
@@ -49,7 +49,7 @@ client.on(Events.MessageCreate, (message) => {
         console.error('Fehler im Blåhaj-Handler:', error);
     });
 });
-// Sport-Auto-Erfassung: km-Angaben im Sport-Kanal werden automatisch eingetragen (der Handler
+// Sport-Auto-Erfassung: "+"-Angaben im Sport-Kanal werden automatisch eingetragen (der Handler
 // prüft den Kanal selbst). Eigene Zuständigkeit, deshalb eine eigene MessageCreate-Registrierung.
 client.on(Events.MessageCreate, (message) => {
     sportHandler.handleMessage(message).catch((error) => {

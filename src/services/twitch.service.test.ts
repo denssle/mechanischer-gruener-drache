@@ -45,6 +45,18 @@ describe('TwitchService', () => {
             expect(user).toEqual({ id: 'twitch-1', login: 'teststreamer', display_name: 'TestStreamer' });
         });
 
+        // Die Eingabe kommt ungefiltert aus dem Slash-Command und darf die Query nicht erweitern.
+        it('kodiert den Namen in der URL', async () => {
+            const twitchService = await freshTwitchService();
+            vi.mocked(fetch)
+                .mockResolvedValueOnce(mockTokenResponse() as any)
+                .mockResolvedValueOnce({ok: true, json: async () => ({data: []})} as any);
+
+            await twitchService.getUserByLogin('a&id=1');
+
+            expect(vi.mocked(fetch).mock.calls[1][0]).toContain('login=a%26id%3D1');
+        });
+
         it('gibt null zurück wenn Twitch keinen User findet', async () => {
             const twitchService = await freshTwitchService();
             vi.mocked(fetch)

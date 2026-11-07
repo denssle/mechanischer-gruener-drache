@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, Collection, Events, Interaction, MessageFlags} from "discord.js";
+import {ChatInputCommandInteraction, Collection, Events, Interaction, MessageFlags, RepliableInteraction} from "discord.js";
 import client from "../client.js";
 import { Command } from "../types/discord.js";
 import bashHandler from "./bash.handler.js";
@@ -27,7 +27,12 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
 
     // Modal-Handler prüfen wie die Button-Handler selbst per customId-Prefix, ob sie zuständig sind.
     if (interaction.isModalSubmit()) {
-        await bashHandler.handleModal(interaction);
+        try {
+            await bashHandler.handleModal(interaction);
+        } catch (error) {
+            console.error("modal execution error", error);
+            await meldeFehler(interaction);
+        }
         return;
     }
 
@@ -41,6 +46,7 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
             await kontextBefehl.execute(interaction);
         } catch (error) {
             console.error("context menu execution error", error);
+            await meldeFehler(interaction);
         }
         return;
     }
@@ -56,6 +62,25 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
         await zeigeGelegentlichEinenTipp(interaction);
     } catch (error) {
         console.error("command execution error", error);
+        await meldeFehler(interaction);
+    }
+}
+
+// Letztes Netz für alles, was ein Handler nicht selbst abfängt (z.B. Redis weg): sonst bliebe es bei
+// "Anwendung reagiert nicht" oder einem ewigen "denkt nach". Bewusst fehlertolerant, die Interaction
+// kann längst abgelaufen sein.
+export async function meldeFehler(interaction: RepliableInteraction): Promise<void> {
+    const content = 'Da ist etwas schiefgelaufen. Versuch es gleich nochmal.';
+    try {
+        if (interaction.deferred && !interaction.replied) {
+            await interaction.editReply(content);
+        } else if (interaction.replied) {
+            await interaction.followUp({content, flags: MessageFlags.Ephemeral});
+        } else {
+            await interaction.reply({content, flags: MessageFlags.Ephemeral});
+        }
+    } catch (error) {
+        console.error("Fehlermeldung konnte nicht zugestellt werden:", error);
     }
 }
 

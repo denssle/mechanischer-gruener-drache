@@ -20,7 +20,7 @@ export function randomTotenFlavor(): string {
 
 export const CHARAKTER_HELP =
     `**Charakter-Befehle**\n\n` +
-    `\`/charakter verknuepfen name:<Name>\` – deinen LotGD-Charakter hinterlegen (nur der öffentliche Name).\n` +
+    `\`/charakter verknuepfen name:<Name>\` – deinen LotGD-Charakter hinterlegen (nur der öffentliche Name, jeder Charakter nur einmal).\n` +
     `\`/charakter anzeigen [name:<Name>]\` – Charakter-Karte anzeigen; ohne Name deinen verknüpften. ` +
     `Sagt auch, ob die Person gerade im Spiel ist und wo, und ob sie die Beobachtung ` +
     `(\`/beobachten\`) freigegeben hat – die Antwort siehst nur du.\n` +
@@ -115,9 +115,10 @@ class CharacterHandler {
 
         const existing = await characterService.getLinkedName(interaction.user.id);
         if (existing) {
-            return interaction.editReply(
-                `Du hast bereits **${existing}** verknüpft. Nutze \`/charakter entfernen\`, um das zu ändern.`
-            );
+            return interaction.editReply({
+                content: `Du hast bereits **${existing}** verknüpft. Nutze \`/charakter entfernen\`, um das zu ändern.`,
+                allowedMentions: {parse: []},
+            });
         }
 
         const roster = await characterService.getRoster();
@@ -127,9 +128,22 @@ class CharacterHandler {
 
         const entry = findInRoster(roster, name);
         if (!entry) {
-            return interaction.editReply(
-                `Charakter **${name}** nicht in der Kriegerliste gefunden. Achte auf die exakte Schreibweise (ohne Titel).`
-            );
+            // Die Antwort ist öffentlich und wiederholt die Eingabe, also kein Ping daraus.
+            return interaction.editReply({
+                content: `Charakter **${name}** nicht in der Kriegerliste gefunden. Achte auf die exakte Schreibweise (ohne Titel).`,
+                allowedMentions: {parse: []},
+            });
+        }
+
+        // Jeder Charakter nur einmal: sonst könnte man einen fremden verknüpfen und über
+        // /charakter beobachtbar dessen Login-Zeiten freigeben. Das ist kein Eigentumsnachweis (wer
+        // zuerst kommt, hat ihn), den brächte erst das Token-Modul (docs/lotgd-modul-plan.md).
+        if (findLinkForName(await characterService.getAllLinks(), entry.name)) {
+            return interaction.editReply({
+                content: `**${entry.name}** ist schon mit jemand anderem verknüpft. Falls das dein Charakter ist, `
+                    + `melde dich bei einem Admin.`,
+                allowedMentions: {parse: []},
+            });
         }
 
         // Den eingegebenen Kern-Namen speichern (der Titel-Präfix im Roster ändert sich).
@@ -141,6 +155,7 @@ class CharacterHandler {
             content: `Charakter **${entry.name}** verknüpft! Beobachtung ist standardmäßig aus – ` +
                 `freigeben kannst du sie mit \`/charakter beobachtbar schalter:an\`.`,
             embeds: [buildCard(entry, null, false)],
+            allowedMentions: {parse: []},
         });
     }
 

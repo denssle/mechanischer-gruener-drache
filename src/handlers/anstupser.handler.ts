@@ -1,6 +1,7 @@
 import {ChatInputCommandInteraction, MessageFlags} from 'discord.js';
 import anstupserService from '../services/anstupser.service.js';
 import {sendeDm} from '../services/dm.service.js';
+import {formatTag} from '../services/zeit.service.js';
 
 // Täglicher 13:37-Anstupser als Abo (war README-Todo). Wer will, meldet sich SELBST an und bekommt
 // dann jeden Tag um 13:37 (lokale Host-Zeit = Europe/Berlin) eine DM.
@@ -17,14 +18,6 @@ export const ANSTUPSER_TEXT = 'Er brauchts mal wieder';
 // Prüfung passiert hier - deshalb reicht eine Konstante statt einer Cron-Dependency.
 export const STUNDE = 13;
 export const MINUTE = 37;
-
-// Lokales Datum als YYYY-MM-DD (Host läuft auf Europe/Berlin) - Tagesmarker wie beim Sport-Feature.
-export function formatTag(date: Date): string {
-    const jahr = date.getFullYear();
-    const monat = String(date.getMonth() + 1).padStart(2, '0');
-    const tag = String(date.getDate()).padStart(2, '0');
-    return `${jahr}-${monat}-${tag}`;
-}
 
 // Ist jetzt die Anstupser-Minute? Rein und getestet, damit die Zeitlogik ohne Timer prüfbar ist.
 export function istAnstupserZeit(date: Date): boolean {

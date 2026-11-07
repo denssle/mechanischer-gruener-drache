@@ -100,3 +100,18 @@ jobs:
           username: ${{ secrets.UBERSPACE_USER }}
           key: ${{ secrets.DEPLOY_KEY_PRIVATE }}
           script: supervisorctl restart drache
+
+      # Der Host baut sich beim Neustart selbst neu (npm ci + build), ein gruener Restart sagt also noch
+      # nichts. Gesund antwortet der Webhook-Pfad auf GET mit 404, solange der Bot nicht laeuft nginx mit 502.
+      - name: Check bot is back up
+        run: |
+          for versuch in $(seq 1 36); do
+            status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 https://enzlor.uber.space/twitch/eventsub || true)
+            if [ "$status" = "404" ]; then
+              echo "Bot antwortet nach Versuch $versuch."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Bot antwortet nach 3 Minuten nicht (zuletzt HTTP $status). Logs: ~/logs/supervisord.log"
+          exit 1

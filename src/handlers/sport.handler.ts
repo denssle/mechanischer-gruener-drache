@@ -17,6 +17,7 @@ import {
 
 import campHandler from './camp.handler.js';
 import ankuendigungskanalService from '../services/ankuendigungskanal.service.js';
+import {formatTag} from '../services/zeit.service.js';
 
 // Ohne Schlüsselwort im Text wird Laufen angenommen (bewusst: lieber ein Eintrag mit der
 // häufigsten Aktivität als gar keiner - die Distanz zählt fürs kooperative Gesamtziel).
@@ -31,17 +32,6 @@ export const BESTAETIGUNGS_REAKTION = '✅';
 // "Bot ist kaputt" zu unterscheiden. Ebenfalls funktionaler Marker, verschwindet nach erfolgreicher
 // Korrektur wieder.
 export const RUECKFRAGE_REAKTION = '❓';
-
-// Lokales Datum als YYYY-MM-DD (Host läuft auf Europe/Berlin, wie beim Event-Feature).
-// Bewusst aus den lokalen Datumsteilen gebaut statt toISOString(), das in UTC umrechnet und
-// dadurch um Mitternacht auf den falschen Tag fallen würde. Dient als Tagesmarker für die
-// tägliche Aktivitätsstand-Meldung (Doppelpost-Schutz).
-export function formatTag(date: Date): string {
-    const jahr = date.getFullYear();
-    const monat = String(date.getMonth() + 1).padStart(2, '0');
-    const tag = String(date.getDate()).padStart(2, '0');
-    return `${jahr}-${monat}-${tag}`;
-}
 
 // Kaufmännisch auf ganze Kilometer runden - NUR für die Anzeige der gemeinsamen Gesamtsumme
 // (Eintrags-Embed, /sport gesamt, Mitternachts-Post). Der gespeicherte Wert bleibt exakt (sonst gingen
@@ -526,7 +516,8 @@ class SportHandler {
             const reached = await sportService.checkAndMarkReachedMilestones();
             for (const milestone of reached) {
                 try {
-                    await channel.send(milestone.text);
+                    // Der Text stammt von irgendwem (der Befehl ist für alle offen): kein Ping.
+                    await channel.send({content: milestone.text, allowedMentions: {parse: []}});
                 } catch (error) {
                     console.error(`Fehler beim Posten des Sport-Meilensteins (${milestone.kilometers} km):`, error);
                 }

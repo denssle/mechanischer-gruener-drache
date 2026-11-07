@@ -6,6 +6,7 @@ import {
 } from 'discord.js';
 import client from '../client.js';
 import greetingService from '../services/greeting.service.js';
+import {formatTag} from '../services/zeit.service.js';
 
 // Morgengruß-Tradition: die erste Nachricht JEDER Person am Tag im Morgengruß-Kanal wird nur per
 // Reaktion begrüßt (kein eigener Post - passt zum Blåhaj-/Sport-Auto-Listener-Muster). Die Emojis
@@ -97,14 +98,6 @@ export function werteReaktionenAus(
         if (anzahl >= MIN_BEOBACHTUNGEN) ergebnis[authorId] = emoji;
     }
     return ergebnis;
-}
-
-// Lokales Datum als YYYY-MM-DD (Host läuft auf Europe/Berlin) - Tagesmarker, wie beim Sport-Feature.
-function formatTag(date: Date): string {
-    const jahr = date.getFullYear();
-    const monat = String(date.getMonth() + 1).padStart(2, '0');
-    const tag = String(date.getDate()).padStart(2, '0');
-    return `${jahr}-${monat}-${tag}`;
 }
 
 class GreetingHandler {

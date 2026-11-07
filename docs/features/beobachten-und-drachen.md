@@ -31,3 +31,4 @@
 - `/charakter entfernen` **räumt den Level-Stand mit ab** (`drachenService.deleteLevel`) – ohne Verknüpfung liest ihn niemand mehr, er bliebe als Karteileiche liegen; die Neu-Verknüpfung beobachtet dann sauber von vorn. Dafür liest `handleEntfernen` den Namen **vor** dem Unlink (danach ist er weg).
 - Randfall bewusst hingenommen (stand schon im Todo): ein gelöschter + unter gleichem Namen neu erstellter Charakter würde fälschlich gefeiert.
 - `drachen.handler.ts` importiert `client` nur in Methodenkörpern (über `commands/index.js` erreichbar via `online`/`character.handler` → Zirkular-Import-Falle).
+- **Grenze des Opt-ins:** Die Freigabe gilt für den verknüpften Charakter, und die Verknüpfung ist kein Eigentumsnachweis. Seit 2026-11-07 ist jeder Charakter wenigstens nur einmal verknüpfbar, siehe [Charakter](charakter.md).

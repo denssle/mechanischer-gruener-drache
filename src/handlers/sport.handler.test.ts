@@ -42,7 +42,8 @@ vi.mock('../client.js', () => ({
 
 import sportService from '../services/sport.service.js';
 import client from '../client.js';
-import sportHandler, { parseKilometer, parseMinuten, erkenneAktivitaet, erkenneSportLeistungen, siehtNachSportAus, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, RUECKFRAGE_REAKTION, formatTag, rundeKilometer, rundeMinuten, SPORT_HILFE } from './sport.handler.js';
+import {formatTag} from '../services/zeit.service.js';
+import sportHandler, { parseKilometer, parseMinuten, erkenneAktivitaet, erkenneSportLeistungen, siehtNachSportAus, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, RUECKFRAGE_REAKTION, rundeKilometer, rundeMinuten, SPORT_HILFE } from './sport.handler.js';
 import { HELP_TEXT } from './hilfe.handler.js';
 import campHandler from './camp.handler.js';
 
@@ -1045,7 +1046,7 @@ describe('SportHandler', () => {
 
             await sportHandler.handleEintragen(eintragenInteraction());
 
-            expect(send).toHaveBeenCalledWith('Yay, 2000 km!');
+            expect(send).toHaveBeenCalledWith({content: 'Yay, 2000 km!', allowedMentions: {parse: []}});
         });
 
         it('markiert nichts als erreicht wenn kein Ankündigungskanal gesetzt ist', async () => {
@@ -1056,17 +1057,6 @@ describe('SportHandler', () => {
             await sportHandler.handleEintragen(eintragenInteraction());
 
             expect(sportService.checkAndMarkReachedMilestones).not.toHaveBeenCalled();
-        });
-    });
-
-    describe('formatTag', () => {
-        // Aus lokalen Datumsteilen (nicht toISOString) - sonst kippt der Tag um Mitternacht in UTC.
-        it.each([
-            [new Date(2026, 6, 9), '2026-07-09'],
-            [new Date(2026, 11, 1), '2026-12-01'],
-            [new Date(2026, 0, 31, 23, 59), '2026-01-31'],
-        ])('formatiert %s als %s', (date, erwartet) => {
-            expect(formatTag(date as Date)).toBe(erwartet);
         });
     });
 

@@ -54,7 +54,7 @@ class TwitchService {
     }
 
     async getUserByLogin(login: string): Promise<TwitchUser | null> {
-        const response = await this.#twitchRequest(`/users?login=${login}`);
+        const response = await this.#twitchRequest(`/users?login=${encodeURIComponent(login)}`);
 
         if (!response.ok) {
             console.error(`Fehler beim Abrufen des Twitch-Users: ${response.statusText}`);
