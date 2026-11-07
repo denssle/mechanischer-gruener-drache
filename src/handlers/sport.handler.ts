@@ -158,6 +158,10 @@ export function erkenneSportLeistungen(text: string): ErkannteSportLeistung[] {
     // ("+5 km und Schwimmen +30 min").
     let uebertrag: SportActivity | null = null;
 
+    // Bis hierhin ist der Text vergeben: ein Sportwort, das schon einer Angabe zugeordnet ist,
+    // darf nicht auch noch für die nächste gelten ("Rad +5 km, +10 km Laufen, +3 km").
+    let vergebenBis = 0;
+
     for (let i = 0; i < matches.length; i++) {
         const match = matches[i];
         const wert = parseFloat(match[1].replace(',', '.'));
@@ -169,11 +173,24 @@ export function erkenneSportLeistungen(text: string): ErkannteSportLeistung[] {
         if (sportartStehtDavor) {
             // "Radfahren +5 km, Laufen +10 km"
             // Jede Sportart gehört zur folgenden Leistungsangabe.
+            const ende = match.index + match[0].length;
             const start = i === 0
                 ? 0
-                : matches[i - 1].index + matches[i - 1][0].length;
+                : Math.max(matches[i - 1].index + matches[i - 1][0].length, vergebenBis);
 
             abschnitt = text.slice(start, match.index);
+
+            // Steht davor nichts, kann die Sportart auch dahinter stehen, bis zur nächsten Angabe:
+            // "Laufen +5 km, +30 min Schwimmen". Sonst bliebe nur der Standard.
+            if (findeAktivitaetsWoerter(abschnitt).length === 0) {
+                const dahinter = text.slice(ende, matches[i + 1]?.index ?? text.length);
+                const wort = findeAktivitaetsWoerter(dahinter)[0];
+
+                if (wort) {
+                    abschnitt = dahinter;
+                    vergebenBis = ende + wort.ende;
+                }
+            }
         } else {
             // "+5 km gelaufen, danach +20 km Rad"
             // Normalerweise gehört die Sportart hinter die Leistungsangabe.
@@ -216,14 +233,23 @@ export function erkenneSportLeistungen(text: string): ErkannteSportLeistung[] {
     return leistungen;
 }
 
-// Sieht eine Nachricht nach einem gemeinten Eintrag aus, den der Parser nicht versteht?
-// "+" vor einer Zahl UND (ein Sportwort oder eine Einheit, die wir nicht kennen: "+2 h", "+500 m").
-// Bewusst nicht jedes "+1": ein "+1, bin dabei" im Sport-Kanal soll kein ❓ bekommen.
+// Sieht eine Nachricht nach einem gemeinten Eintrag aus, den der Parser nicht versteht? Entweder
+// eine Einheit, die wir nicht kennen ("+2 h", "+500 m"), oder eine Zahl direkt am Sportwort
+// ("+240 schwimmen", "Schwimmen +240"). Ein Sportwort irgendwo im Satz reicht bewusst nicht, und die
+// nackte +1 ist eine Zusage, keine Leistung: "+1 fürs Radfahren" und "+1 Laufgruppe?" bleiben ohne ❓.
 export function siehtNachSportAus(text: string): boolean {
-    if (!/\+\s*\d/.test(text)) return false;
+    if (/\+\s*\d+(?:[.,]\d+)?\s*(?:h|std|stunden?|m|meter|mins?|minute|kilometern)\b/i.test(text)) return true;
 
-    return findeAktivitaetsWoerter(text).length > 0 ||
-        /\+\s*\d+(?:[.,]\d+)?\s*(?:h|std|stunden?|m|meter)\b/i.test(text);
+    const woerter = findeAktivitaetsWoerter(text);
+
+    return [...text.matchAll(/\+\s*(\d+(?:[.,]\d+)?)\s*/g)].some(zahl => {
+        if (parseFloat(zahl[1].replace(',', '.')) === 1) return false;
+
+        const zahlEnde = zahl.index + zahl[0].length;
+
+        return woerter.some(wort =>
+            wort.index === zahlEnde || /^[\s:]*$/.test(text.slice(wort.ende, zahl.index)) && wort.ende <= zahl.index);
+    });
 }
 
 // Exportiert wie CHARAKTER_HELP/SPIELWELT_HELP, damit ein Test die km-Beispiele darin gegen den
