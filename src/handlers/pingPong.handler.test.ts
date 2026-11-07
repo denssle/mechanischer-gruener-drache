@@ -126,6 +126,8 @@ describe('PingPongHandler', () => {
             const reply = interaction.reply.mock.calls[0][0];
             expect(reply.content).toContain('<@user-a>');
             expect(reply.content).toContain('<@user-b>');
+            // Der Client pingt per Voreinstellung niemanden, die Herausforderung muss es erlauben.
+            expect(reply.allowedMentions).toEqual({users: ['user-b']});
 
             const buttons = reply.components[0].toJSON().components;
             expect(buttons.map((b: any) => b.custom_id)).toEqual([
@@ -711,6 +713,7 @@ describe('PingPongHandler', () => {
             await pingPongHandler.handleTaktikduell(interaction);
 
             const reply = interaction.reply.mock.calls[0][0];
+            expect(reply.allowedMentions).toEqual({users: ['user-b']});
             const buttons = reply.components[0].toJSON().components;
 
             expect(buttons.map((b: any) => b.custom_id)).toEqual([
@@ -1610,6 +1613,7 @@ describe('PingPongHandler', () => {
                     team1: ['111', '222'], team2: ['333', '444'], ausstehend: ['222', '333', '444'],
                 });
                 expect(antwort.components[0].components[0].data.custom_id).toBe('pingpong-doppel:dabei:111:fest');
+                expect(antwort.allowedMentions).toEqual({users: ['222', '333', '444']});
             });
 
             it('lehnt Gegner ohne Partner ab', async () => {

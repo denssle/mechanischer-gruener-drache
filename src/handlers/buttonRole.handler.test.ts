@@ -92,6 +92,7 @@ describe('ButtonRoleHandler', () => {
             expect(interaction.channel.send).toHaveBeenCalledTimes(1);
             const sent = interaction.channel.send.mock.calls[0][0];
             expect(sent.content).toBe('Klick mich');
+            expect(sent.allowedMentions).toEqual({parse: ['users', 'roles', 'everyone']});
             const button = sent.components[0].toJSON().components[0];
             expect(button.custom_id).toBe('role-toggle:role-1');
             expect(button.label).toBe('Regeln akzeptieren');

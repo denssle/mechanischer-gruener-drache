@@ -1,4 +1,4 @@
-import {Client, Collection, GatewayIntentBits, Partials} from "discord.js";
+import {Client, Collection, GatewayIntentBits, MessageMentionOptions, Partials} from "discord.js";
 import commands from './commands/index.js';
 import kontextBefehle from './commands/kontextmenues.js';
 import { Command, KontextCommand } from './types/discord.js';
@@ -12,7 +12,13 @@ declare module 'discord.js' {
     }
 }
 
+// Sicher per Voreinstellung: Der Bot pingt niemanden, außer eine Nachricht erlaubt es ausdrücklich
+// (Allowlist, siehe CLAUDE.md). Eine vergessene Stelle bleibt damit stumm, statt fremden Text pingen
+// zu lassen. repliedUser bleibt an: wer eine Antwort auf die eigene Nachricht bekommt, soll es merken.
+export const STANDARD_MENTIONS = {parse: [], repliedUser: true} satisfies MessageMentionOptions;
+
 const client = new Client({
+    allowedMentions: STANDARD_MENTIONS,
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,

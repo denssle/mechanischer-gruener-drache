@@ -142,7 +142,7 @@ client.on(Events.GuildAuditLogEntryCreate, (entry, guild) => {
 // EINZIGER TIMER für alle täglichen Aufgaben, kein zweiter Mechanismus und keine Cron-Dependency.
 const TAEGLICHER_POST_INTERVALL_MS = 60 * 1000;
 
-client.once(Events.ClientReady, async () => {
+async function starteNachLogin(): Promise<void> {
     console.log(`Eingeloggt als ${client.user?.tag} - Version ${pjson.version}`);
     try {
         await redisService.connect();
@@ -180,6 +180,12 @@ client.once(Events.ClientReady, async () => {
     } catch (error) {
         console.error('Fehler beim Initialisieren nach dem Discord-Login:', error);
     }
+}
+
+client.once(Events.ClientReady, () => {
+    starteNachLogin().catch((error) => {
+        console.error('Fehler beim Start nach dem Discord-Login:', error);
+    });
 });
 
 if (process.env.CI) {
