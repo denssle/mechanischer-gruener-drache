@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits} from 'discord.js';
+import {ChatInputCommandInteraction, Guild, GuildMember, MessageFlags, PermissionFlagsBits} from 'discord.js';
 import client from '../client.js';
 import twitchUserService from '../services/twitch.user.service.js';
 import twitchService from '../services/twitch.service.js';
@@ -39,6 +39,41 @@ export function teileInNachrichten(zeilen: string[]): string[] {
     return [...nachrichten, aktuell];
 }
 
+const TAG_MS = 24 * 60 * 60 * 1000;
+
+export interface RollenStand {
+    gesamt: number;
+    ohneRolle: number;
+    letzte30Tage: number;
+    letztesJahr: number;
+    aelter: number;
+    hingewiesen: number;
+}
+
+// Rein, damit die Aufteilung ohne Discord testbar ist. Bots zählen nicht mit: sie haben oft gar keine
+// Rolle und würden die Zahl sonst verfälschen. Ohne Beitrittsdatum (selten) landet jemand bei "älter".
+export function zaehleOhneRolle(
+    mitglieder: Iterable<GuildMember>,
+    hatRolle: (mitglied: GuildMember) => boolean,
+    hingewiesen: Set<string>,
+    jetzt = Date.now(),
+): RollenStand {
+    const stand: RollenStand = {gesamt: 0, ohneRolle: 0, letzte30Tage: 0, letztesJahr: 0, aelter: 0, hingewiesen: 0};
+    for (const mitglied of mitglieder) {
+        if (mitglied.user.bot) continue;
+        stand.gesamt++;
+        if (hatRolle(mitglied)) continue;
+
+        stand.ohneRolle++;
+        if (hingewiesen.has(mitglied.id)) stand.hingewiesen++;
+        const tage = (jetzt - (mitglied.joinedTimestamp ?? 0)) / TAG_MS;
+        if (tage <= 30) stand.letzte30Tage++;
+        else if (tage <= 365) stand.letztesJahr++;
+        else stand.aelter++;
+    }
+    return stand;
+}
+
 // Feature-übergreifende Admin-Diagnose: zeigt auf einen Blick, ob alle setzbaren Kanäle/Einstellungen
 // gesetzt UND abrufbar sind, und faltet den früheren Twitch-EventSub-Check mit ein (ersetzt
 // `/twitch diagnose`). Die ✅/⚠️/❌-Marker sind hier funktional (Admin-Debugging, dokumentierte
@@ -68,9 +103,12 @@ class DiagnoseHandler {
         lines.push(`Morgengruß-Kanal: ${await this.pruefeKanal(await greetingService.getChannel())}`);
         lines.push(`Geburtstagskanal: ${await this.pruefeKanal(await geburtstagService.getChannel())}`);
         lines.push(`Spielwelt-Ankündigungskanal: ${await this.pruefeKanal(await drachenService.getChannel())}`);
-        lines.push(`Rollenhinweis-Kanal: ${await this.pruefeKanal(await rollenhinweisService.getChannel())}`);
+        const hinweisKanal = await rollenhinweisService.getChannel();
+        lines.push(`Rollenhinweis-Kanal: ${await this.pruefeKanal(hinweisKanal)}${await this.warnungUnsichtbar(hinweisKanal)}`);
         const rollenKanal = await rollenhinweisService.getRollenKanal();
-        lines.push(`Rollenhinweis, Kanal mit dem Rollen-Button: ${rollenKanal ? await this.pruefeKanal(rollenKanal) : 'ℹ️ nicht gesetzt (optional)'}`);
+        lines.push(`Rollenhinweis, Kanal mit dem Rollen-Button: ${rollenKanal ? await this.pruefeKanal(rollenKanal) : 'ℹ️ nicht gesetzt (optional)'}${await this.warnungUnsichtbar(rollenKanal)}`);
+        const willkommensKanal = await rollenhinweisService.getWillkommensKanal();
+        lines.push(`Willkommensgruß: ${willkommensKanal ? await this.pruefeKanal(willkommensKanal) : 'ℹ️ nicht gesetzt, Neue werden nicht begrüßt'}${await this.warnungUnsichtbar(willkommensKanal)}`);
         const fehlerKanal = await fehlerMeldungService.getChannel();
         lines.push(`Kanal für Bot-Fehler: ${fehlerKanal ? await this.pruefeKanal(fehlerKanal) : 'ℹ️ nicht gesetzt (optional)'}`);
         lines.push(`Audit-Log-Zugriff: ${this.pruefeAuditLogRecht()}`);
@@ -79,6 +117,9 @@ class DiagnoseHandler {
         lines.push(event
             ? `Event: ✅ gesetzt für <t:${Math.floor(event.timestamp / 1000)}:F>`
             : 'Event: ℹ️ kein Event gesetzt (optional)');
+
+        lines.push('\n**Mitglieder ohne Rolle**');
+        await this.pruefeMitglieder(lines);
 
         lines.push('\n**Ping-Pong-Season**');
         await this.pruefeChampionRolle(lines);
@@ -94,6 +135,62 @@ class DiagnoseHandler {
         for (const nachricht of rest) {
             await interaction.followUp({content: nachricht, flags: MessageFlags.Ephemeral});
         }
+    }
+
+    // Wer draußen steht und seit wann. Frische Fälle sprechen für ein Problem beim Ankommen, alte eher
+    // für verwaiste Konten. Wer zuletzt aktiv war, verrät die Bot-API nicht, das zeigt nur Discords
+    // Vorschau "Mitglieder entfernen". Fehlertolerant, siehe pruefeCharaktere.
+    private async pruefeMitglieder(lines: string[]): Promise<void> {
+        const guild = client.guilds.cache.get(config.GUILD_ID);
+        if (!guild) {
+            lines.push('⚠️ Server nicht im Cache');
+            return;
+        }
+
+        try {
+            const hauptrolle = await this.ladeHauptrolle(guild, lines);
+            const hatRolle = hauptrolle
+                ? (mitglied: GuildMember) => mitglied.roles.cache.has(hauptrolle)
+                : (mitglied: GuildMember) => mitglied.roles.cache.some(rolle => rolle.id !== guild.id);
+            const mitglieder = await guild.members.fetch();
+            const hingewiesen = new Set(await rollenhinweisService.getHingewiesene());
+            const stand = zaehleOhneRolle(mitglieder.values(), hatRolle, hingewiesen);
+
+            lines.push(`Ohne Rolle: ${stand.ohneRolle} von ${stand.gesamt} (ohne Bots)`);
+            lines.push(`Beigetreten: ${stand.letzte30Tage} in den letzten 30 Tagen, ${stand.letztesJahr} im letzten Jahr, ${stand.aelter} früher`);
+            lines.push(`Rollenhinweis bekommen: ${stand.hingewiesen}, nie erreicht: ${stand.ohneRolle - stand.hingewiesen}`);
+        } catch (error) {
+            console.error('Konnte die Mitglieder für /diagnose nicht auswerten:', error);
+            lines.push('⚠️ Mitglieder konnten nicht ausgewertet werden.');
+        }
+    }
+
+    // Gesetzt, aber gelöscht: dann zählt wieder "gar keine Rolle", sonst stünde der ganze Server draußen.
+    private async ladeHauptrolle(guild: Guild, lines: string[]): Promise<string | null> {
+        const rolleId = await rollenhinweisService.getHauptrolle();
+        if (!rolleId) {
+            lines.push('Hauptrolle: ℹ️ nicht gesetzt (optional), gezählt wird, wer gar keine Rolle hat');
+            return null;
+        }
+        if (!guild.roles.cache.has(rolleId)) {
+            lines.push(`Hauptrolle: ⚠️ gesetzt (\`${rolleId}\`), aber nicht (mehr) vorhanden, gezählt wird, wer gar keine Rolle hat`);
+            return null;
+        }
+        lines.push(`Hauptrolle: ✅ <@&${rolleId}>`);
+        return rolleId;
+    }
+
+    // Hinweis, Gruß und Rollen-Button richten sich an Leute ohne Rolle. Sehen die den Kanal nicht, läuft
+    // alles ins Leere, ohne dass irgendwo ein Fehler auftaucht.
+    private async warnungUnsichtbar(channelId: string | null): Promise<string> {
+        const guild = client.guilds.cache.get(config.GUILD_ID);
+        if (!channelId || !guild) return '';
+
+        const kanal = await client.channels.fetch(channelId).catch(() => null);
+        if (!kanal || !('permissionsFor' in kanal)) return '';
+        return kanal.permissionsFor(guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel)
+            ? ''
+            : ' ⚠️ für Leute ohne Rolle nicht sichtbar';
     }
 
     // Ist der /config-Login scharf geschaltet? Reines Config-Lesen (kein Netz): ohne beide Secrets

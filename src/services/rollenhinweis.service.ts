@@ -6,6 +6,10 @@ const KEYS = {
     rollenKanal: 'ROLLENHINWEIS:ROLLENKANAL',
     // Set der User-IDs, die den Hinweis schon bekommen haben - jede Person genau einmal, für immer.
     hingewiesen: 'ROLLENHINWEIS:HINGEWIESEN',
+    // Kanal für den Willkommensgruß beim Beitritt. Ohne Kanal bleibt der Bot still.
+    willkommensKanal: 'ROLLENHINWEIS:WILLKOMMENSKANAL',
+    // Die Rolle, die den Server öffnet. Nur für die Zählung in /diagnose, optional.
+    hauptrolle: 'ROLLENHINWEIS:HAUPTROLLE',
 };
 
 class RollenhinweisService {
@@ -23,6 +27,30 @@ class RollenhinweisService {
 
     async getRollenKanal(): Promise<string | null> {
         return redisService.get(KEYS.rollenKanal);
+    }
+
+    async setWillkommensKanal(channelId: string): Promise<void> {
+        await redisService.set(KEYS.willkommensKanal, channelId);
+    }
+
+    async getWillkommensKanal(): Promise<string | null> {
+        return redisService.get(KEYS.willkommensKanal);
+    }
+
+    async setHauptrolle(rolleId: string): Promise<void> {
+        await redisService.set(KEYS.hauptrolle, rolleId);
+    }
+
+    async getHauptrolle(): Promise<string | null> {
+        return redisService.get(KEYS.hauptrolle);
+    }
+
+    async removeHauptrolle(): Promise<void> {
+        await redisService.delete(KEYS.hauptrolle);
+    }
+
+    async getHingewiesene(): Promise<string[]> {
+        return redisService.getSetMembers(KEYS.hingewiesen);
     }
 
     // true = die Person war noch nicht vermerkt und ist es jetzt. Ein Schritt (SADD), damit zwei

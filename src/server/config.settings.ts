@@ -114,6 +114,11 @@ const KANAL_SERVICES: Record<string, KanalService> = {
         lade: () => rollenhinweisService.getRollenKanal(),
         speichere: (id) => rollenhinweisService.setRollenKanal(id),
     },
+    'rollenhinweis-willkommen': {
+        label: 'Kanal für den Willkommensgruß',
+        lade: () => rollenhinweisService.getWillkommensKanal(),
+        speichere: (id) => rollenhinweisService.setWillkommensKanal(id),
+    },
 };
 
 export interface KanalFeld {
@@ -174,7 +179,7 @@ export function istGueltigeRolle(rolleId: string): boolean {
 }
 
 // Datengetrieben wie KANAL_SERVICES: eine neue Rollen-Einstellung ist eine Zeile, keine neue
-// Route/Handler. Beide Rollen sind optional (leerer Wert = entfernen), deshalb hat `speichere`
+// Route/Handler. Alle Rollen sind optional (leerer Wert = entfernen), deshalb hat `speichere`
 // hier `string | null` statt eines eigenen Entfernen-Pfads.
 interface RollenService {
     label: string;
@@ -196,6 +201,13 @@ const ROLLEN_SERVICES: Record<string, RollenService> = {
         speichere: (id) => id === null
             ? pingPongService.removeChampionRole()
             : pingPongService.setChampionRole(id),
+    },
+    'rollenhinweis-hauptrolle': {
+        label: 'Hauptrolle',
+        lade: () => rollenhinweisService.getHauptrolle(),
+        speichere: (id) => id === null
+            ? rollenhinweisService.removeHauptrolle()
+            : rollenhinweisService.setHauptrolle(id),
     },
 };
 
@@ -223,7 +235,7 @@ export async function ladeRollenFelder(): Promise<RollenFeld[]> {
     }));
 }
 
-// null = Rolle entfernen (beide Rollen sind optional). Sonst setzen.
+// null = Rolle entfernen (alle Rollen sind optional). Sonst setzen.
 export async function speichereRolle(schluessel: string, rolleId: string | null): Promise<void> {
     await ROLLEN_SERVICES[schluessel].speichere(rolleId);
 }

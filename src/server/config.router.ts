@@ -5,7 +5,7 @@ import config from '../../config.json' with {type: 'json'};
 import client from '../client.js';
 import greetingHandler from '../handlers/greeting.handler.js';
 import {GRATULATIONS_STUNDE} from '../handlers/geburtstag.handler.js';
-import {ROLLENHINWEIS_TEXT} from '../handlers/rollenhinweis.handler.js';
+import {ROLLENHINWEIS_TEXT, WILLKOMMENS_TEXT} from '../handlers/rollenhinweis.handler.js';
 import {getLogEntries, LogEntry} from '../services/logBuffer.service.js';
 import {
     buildAuthorizeUrl,
@@ -565,7 +565,11 @@ export function renderRollenhinweisHinweis(): string {
     return `<p class="feld-hinweis">Wer in diesem Kanal schreibt und noch gar keine Rolle hat, bekommt
     vom Bot einmalig (pro Person, für immer) diese Antwort: „${escapeHtml(ROLLENHINWEIS_TEXT)}"
     Ist der Kanal mit dem Rollen-Button gesetzt, verlinkt die Antwort ihn. Er muss auch für Leute ohne
-    Rolle sichtbar sein, sonst führt der Link ins Leere.</p>`;
+    Rolle sichtbar sein, sonst führt der Link ins Leere.</p>
+    <p class="feld-hinweis">Ist ein Kanal für den Willkommensgruß gesetzt, schreibt der Bot dort bei jedem
+    Beitritt: „Willkommen, @Name! ${escapeHtml(WILLKOMMENS_TEXT)}" Auch dieser Kanal muss ohne Rolle
+    sichtbar sein. Die Hauptrolle ist die Rolle, die den Server öffnet: /diagnose zählt, wer sie nicht hat.
+    Ohne Hauptrolle zählt es, wer gar keine Rolle hat.</p>`;
 }
 
 function configBody(bereicheHtml: string): string {
@@ -699,7 +703,8 @@ export function renderConfigSeite(daten: ConfigSeiteDaten): string {
             kanal('spielwelt-kanal') + renderSpielweltHinweis(),
             meldungFuer('spielwelt')) +
         renderBereich('rollenhinweis', 'Rollenhinweis',
-            kanal('rollenhinweis-kanal') + kanal('rollenhinweis-rollenkanal') + renderRollenhinweisHinweis(),
+            kanal('rollenhinweis-kanal') + kanal('rollenhinweis-rollenkanal') + kanal('rollenhinweis-willkommen') +
+                rolle('rollenhinweis-hauptrolle') + renderRollenhinweisHinweis(),
             meldungFuer('rollenhinweis')) +
         renderBereich('pingpong', 'Ping-Pong',
             rolle('pingpong-champion') + renderPingPongHinweis(),
@@ -822,6 +827,9 @@ const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
     'spielwelt-kanal': {bereich: 'spielwelt', text: 'Spielwelt-Ankündigungskanal gespeichert.'},
     'rollenhinweis-kanal': {bereich: 'rollenhinweis', text: 'Rollenhinweis-Kanal gespeichert.'},
     'rollenhinweis-rollenkanal': {bereich: 'rollenhinweis', text: 'Kanal mit dem Rollen-Button gespeichert.'},
+    'rollenhinweis-willkommen': {bereich: 'rollenhinweis', text: 'Kanal für den Willkommensgruß gespeichert.'},
+    'rollenhinweis-hauptrolle': {bereich: 'rollenhinweis', text: 'Hauptrolle gespeichert.'},
+    'rollenhinweis-hauptrolle-entfernt': {bereich: 'rollenhinweis', text: 'Hauptrolle entfernt.'},
     'twitch-rolle': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle gespeichert.'},
     'twitch-rolle-entfernt': {bereich: 'twitch', text: 'Twitch-Benachrichtigungsrolle entfernt.'},
     'pingpong-champion': {bereich: 'pingpong', text: 'Champion-Rolle gespeichert.'},
