@@ -449,8 +449,12 @@ describe('SportHandler', () => {
         });
     });
 
-    describe('Sportart nach der Angabe, wenn die erste davor stand', () => {
+    describe('Stücke: n-te Angabe bekommt das n-te Sportwort', () => {
         it.each([
+            // Jede Angabe wird gutgeschrieben, auch mit einem Wort, das der Bot nicht kennt.
+            ['+40 km Rad, +60 min Yoga', [{aktivitaet: 'radfahren', kilometer: 40}, {aktivitaet: 'krafttraining', minuten: 60}]],
+            ['+12,5 km Rad, +30 min Schwimmen', [{aktivitaet: 'radfahren', kilometer: 12.5}, {aktivitaet: 'schwimmen', minuten: 30}]],
+            ['+5 km\n+30 min Schwimmen', [{aktivitaet: 'laufen', kilometer: 5}, {aktivitaet: 'schwimmen', minuten: 30}]],
             ['Laufen +5 km, +30 min Schwimmen', [{aktivitaet: 'laufen', kilometer: 5}, {aktivitaet: 'schwimmen', minuten: 30}]],
             ['Gelaufen +5 km und +10 km Rad', [{aktivitaet: 'laufen', kilometer: 5}, {aktivitaet: 'radfahren', kilometer: 10}]],
             // Ein Wort gilt für genau eine Angabe, die dritte fällt auf den Standard zurück.
