@@ -9,6 +9,7 @@ import loggingService from '../services/logging.service.js';
 import greetingService from '../services/greeting.service.js';
 import geburtstagService from '../services/geburtstag.service.js';
 import drachenService from '../services/drachen.service.js';
+import rollenhinweisService from '../services/rollenhinweis.service.js';
 import eventService from '../services/event.service.js';
 import pingPongService from '../services/pingPong.service.js';
 import bashService, {BashAenderung, parseIsoDatum} from '../services/bash.service.js';
@@ -96,6 +97,11 @@ const KANAL_SERVICES: Record<string, KanalService> = {
         label: 'Spielwelt-Ankündigungskanal',
         lade: () => drachenService.getChannel(),
         speichere: (id) => drachenService.setChannel(id),
+    },
+    'rollenhinweis-kanal': {
+        label: 'Rollenhinweis-Kanal',
+        lade: () => rollenhinweisService.getChannel(),
+        speichere: (id) => rollenhinweisService.setChannel(id),
     },
 };
 

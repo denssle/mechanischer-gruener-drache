@@ -14,6 +14,7 @@ const character = vi.hoisted(() => ({ getAllLinks: vi.fn(), getRoster: vi.fn() }
 const oauth = vi.hoisted(() => ({ oauthConfigured: vi.fn() }));
 const geburtstag = vi.hoisted(() => ({ getChannel: vi.fn(async () => null) }));
 const drachen = vi.hoisted(() => ({ getChannel: vi.fn(async () => null) }));
+const rollenhinweis = vi.hoisted(() => ({ getChannel: vi.fn(async () => null) }));
 const session = vi.hoisted(() => ({ sessionConfigured: vi.fn() }));
 const pingPong = vi.hoisted(() => ({ getLastSeason: vi.fn(), getChampionRole: vi.fn() }));
 const channelsFetch = vi.hoisted(() => vi.fn());
@@ -27,6 +28,7 @@ vi.mock('../services/logging.service.js', () => ({ default: logging }));
 vi.mock('../services/greeting.service.js', () => ({ default: greeting }));
 vi.mock('../services/geburtstag.service.js', () => ({ default: geburtstag }));
 vi.mock('../services/drachen.service.js', () => ({ default: drachen }));
+vi.mock('../services/rollenhinweis.service.js', () => ({ default: rollenhinweis }));
 vi.mock('../services/event.service.js', () => ({ default: event }));
 vi.mock('../services/pingPong.service.js', () => ({ default: pingPong }));
 vi.mock('../services/discordOAuth.service.js', () => oauth);

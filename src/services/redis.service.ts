@@ -116,8 +116,10 @@ class RedisService {
         return Boolean(await this.#client.hExists(key, field));
     }
 
-    async addToSet(key: string, value: string): Promise<void> {
-        await this.#client.sAdd(key, value);
+    // Gibt zurück, ob der Wert neu im Set ist (SADD zählt die hinzugefügten Elemente) - Prüfen und
+    // Eintragen in einem Schritt, für "nur beim ersten Mal"-Logik ohne Wettlauf.
+    async addToSet(key: string, value: string): Promise<boolean> {
+        return (await this.#client.sAdd(key, value)) > 0;
     }
 
     async getSetMembers(key: string): Promise<string[]> {
