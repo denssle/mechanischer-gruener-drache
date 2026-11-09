@@ -10,7 +10,13 @@ mkdir -p "$ziel"
 chmod 700 "$ziel"
 
 datei="$ziel/redis-$(date +%F).rdb"
-redis-cli -s "$HOME/.redis/sock" --rdb "$datei"
+# redis-cli meldet auch den Erfolg vierzeilig auf stderr, und Cron mailt jede Ausgabe.
+# Deshalb nur im Fehlerfall durchreichen: Stille heißt "lief", eine Mail heißt "schau nach".
+if ! ausgabe=$(redis-cli -s "$HOME/.redis/sock" --rdb "$datei" 2>&1); then
+    echo "redis-cli --rdb ist gescheitert:" >&2
+    echo "$ausgabe" >&2
+    exit 1
+fi
 chmod 600 "$datei"
 
 # Ein leerer Dump soll die alten Stände nicht verdrängen.
