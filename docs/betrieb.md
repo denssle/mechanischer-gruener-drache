@@ -18,6 +18,8 @@ Die Redis-Daten (Zitate, Geburtstage, Sportdaten, Ruhmeshalle) liegen nur auf de
 
 Danach einmal von Hand laufen lassen und prüfen, ob eine Datei in `~/backups/drache/` liegt.
 
+**Mails von Cron.** Cron mailt jede Ausgabe eines Jobs. Das Skript schweigt deshalb, solange es klappt (die Erfolgsmeldungen von `redis-cli --rdb` werden geschluckt, bis 2026-11-09 kamen sie jede Nacht als Mail). Eine Mail vom Backup heißt also: etwas ist schiefgegangen, die Meldung steht drin. Kein `MAILTO=""` setzen, sonst geht auch der Fehlerfall verloren.
+
 **Zurückspielen.** Das Vorgehen ist noch nicht geübt, beim ersten Mal also mit Ruhe und einer Kopie des aktuellen Standes:
 
 1. `supervisorctl stop drache`
