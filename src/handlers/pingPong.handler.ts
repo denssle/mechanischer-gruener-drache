@@ -31,8 +31,8 @@ const COOLDOWN_SECONDS = 30;
 // holen und zeigt bei allen, die sie gerade nicht kennt, "Unbekannter Benutzer" - in einer
 // Rundlauf-Lobby mit 8 Leuten standen 8 IDs im Text und 0 im mentions-Feld. Die Freigabe füllt
 // das Feld. Sie gilt NUR für Bearbeitungen (Lobby-Stand, Absage, Ergebnis), weil eine Bearbeitung
-// niemanden benachrichtigt - UNGEPRÜFTE ANNAHME (Discord dokumentiert es nicht, nur Community-
-// Berichte; Stand 2026-11-15, siehe docs/features/pingpong.md). Eine neue Nachricht würde mit
+// niemanden benachrichtigt - live geprüft am 2026-11-15 (Rundlauf mit 5 Leuten), offiziell
+// dokumentiert ist es nicht, siehe docs/features/pingpong.md. Eine neue Nachricht würde mit
 // derselben Freigabe pingen; dort stehen Namen als Text (anzeigename.service).
 // Freigegeben werden nur die User-IDs, die im Text stehen - Rollen und @everyone bleiben zu.
 export function erwaehnteUser(content: string): MessageMentionOptions {
