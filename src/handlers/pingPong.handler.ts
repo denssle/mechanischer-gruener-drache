@@ -6,8 +6,10 @@ import {
     ChatInputCommandInteraction,
     Client,
     DiscordAPIError,
+    InteractionUpdateOptions,
     Message,
     MessageFlags,
+    MessageMentionOptions,
     RESTJSONErrorCodes
 } from "discord.js";
 import redisService from "../services/redis.service.js";
@@ -17,10 +19,37 @@ import pingPongService, {PING_PONG_KEYS} from "../services/pingPong.service.js";
 // Nur für das persönliche Morgengruß-Emoji in der Bestenliste. greeting.handler nutzt client
 // ausschließlich in Methodenkörpern - die Zirkular-Import-Falle greift also nicht.
 import greetingHandler, {emojiFuerNachricht} from "./greeting.handler.js";
+import {warneUndWeiter} from "../services/fehler.service.js";
 
 // Nach jeder Herausforderung darf man erst nach Ablauf dieser Zeit wieder aufschlagen -
 // verhindert, dass jemand den halben Server in Serie herausfordert.
 const COOLDOWN_SECONDS = 30;
+
+// Wer in einer BEARBEITETEN Nachricht steht, darf "erwähnt" werden. Hintergrund (gemessen
+// 2026-11-15): seit der Client-Voreinstellung {parse: []} (STANDARD_MENTIONS) lässt Discord das
+// mentions-Feld der Nachricht leer, die App muss die Namen dann aus ihrem eigenen Speicher
+// holen und zeigt bei allen, die sie gerade nicht kennt, "Unbekannter Benutzer" - in einer
+// Rundlauf-Lobby mit 8 Leuten standen 8 IDs im Text und 0 im mentions-Feld. Die Freigabe füllt
+// das Feld. Sie gilt NUR für Bearbeitungen (Lobby-Stand, Absage, Ergebnis), denn eine
+// Bearbeitung benachrichtigt niemanden; eine neue Nachricht würde mit derselben Freigabe pingen.
+// Freigegeben werden nur die User-IDs, die im Text stehen - Rollen und @everyone bleiben zu.
+export function erwaehnteUser(content: string): MessageMentionOptions {
+    return {users: [...new Set([...content.matchAll(/<@!?(\d+)>/g)].map(treffer => treffer[1]))]};
+}
+
+// Jede Bearbeitung einer Ping-Pong-Nachricht läuft hierüber, siehe erwaehnteUser.
+function bearbeite(interaction: ButtonInteraction, inhalt: InteractionUpdateOptions & {content: string}) {
+    return interaction.update({...inhalt, allowedMentions: erwaehnteUser(inhalt.content)});
+}
+
+// Name für die Ranglisten aus den gespeicherten Userdaten. Fehlt er, steht die nackte ID in der
+// Liste - das soll auffallen: ins Log mit der ID, damit sich nachsehen lässt, wer das ist (z.B.
+// jemand, der vor dem Mitglieder-Abgleich gespielt hat oder dessen Daten verloren gingen).
+function anzeigeNameOderId(user: {displayName?: string} | null | undefined, userId: string, liste: string): string {
+    if (user?.displayName) return user.displayName;
+    console.warn(`Ping-Pong (${liste}): kein gespeicherter Name für ${userId} - zeige die ID.`);
+    return userId;
+}
 
 // Duell: gespielt wird auf POINTS_TO_WIN gewonnene Ballwechsel (je 50/50, wie das Solo-Spiel).
 // Der Sieger bekommt einen Punkt für die Bestenliste, der Verlierer verliert einen - aber
@@ -472,7 +501,7 @@ class PingPongHandler {
             }
 
             if (aktion === 'ablehnen') {
-                return interaction.update({
+                return bearbeite(interaction, {
                     content: `<@${gegnerId}> lehnt die Herausforderung von <@${herausfordererId}> ab. Kein Duell heute.`,
                     components: []
                 });
@@ -486,7 +515,7 @@ class PingPongHandler {
                 await interaction.reply({
                     content: 'Das Duell konnte nicht ausgetragen werden.',
                     flags: MessageFlags.Ephemeral
-                }).catch(() => {});
+                }).catch(warneUndWeiter('Ping-Pong: Fehlermeldung zum Duell nicht zustellbar'));
             }
         }
     }
@@ -603,7 +632,7 @@ class PingPongHandler {
             }
 
             if (gegnerAktion === 'ablehnen') {
-                return interaction.update({
+                return bearbeite(interaction, {
                     content: `<@${gegnerId}> lehnt die Herausforderung von <@${herausfordererId}> ab. Kein Duell heute.`,
                     components: []
                 });
@@ -618,7 +647,7 @@ class PingPongHandler {
                 await interaction.reply({
                     content: 'Das Duell konnte nicht ausgetragen werden.',
                     flags: MessageFlags.Ephemeral
-                }).catch(() => {});
+                }).catch(warneUndWeiter('Ping-Pong: Fehlermeldung zum Duell nicht zustellbar'));
             }
         }
     }
@@ -833,7 +862,7 @@ class PingPongHandler {
                         flags: MessageFlags.Ephemeral
                     });
                 }
-                await interaction.update({
+                await bearbeite(interaction, {
                     content: `<@${eroeffnerId}> sagt den Rundlauf ab. Die Platte bleibt heute leer.`,
                     components: []
                 });
@@ -853,7 +882,7 @@ class PingPongHandler {
                         flags: MessageFlags.Ephemeral
                     });
                 }
-                return interaction.update({
+                return bearbeite(interaction, {
                     content: this.baueLobbyText(eroeffnerId, [...teilnehmer, interaction.user.id]),
                     components: [this.baueRundlaufButtons(eroeffnerId)],
                 });
@@ -874,7 +903,7 @@ class PingPongHandler {
                         flags: MessageFlags.Ephemeral
                     });
                 }
-                return interaction.update({
+                return bearbeite(interaction, {
                     content: this.baueLobbyText(eroeffnerId, teilnehmer.filter(id => id !== interaction.user.id)),
                     components: [this.baueRundlaufButtons(eroeffnerId)],
                 });
@@ -904,7 +933,7 @@ class PingPongHandler {
                 await interaction.reply({
                     content: 'Der Rundlauf konnte nicht ausgetragen werden.',
                     flags: MessageFlags.Ephemeral
-                }).catch(() => {});
+                }).catch(warneUndWeiter('Ping-Pong: Fehlermeldung zum Rundlauf nicht zustellbar'));
             }
         }
     }
@@ -924,7 +953,7 @@ class PingPongHandler {
         }
 
         try {
-            await interaction.update({content: texte.laeuft, components: []});
+            await bearbeite(interaction, {content: texte.laeuft, components: []});
         } catch (error) {
             await redisService.delete(lock);
             throw error;
@@ -933,13 +962,14 @@ class PingPongHandler {
         await nachButtons?.();
 
         try {
-            await interaction.editReply(await auswerten());
+            const ergebnis = await auswerten();
+            await interaction.editReply({...ergebnis, allowedMentions: erwaehnteUser(ergebnis.content)});
         } catch (error) {
             console.error('Fehler beim Auswerten eines Ping-Pong-Spiels:', error);
             await interaction.editReply(
                 'Beim Auswerten ist etwas schiefgelaufen, das Spiel ist beendet. '
                 + 'Ein Teil der Punkte kann schon gebucht sein.'
-            ).catch(() => {});
+            ).catch(warneUndWeiter('Ping-Pong: Hinweis auf gescheiterte Auswertung nicht zustellbar'));
         }
     }
 
@@ -1102,7 +1132,7 @@ class PingPongHandler {
                         flags: MessageFlags.Ephemeral
                     });
                 }
-                return interaction.update({
+                return bearbeite(interaction, {
                     content: `<@${eroeffnerId}> sagt das Doppel ab. Die Platte bleibt heute leer.`,
                     components: []
                 });
@@ -1125,7 +1155,7 @@ class PingPongHandler {
                 await interaction.reply({
                     content: 'Das Doppel konnte nicht ausgetragen werden.',
                     flags: MessageFlags.Ephemeral
-                }).catch(() => {});
+                }).catch(warneUndWeiter('Ping-Pong: Fehlermeldung zum Doppel nicht zustellbar'));
             }
         }
     }
@@ -1138,7 +1168,7 @@ class PingPongHandler {
             if (!teilnehmer.includes(userId)) {
                 return interaction.reply({content: 'Du stehst gar nicht an der Platte.', flags: MessageFlags.Ephemeral});
             }
-            return interaction.update({
+            return bearbeite(interaction, {
                 content: this.baueOffenenDoppelText(eroeffnerId, teilnehmer.filter(id => id !== userId)),
                 components: [this.baueDoppelButtons(eroeffnerId, 'offen')],
             });
@@ -1150,7 +1180,7 @@ class PingPongHandler {
 
         const neu = [...teilnehmer, userId];
         if (neu.length < DOPPEL_GROESSE) {
-            return interaction.update({
+            return bearbeite(interaction, {
                 content: this.baueOffenenDoppelText(eroeffnerId, neu),
                 components: [this.baueDoppelButtons(eroeffnerId, 'offen')],
             });
@@ -1169,7 +1199,7 @@ class PingPongHandler {
         if (aktion === 'raus') {
             // Das Team ist fest - springt der Partner ab, gibt es kein Doppel mehr.
             if (userId === partnerId) {
-                return interaction.update({
+                return bearbeite(interaction, {
                     content: `<@${partnerId}> springt ab – das Doppel mit <@${eroeffnerId}> fällt aus.`,
                     components: []
                 });
@@ -1178,7 +1208,7 @@ class PingPongHandler {
                 return interaction.reply({content: 'Du bist gar nicht dabei.', flags: MessageFlags.Ephemeral});
             }
             // Ein Gegner (eingeladen oder freiwillig) gibt seinen Platz frei, der Rest bleibt stehen.
-            return interaction.update({
+            return bearbeite(interaction, {
                 content: this.baueFestenDoppelText(eroeffnerId, {
                     team1: lobby.team1,
                     team2: lobby.team2.filter(id => id !== userId),
@@ -1203,7 +1233,7 @@ class PingPongHandler {
         }
 
         if (neu.team2.length < 2 || neu.ausstehend.length > 0) {
-            return interaction.update({
+            return bearbeite(interaction, {
                 content: this.baueFestenDoppelText(eroeffnerId, neu),
                 components: [this.baueDoppelButtons(eroeffnerId, 'fest')],
             });
@@ -1376,8 +1406,7 @@ class PingPongHandler {
 
             const message = highscore
                 .map((item, index) => {
-                    const user = users[index];
-                    const displayName = user?.displayName ?? item.value;
+                    const displayName = anzeigeNameOderId(users[index], item.value, 'Bestenliste');
                     const serie = serien[index] >= MIN_SERIE ? ` (${serien[index]} in Folge)` : '';
                     const emoji = emojiFuerNachricht(emojis[item.value], interaction.guild, item.value);
                     return `${index + 1}. ${emoji} ${displayName} - ${item.score}${serie}`;
@@ -1450,7 +1479,7 @@ class PingPongHandler {
 
             const message = rekorde
                 .map((item, index) => {
-                    const displayName = users[index]?.displayName ?? item.value;
+                    const displayName = anzeigeNameOderId(users[index], item.value, liste.ueberschrift.replaceAll('*', ''));
                     const emoji = emojiFuerNachricht(emojis[item.value], interaction.guild, item.value);
                     return `${index + 1}. ${emoji} ${displayName} - **${item.score}** ${liste.einheit}`;
                 })

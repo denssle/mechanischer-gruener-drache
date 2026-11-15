@@ -49,6 +49,7 @@ import redisService from "../services/redis.service.js";
 import userService from "../services/user.service.js";
 import greetingHandler from "./greeting.handler.js";
 import pingPongHandler, {
+    erwaehnteUser,
     DUELL_FLAVORS,
     entscheideTaktik,
     formatDoppelZeilen,
@@ -83,6 +84,16 @@ describe('PingPongHandler', () => {
         vi.mocked(redisService.increment).mockResolvedValue(1);
         // Standard: der Doppel-Start-Lock ist frei.
         vi.mocked(redisService.setIfAbsent).mockResolvedValue(true);
+    });
+
+    describe('erwaehnteUser', () => {
+        it('gibt genau die User-IDs aus dem Text frei, jede einmal', () => {
+            expect(erwaehnteUser('<@111> schlägt <@!222> und <@111>')).toEqual({users: ['111', '222']});
+        });
+
+        it('gibt weder Rollen noch @everyone frei', () => {
+            expect(erwaehnteUser('<@&333> @everyone @here')).toEqual({users: []});
+        });
     });
 
     describe('Flavor-Text', () => {
@@ -1331,6 +1342,15 @@ describe('PingPongHandler', () => {
                 expect(parseTeilnehmer(interaction.update.mock.calls[0][0].content)).toEqual(['111', '222']);
             });
 
+            // Ohne Freigabe bleibt das mentions-Feld leer und die App zeigt "Unbekannter Benutzer".
+            it('gibt bei der Bearbeitung alle Leute an der Platte als Erwähnung frei', async () => {
+                const interaction = mockButton('pingpong-rundlauf:beitreten:111', '222', lobbyInhalt(['111']));
+
+                await pingPongHandler.handleRundlaufButton(interaction);
+
+                expect(interaction.update.mock.calls[0][0].allowedMentions).toEqual({users: ['111', '222']});
+            });
+
             it('lässt niemanden doppelt an die Platte', async () => {
                 const interaction = mockButton('pingpong-rundlauf:beitreten:111', '222',
                     lobbyInhalt(['111', '222']));
@@ -1416,6 +1436,7 @@ describe('PingPongHandler', () => {
                 const ergebnis = interaction.editReply.mock.calls[0][0];
                 expect(redisService.removeFromSortedSet).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_OFFEN', 'g1:c1:m1');
                 expect(ergebnis.components).toEqual([]);
+                expect([...ergebnis.allowedMentions.users].sort()).toEqual(['111', '222', '333']);
                 // Jeder Teilnehmer steht mit einem Platz in der Ergebnisliste.
                 expect(ergebnis.content).toContain('1. <@');
                 expect(ergebnis.content).toContain('3. <@');

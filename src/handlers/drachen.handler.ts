@@ -2,6 +2,7 @@ import {TextChannel} from 'discord.js';
 import client from '../client.js';
 import drachenService from '../services/drachen.service.js';
 import characterService, {CharacterLink, findLinkForName} from '../services/character.service.js';
+import {warneUndWeiter} from '../services/fehler.service.js';
 
 // Drachentötungs-Gratulation. Einen Dragonkill-Zähler gibt es öffentlich NICHT (die Kriegerliste
 // hat nur Gilde/Name/Ort/Stufe/Rasse/Geschlecht/Lebt/"Zuletzt da"), aber einen sauberen Proxy:
@@ -142,12 +143,8 @@ class DrachenHandler {
         const channelId = await drachenService.getChannel();
         if (!channelId) return null;
 
-        const channel = await client.channels.fetch(channelId).catch(() => null) as TextChannel | null;
-        if (!channel) {
-            console.warn(`Spielwelt-Ankündigungskanal ${channelId} nicht abrufbar - Gratulation wird verworfen.`);
-            return null;
-        }
-        return channel;
+        return await client.channels.fetch(channelId).catch(warneUndWeiter(
+            `Spielwelt-Ankündigungskanal ${channelId} nicht abrufbar, Gratulation wird verworfen`)) as TextChannel | null;
     }
 }
 

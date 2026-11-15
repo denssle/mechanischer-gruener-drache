@@ -7,6 +7,7 @@ import {
 import client from '../client.js';
 import greetingService from '../services/greeting.service.js';
 import {formatTag} from '../services/zeit.service.js';
+import {warneUndWeiter} from '../services/fehler.service.js';
 
 // Morgengruß-Tradition: die erste Nachricht JEDER Person am Tag im Morgengruß-Kanal wird nur per
 // Reaktion begrüßt (kein eigener Post - passt zum Blåhaj-/Sport-Auto-Listener-Muster). Die Emojis
@@ -208,7 +209,8 @@ class GreetingHandler {
         const channelId = await greetingService.getChannel();
         if (!channelId) return null;
 
-        const channel = await client.channels.fetch(channelId).catch(() => null);
+        const channel = await client.channels.fetch(channelId).catch(warneUndWeiter(
+            `Morgengruß-Kanal ${channelId} nicht abrufbar`));
         return channel && channel.isTextBased() ? channel : null;
     }
 }

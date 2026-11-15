@@ -3,6 +3,7 @@ import redisService from "../services/redis.service.js";
 import pingPongService, {PING_PONG_KEYS} from "../services/pingPong.service.js";
 import client from "../client.js";
 import config from "../../config.json" with {type: "json"};
+import {warneUndWeiter} from '../services/fehler.service.js';
 
 // Season-Abrechnung des Ping-Pong-Features - bewusst eine eigene Datei neben pingPong.handler.ts
 // (Duelle): die beiden teilen sich nur die Keys aus pingPong.service.ts, sonst nichts. client wird
@@ -159,11 +160,9 @@ class PingPongSeasonHandler {
 
             // Ist der Sieger nicht mehr auf dem Server, gibt es keine Rolle - der
             // Ruhmeshallen-Eintrag steht trotzdem schon.
-            const sieger = await guild.members.fetch(siegerId).catch(() => null);
-            if (!sieger) {
-                console.warn(`Ping-Pong-Champion ${siegerId} ist nicht mehr auf dem Server - Rolle nicht vergeben.`);
-                return;
-            }
+            const sieger = await guild.members.fetch(siegerId).catch(warneUndWeiter(
+                `Ping-Pong-Champion ${siegerId} nicht abrufbar (nicht mehr auf dem Server?), Rolle nicht vergeben`));
+            if (!sieger) return;
             await sieger.roles.add(rolle);
         } catch (error) {
             console.error('Fehler beim Vergeben der Ping-Pong-Champion-Rolle:', error);

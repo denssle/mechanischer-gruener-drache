@@ -8,6 +8,7 @@ import {
     MessageFlags,
     PermissionFlagsBits
 } from 'discord.js';
+import {warneUndWeiter} from '../services/fehler.service.js';
 
 // Die Rolle steckt direkt in der customId des Buttons (role-toggle:{roleId}) - dadurch
 // braucht es keinen Redis-State, und die Bindung überlebt jeden Bot-Neustart automatisch.
@@ -126,7 +127,7 @@ class ButtonRoleHandler {
                 await interaction.reply({
                     content: 'Das hat nicht geklappt. Bitte melde dich bei einem Admin.',
                     flags: MessageFlags.Ephemeral
-                }).catch(() => {});
+                }).catch(warneUndWeiter('Button-Rolle: Fehlermeldung nicht zustellbar'));
             }
         }
     }

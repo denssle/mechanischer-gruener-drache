@@ -4,6 +4,7 @@ import config from '../../config.json' with {type: 'json'};
 import geburtstagService, {Geburtstag} from '../services/geburtstag.service.js';
 import {ALTERS_ZEILEN, GEBURTSTAGS_GLUECKWUENSCHE} from '../data/geburtstagsglueckwuensche.js';
 import {formatTag} from '../services/zeit.service.js';
+import {warneUndWeiter} from '../services/fehler.service.js';
 
 // Geburtstagskalender: jede:r trägt den eigenen Geburtstag selbst ein (Jahr optional), der Bot
 // gratuliert am Tag im konfigurierten Kanal (gesetzt über /config). Angestoßen vom EINEN 60-s-Timer
@@ -302,12 +303,8 @@ class GeburtstagHandler {
             return null;
         }
 
-        const channel = await client.channels.fetch(channelId).catch(() => null) as TextChannel | null;
-        if (!channel) {
-            console.warn(`Geburtstagskanal ${channelId} nicht abrufbar - Glückwunsch wird zurückgestellt.`);
-            return null;
-        }
-        return channel;
+        return await client.channels.fetch(channelId).catch(warneUndWeiter(
+            `Geburtstagskanal ${channelId} nicht abrufbar, Glückwunsch wird zurückgestellt`)) as TextChannel | null;
     }
 }
 
