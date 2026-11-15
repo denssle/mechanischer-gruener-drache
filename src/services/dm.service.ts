@@ -1,6 +1,7 @@
 import client from '../client.js';
 
-// Gemeinsamer DM-Versand für die Opt-in-Features (Anstupser-Abo, Beobachtungsliste). Stand
+// Gemeinsamer DM-Versand für die Opt-in-Features (Anstupser-Abo, Beobachtungsliste) und die
+// einmalige, von Hand gestartete Rollen-Erinnerung. Stand
 // vorher nur im Anstupser-Handler; mit dem zweiten Nutzer gehört er an eine Stelle - dieselbe
 // Überlegung wie bei PING_PONG_KEYS im Ping-Pong-Service.
 //

@@ -21,7 +21,7 @@ Ein Discord-Bot für den Discord-Server von [LotgD](http://www.lotgd.de/), gesch
 - **Beobachtungsliste**: `/beobachten hinzufuegen` schickt eine DM, sobald ein bestimmter Charakter im Spiel online geht. Beobachten lässt sich nur, wer selbst zugestimmt hat (`/charakter beobachtbar`).
 - **Anstupser**: Wer sich mit `/anstupser an` anmeldet, bekommt täglich um 13:37 eine DM. Rein freiwillig.
 - **Morgengruß**: Die erste Nachricht einer Person am Tag im Morgengruß-Kanal bekommt 👋 und ein persönliches Emoji.
-- **Rollenhinweis**: Wer im konfigurierten Kanal noch ohne Rolle schreibt, bekommt einmalig einen Hinweis, wo es Rollen gibt. Neue Mitglieder werden beim Beitritt begrüßt und auf die Rollen hingewiesen.
+- **Rollenhinweis**: Wer im konfigurierten Kanal noch ohne Rolle schreibt, bekommt einmalig einen Hinweis, wo es Rollen gibt. Neue Mitglieder werden beim Beitritt begrüßt und auf die Rollen hingewiesen. Auf `/config` lässt sich einmalig eine Erinnerung per DM an alle ohne Hauptrolle starten.
 - **Tipps & Nettigkeiten**: Selten (~15 %, höchstens einmal pro Person und Tag) hängt der Bot an eine ohnehin ausgelöste Antwort eine kleine, **nur für dich sichtbare** Zeile – meist ein Tipp zu einem Befehl, den man vielleicht noch nicht kennt, manchmal einfach ein netter Gruß.
 
 ## 💬 Befehle
