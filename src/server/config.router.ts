@@ -662,7 +662,7 @@ export function renderRollenDm(stand: RollenDmStand, csrfToken: string): string 
         return `${verlauf}<p class="feld-hinweis">Gerade gibt es niemanden anzuschreiben.</p>`;
     }
     return `${verlauf}<p class="feld-hinweis">Ein Start schreibt ${stand.wuerdenAngeschrieben} Personen an, die keine
-        Hauptrolle haben und seit mindestens 30 Tagen da sind. Jede bekommt diese DM höchstens einmal: „${escapeHtml(stand.text)}"</p>
+        Hauptrolle haben und seit mindestens 30 Tagen da sind. Jede bekommt diese DM höchstens einmal: „${escapeHtml(stand.text)}“</p>
         <form class="setting" method="post" action="/config/rollen-dm">
             <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
             <input type="hidden" name="aktion" value="starten">
@@ -868,7 +868,6 @@ const MELDUNGEN: Record<string, {bereich: string; text: string}> = {
     'rollenhinweis-rollenkanal': {bereich: 'rollenhinweis', text: 'Kanal mit dem Rollen-Button gespeichert.'},
     'rollenhinweis-willkommen': {bereich: 'rollenhinweis', text: 'Kanal für den Willkommensgruß gespeichert.'},
     'rollenhinweis-willkommen-entfernt': {bereich: 'rollenhinweis', text: 'Willkommensgruß abgeschaltet.'},
-    'rollen-dm-gestartet': {bereich: 'rollenhinweis', text: 'Runde gestartet.'},
     'rollen-dm-abgebrochen': {bereich: 'rollenhinweis', text: 'Runde abgebrochen, offene DMs gehen nicht mehr raus.'},
     'rollenhinweis-hauptrolle': {bereich: 'rollenhinweis', text: 'Hauptrolle gespeichert.'},
     'rollenhinweis-hauptrolle-entfernt': {bereich: 'rollenhinweis', text: 'Hauptrolle entfernt.'},
@@ -898,6 +897,17 @@ export function leseMeldung(req: Request): Meldung | undefined {
     const gespeichert = req.query.gespeichert;
     if (typeof gespeichert === 'string' && Object.prototype.hasOwnProperty.call(MELDUNGEN, gespeichert)) {
         return {...MELDUNGEN[gespeichert], art: 'ok'};
+    }
+    // Wie ?gelernt: als Zahl gelesen, nie roh eingesetzt.
+    const rollenDm = Number(req.query.rollenDm);
+    if (typeof req.query.rollenDm === 'string' && Number.isInteger(rollenDm) && rollenDm >= 0) {
+        return {
+            bereich: 'rollenhinweis',
+            text: rollenDm === 0
+                ? 'Runde gestartet, aber gerade gibt es niemanden anzuschreiben.'
+                : `Runde gestartet: ${rollenDm} Personen stehen in der Warteschlange.`,
+            art: 'ok',
+        };
     }
     const gelernt = Number(req.query.gelernt);
     if (typeof req.query.gelernt === 'string' && Number.isFinite(gelernt)) {
@@ -1228,10 +1238,8 @@ export async function handleBashSpeichern(req: Request, res: Response): Promise<
     res.redirect('/config/bash?gespeichert=1');
 }
 
-// Morgengruß: stößt den Historien-Scan an (früher /morgengruss lernen). CSRF zuerst, dann scannen -
-// der Scan (greetingHandler.lerneAusHistorie) löst den Kanal selbst auf und liefert null, wenn keiner
-// gesetzt/abrufbar ist. Ergebnis per Redirect (PRG), damit ein Reload nicht erneut scannt.
-// Das Häkchen wird hier noch einmal geprüft: `required` im Formular ist nur Komfort.
+// Einmalige Rollen-Erinnerung per DM. Das Häkchen wird hier noch einmal geprüft: `required` im Formular
+// ist nur Komfort. Wer startet oder abbricht, geht als ID ins Log (siehe rollenDmHandler.starte).
 export async function handleRollenDm(req: Request, res: Response): Promise<void> {
     const userId = res.locals.configUserId as string;
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -1243,7 +1251,7 @@ export async function handleRollenDm(req: Request, res: Response): Promise<void>
     }
 
     if (body.aktion === 'abbrechen') {
-        await rollenDmHandler.brichAb();
+        await rollenDmHandler.brichAb(userId);
         zurueckZumBereich(res, 'rollen-dm-abgebrochen');
         return;
     }
@@ -1253,13 +1261,18 @@ export async function handleRollenDm(req: Request, res: Response): Promise<void>
         return;
     }
 
-    if (!await rollenDmHandler.starte()) {
+    const ausstehend = await rollenDmHandler.starte(userId);
+    if (ausstehend === null) {
         res.status(400).type('html').send(renderPage(eingabeFehlerBody('Hauptrolle oder Kanal mit dem Rollen-Button fehlen.')));
         return;
     }
-    zurueckZumBereich(res, 'rollen-dm-gestartet');
+    // Die tatsächliche Zahl, nicht die aus der Vorschau: der Start holt die Mitglieder frisch.
+    res.redirect(`/config?rollenDm=${ausstehend}#bereich-rollenhinweis`);
 }
 
+// Morgengruß: stößt den Historien-Scan an (früher /morgengruss lernen). CSRF zuerst, dann scannen -
+// der Scan (greetingHandler.lerneAusHistorie) löst den Kanal selbst auf und liefert null, wenn keiner
+// gesetzt/abrufbar ist. Ergebnis per Redirect (PRG), damit ein Reload nicht erneut scannt.
 export async function handleMorgengrussLernen(req: Request, res: Response): Promise<void> {
     const userId = res.locals.configUserId as string;
     const body = (req.body ?? {}) as Record<string, unknown>;

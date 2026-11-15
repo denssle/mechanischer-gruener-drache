@@ -1,8 +1,9 @@
-import {Guild, GuildMember, Role} from 'discord.js';
+import {DiscordAPIError, Guild, GuildMember, RESTJSONErrorCodes, Role} from 'discord.js';
 import client from '../client.js';
 import rollenDmService from '../services/rollenDm.service.js';
 import rollenhinweisService from '../services/rollenhinweis.service.js';
 import {sendeDm} from '../services/dm.service.js';
+import {beschreibeFehler} from '../services/fehler.service.js';
 import config from '../../config.json' with {type: 'json'};
 
 // Einmalige Erinnerung per DM an alle, denen die Hauptrolle fehlt. Das ist die einzige Ausnahme von
@@ -28,8 +29,8 @@ export function istVersandZeit(datum: Date): boolean {
 
 // Voller Link statt <#id>: Kanal-Erwähnungen sind in DMs nicht verlässlich klickbar.
 export function rollenDmText(serverName: string, rollenName: string, link: string): string {
-    return `Hallo! Du bist auf dem Server „${serverName}", siehst dort aber nur einen kleinen Teil, ` +
-        `weil dir die Rolle „${rollenName}" fehlt. Mit einem Klick holst du sie dir hier: ${link}\n\n` +
+    return `Hallo! Du bist auf dem Server „${serverName}“, siehst dort aber nur einen kleinen Teil, ` +
+        `weil dir die Rolle „${rollenName}“ fehlt. Mit einem Klick holst du sie dir hier: ${link}\n\n` +
         'Das ist eine einmalige Erinnerung, ich schreibe dich deswegen nicht noch einmal an.';
 }
 
@@ -98,22 +99,28 @@ class RollenDmHandler {
         };
     }
 
-    // false = Hauptrolle oder Rollen-Kanal fehlen. Hier geht noch nichts raus, nur die Warteschlange füllt sich.
-    async starte(): Promise<boolean> {
+    // Liefert, wie viele Personen jetzt in der Warteschlange stehen (die Vorschau zählt aus dem Cache,
+    // hier wird frisch geholt - die Zahlen können also abweichen). null = Hauptrolle oder Rollen-Kanal
+    // fehlen. Hier geht noch nichts raus, nur die Warteschlange füllt sich.
+    // Wer gestartet hat, steht im Log: das ist die einzige ungefragte DM-Aktion, sie soll nachvollziehbar sein.
+    async starte(gestartetVon: string): Promise<number | null> {
         const voraussetzungen = await this.ladeVoraussetzungen();
-        if (!voraussetzungen) return false;
+        if (!voraussetzungen) return null;
 
         const mitglieder = await voraussetzungen.guild.members.fetch();
         const angeschrieben = new Set(await rollenDmService.getAngeschrieben());
         const empfaenger = waehleEmpfaenger(mitglieder.values(), voraussetzungen.hauptrolle.id, angeschrieben);
         await Promise.all(empfaenger.map(id => rollenDmService.inWarteschlange(id)));
-        console.log(`Rollen-DM-Runde gestartet: ${empfaenger.length} Empfänger in der Warteschlange.`);
-        return true;
+        const ausstehend = (await rollenDmService.getWarteschlange()).length;
+        console.log(`Rollen-DM-Runde gestartet von ${gestartetVon}: ${empfaenger.length} neu in der Warteschlange, `
+            + `${ausstehend} insgesamt ausstehend.`);
+        return ausstehend;
     }
 
-    async brichAb(): Promise<void> {
+    async brichAb(abgebrochenVon: string): Promise<void> {
+        const offen = (await rollenDmService.getWarteschlange()).length;
         await rollenDmService.leereWarteschlange();
-        console.log('Rollen-DM-Runde abgebrochen.');
+        console.log(`Rollen-DM-Runde abgebrochen von ${abgebrochenVon}: ${offen} DMs gehen nicht mehr raus.`);
     }
 
     // Wird vom 60-s-Timer in index.ts angestupst. Ohne gestartete Runde ist die Warteschlange leer und
@@ -131,21 +138,47 @@ class RollenDmHandler {
             return;
         }
 
-        for (const userId of warteschlange) {
-            await rollenDmService.ausWarteschlange(userId);
+        for (const [index, userId] of warteschlange.entries()) {
+            // Nur "Unknown Member" heißt: die Person ist weg. Jeder andere Fehler (Netzwerk, Rate-Limit,
+            // Discord-Störung) beendet den Durchlauf, und die Person bleibt in der Warteschlange.
+            // Früher galt jeder Fehler als "weg" - eine kurze Störung um 17:00 hätte so die ganze
+            // Runde still geleert, weil die Schleife dann für alle scheitert.
+            let mitglied: GuildMember;
+            try {
+                mitglied = await voraussetzungen.guild.members.fetch(userId);
+            } catch (error) {
+                if (error instanceof DiscordAPIError && error.code === RESTJSONErrorCodes.UnknownMember) {
+                    await rollenDmService.ausWarteschlange(userId);
+                    console.log(`Rollen-Erinnerung: ${userId} ist nicht mehr auf dem Server, übersprungen.`);
+                    continue;
+                }
+                console.warn(`Rollen-DM-Runde: Mitglied ${userId} nicht abrufbar, Versuch in 10 Minuten wieder: `
+                    + beschreibeFehler(error));
+                return;
+            }
 
-            const mitglied = await voraussetzungen.guild.members.fetch(userId).catch(() => null);
-            if (!mitglied || mitglied.roles.cache.has(voraussetzungen.hauptrolle.id)) continue;
+            await rollenDmService.ausWarteschlange(userId);
+            if (mitglied.roles.cache.has(voraussetzungen.hauptrolle.id)) {
+                console.log(`Rollen-Erinnerung: ${userId} hat die Hauptrolle inzwischen, übersprungen.`);
+                continue;
+            }
 
             // Vermerk VOR dem Versand: stürzt der Bot dazwischen ab, fehlt schlimmstenfalls eine DM.
             // Zwei DMs an dieselbe Person wären der schlimmere Fehler.
             if (!await rollenDmService.markiereAngeschrieben(userId)) continue;
 
-            if (!await sendeDm(userId, voraussetzungen.text, 'Rollen-Erinnerung')) {
+            const zugestellt = await sendeDm(userId, voraussetzungen.text, 'Rollen-Erinnerung');
+            if (!zugestellt) {
                 await rollenDmService.markiereNichtZugestellt(userId);
             }
+            // Nur die ID, nie der Text (der steht im Code). Der Rest ist eine Obergrenze: wer noch
+            // dran ist, kann inzwischen die Rolle haben.
+            const rest = warteschlange.length - index - 1;
+            console.log(`Rollen-Erinnerung an ${userId} ${zugestellt ? 'zugestellt' : 'nicht zustellbar'}, `
+                + (rest > 0 ? `noch ${rest} in der Warteschlange.` : 'Runde abgeschlossen.'));
             return;
         }
+        console.log('Rollen-DM-Runde abgeschlossen: niemand mehr in der Warteschlange.');
     }
 }
 

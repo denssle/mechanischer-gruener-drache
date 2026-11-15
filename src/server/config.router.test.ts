@@ -37,7 +37,7 @@ vi.mock('../services/logBuffer.service.js', () => ({
 vi.mock('../handlers/rollenDm.handler.js', () => ({
     default: {
         holeStand: vi.fn(() => Promise.resolve({text: null, wuerdenAngeschrieben: 0, ausstehend: 0, angeschrieben: 0, nichtZugestellt: 0})),
-        starte: vi.fn(() => Promise.resolve(true)),
+        starte: vi.fn(() => Promise.resolve(7)),
         brichAb: vi.fn(() => Promise.resolve()),
     },
 }));
@@ -320,6 +320,23 @@ describe('config.router', () => {
             });
         });
 
+        it('meldet die tatsächliche Zahl einer gestarteten Rollen-DM-Runde', () => {
+            expect(leseMeldung(mockRequest({query: {rollenDm: '7'}}) as any)).toEqual({
+                bereich: 'rollenhinweis',
+                text: 'Runde gestartet: 7 Personen stehen in der Warteschlange.',
+                art: 'ok',
+            });
+            expect(leseMeldung(mockRequest({query: {rollenDm: '0'}}) as any)?.text)
+                .toBe('Runde gestartet, aber gerade gibt es niemanden anzuschreiben.');
+        });
+
+        // Wie ?gelernt: nur als Zahl, sonst wäre der Parameter ein XSS-Vektor.
+        it('ignoriert eine Rollen-DM-Zahl, die keine ist', () => {
+            expect(leseMeldung(mockRequest({query: {rollenDm: '<script>'}}) as any)).toBeUndefined();
+            expect(leseMeldung(mockRequest({query: {rollenDm: '-1'}}) as any)).toBeUndefined();
+            expect(leseMeldung(mockRequest({query: {rollenDm: '1.5'}}) as any)).toBeUndefined();
+        });
+
         it('ignoriert unbekannte und Prototyp-Schlüssel (der Wert wird nie ausgegeben)', () => {
             expect(leseMeldung(mockRequest({query: {gespeichert: 'quatsch'}}) as any)).toBeUndefined();
             expect(leseMeldung(mockRequest({query: {gespeichert: '__proto__'}}) as any)).toBeUndefined();
@@ -366,12 +383,13 @@ describe('config.router', () => {
 
             await handleRollenDm(anfrage({aktion: 'starten', bestaetigt: 'ja'}), res);
 
-            expect(rollenDmHandler.starte).toHaveBeenCalled();
-            expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=rollen-dm-gestartet#bereich-rollenhinweis');
+            expect(rollenDmHandler.starte).toHaveBeenCalledWith('12345');
+            // Die Zahl aus der echten Warteschlange, nicht die aus der Vorschau.
+            expect(res.redirect).toHaveBeenCalledWith('/config?rollenDm=7#bereich-rollenhinweis');
         });
 
         it('meldet fehlende Voraussetzungen', async () => {
-            (rollenDmHandler.starte as any).mockResolvedValueOnce(false);
+            (rollenDmHandler.starte as any).mockResolvedValueOnce(null);
             const res = antwort();
 
             await handleRollenDm(anfrage({aktion: 'starten', bestaetigt: 'ja'}), res);
@@ -384,7 +402,7 @@ describe('config.router', () => {
 
             await handleRollenDm(anfrage({aktion: 'abbrechen'}), res);
 
-            expect(rollenDmHandler.brichAb).toHaveBeenCalled();
+            expect(rollenDmHandler.brichAb).toHaveBeenCalledWith('12345');
             expect(res.redirect).toHaveBeenCalledWith('/config?gespeichert=rollen-dm-abgebrochen#bereich-rollenhinweis');
         });
 

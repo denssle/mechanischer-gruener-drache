@@ -22,7 +22,7 @@ vi.mock('../services/rollenDm.service.js', () => ({default: rollenDm}));
 vi.mock('../services/rollenhinweis.service.js', () => ({default: hinweis}));
 vi.mock('../services/dm.service.js', () => ({sendeDm}));
 
-import {Collection} from 'discord.js';
+import {Collection, DiscordAPIError, RESTJSONErrorCodes} from 'discord.js';
 import config from '../../config.json' with {type: 'json'};
 import rollenDmHandler, {istVersandZeit, rollenDmText, waehleEmpfaenger} from './rollenDm.handler.js';
 
@@ -36,6 +36,10 @@ const mockMitglied = (id: string, rollen: string[] = [], vorTagen = 400, bot = f
     roles: {cache: new Collection(rollen.map(rolle => [rolle, {id: rolle}]))},
 }) as any;
 
+const unbekanntesMitglied = () => new DiscordAPIError(
+    {code: RESTJSONErrorCodes.UnknownMember, message: 'Unknown Member'},
+    RESTJSONErrorCodes.UnknownMember, 404, 'GET', 'https://discord.com/api/v10/x', {});
+
 const mockGuild = (mitglieder: any[]) => {
     const karte = new Map(mitglieder.map(mitglied => [mitglied.id, mitglied]));
     return {
@@ -46,7 +50,8 @@ const mockGuild = (mitglieder: any[]) => {
             cache: karte,
             fetch: vi.fn(async (id?: string) => {
                 if (id === undefined) return karte;
-                if (!karte.has(id)) throw new Error('Unknown Member');
+                // So meldet Discord "nicht auf dem Server" wirklich - nicht irgendein Fehler.
+                if (!karte.has(id)) throw unbekanntesMitglied();
                 return karte.get(id);
             }),
         },
@@ -69,8 +74,8 @@ describe('rollenDmText', () => {
     it('nennt Server, Rolle und Link und sagt, dass es einmalig ist', () => {
         const text = rollenDmText('Testserver', 'Einwohner', 'https://discord.com/channels/1/2');
 
-        expect(text).toContain('„Testserver"');
-        expect(text).toContain('„Einwohner"');
+        expect(text).toContain('„Testserver“');
+        expect(text).toContain('„Einwohner“');
         expect(text).toContain('https://discord.com/channels/1/2');
         expect(text).toContain('einmalige Erinnerung');
     });
@@ -151,6 +156,52 @@ describe('RollenDmHandler', () => {
             expect(rollenDm.ausWarteschlange).toHaveBeenCalledWith('weg');
         });
 
+        // Früher galt jeder Fehler als "weg": eine kurze Störung hätte die ganze Runde still geleert.
+        it('verliert bei einem vorübergehenden Fehler niemanden und sagt im Log warum', async () => {
+            rollenDm.getWarteschlange.mockResolvedValue(['a', 'b']);
+            const guild = mockGuild([mockMitglied('a'), mockMitglied('b')]);
+            guild.members.fetch.mockRejectedValue(new Error('socket hang up'));
+            guildsCache.set(config.GUILD_ID, guild);
+
+            await rollenDmHandler.sendeNaechste();
+
+            expect(rollenDm.ausWarteschlange).not.toHaveBeenCalled();
+            expect(rollenDm.markiereAngeschrieben).not.toHaveBeenCalled();
+            expect(sendeDm).not.toHaveBeenCalled();
+            // Nach dem ersten Fehler ist Schluss, statt die Störung an allen Weiteren auszuprobieren.
+            expect(guild.members.fetch).toHaveBeenCalledTimes(1);
+            expect(console.warn).toHaveBeenCalledWith(
+                'Rollen-DM-Runde: Mitglied a nicht abrufbar, Versuch in 10 Minuten wieder: socket hang up');
+        });
+
+        it('protokolliert jede DM mit ID und Rest, nie mit Text', async () => {
+            rollenDm.getWarteschlange.mockResolvedValue(['a', 'b']);
+
+            await rollenDmHandler.sendeNaechste();
+
+            expect(console.log).toHaveBeenCalledWith('Rollen-Erinnerung an a zugestellt, noch 1 in der Warteschlange.');
+        });
+
+        it('meldet das Ende der Runde', async () => {
+            rollenDm.getWarteschlange.mockResolvedValue(['a']);
+            sendeDm.mockResolvedValue(false);
+
+            await rollenDmHandler.sendeNaechste();
+
+            expect(console.log).toHaveBeenCalledWith('Rollen-Erinnerung an a nicht zustellbar, Runde abgeschlossen.');
+        });
+
+        it('meldet, wenn nur noch Übersprungene in der Warteschlange standen', async () => {
+            rollenDm.getWarteschlange.mockResolvedValue(['c', 'weg']);
+
+            await rollenDmHandler.sendeNaechste();
+
+            expect(sendeDm).not.toHaveBeenCalled();
+            expect(console.log).toHaveBeenCalledWith('Rollen-Erinnerung: c hat die Hauptrolle inzwischen, übersprungen.');
+            expect(console.log).toHaveBeenCalledWith('Rollen-Erinnerung: weg ist nicht mehr auf dem Server, übersprungen.');
+            expect(console.log).toHaveBeenCalledWith('Rollen-DM-Runde abgeschlossen: niemand mehr in der Warteschlange.');
+        });
+
         it('schreibt niemanden doppelt an', async () => {
             rollenDm.getWarteschlange.mockResolvedValue(['a']);
             rollenDm.markiereAngeschrieben.mockResolvedValue(false);
@@ -183,24 +234,38 @@ describe('RollenDmHandler', () => {
 
     describe('starte', () => {
         it('füllt nur die Warteschlange und sendet selbst nichts', async () => {
-            expect(await rollenDmHandler.starte()).toBe(true);
+            rollenDm.getWarteschlange.mockResolvedValue(['a', 'b']);
+
+            expect(await rollenDmHandler.starte('admin-1')).toBe(2);
 
             expect(rollenDm.inWarteschlange.mock.calls.map(aufruf => aufruf[0])).toEqual(['a', 'b']);
             expect(sendeDm).not.toHaveBeenCalled();
         });
 
+        it('meldet die tatsächliche Zahl aus der Warteschlange und wer gestartet hat', async () => {
+            // Ein zweiter Start nach einem Teil-Lauf: x stand schon drin, a und b kommen dazu.
+            rollenDm.getWarteschlange.mockResolvedValue(['x', 'a', 'b']);
+
+            expect(await rollenDmHandler.starte('admin-1')).toBe(3);
+            expect(console.log).toHaveBeenCalledWith(
+                'Rollen-DM-Runde gestartet von admin-1: 2 neu in der Warteschlange, 3 insgesamt ausstehend.');
+        });
+
         it('startet ohne Rollen-Kanal nicht', async () => {
             hinweis.getRollenKanal.mockResolvedValue(null);
 
-            expect(await rollenDmHandler.starte()).toBe(false);
+            expect(await rollenDmHandler.starte('admin-1')).toBeNull();
             expect(rollenDm.inWarteschlange).not.toHaveBeenCalled();
         });
     });
 
-    it('brichAb leert die Warteschlange', async () => {
-        await rollenDmHandler.brichAb();
+    it('brichAb leert die Warteschlange und sagt im Log, wer wie viele DMs gestoppt hat', async () => {
+        rollenDm.getWarteschlange.mockResolvedValue(['a', 'b']);
+
+        await rollenDmHandler.brichAb('admin-1');
 
         expect(rollenDm.leereWarteschlange).toHaveBeenCalled();
+        expect(console.log).toHaveBeenCalledWith('Rollen-DM-Runde abgebrochen von admin-1: 2 DMs gehen nicht mehr raus.');
     });
 
     it('holeStand zeigt Vorschau und Zähler', async () => {
