@@ -216,12 +216,16 @@ describe('DrachenHandler.pruefeLevel', () => {
         expect(characterSvc.getAllLinks).not.toHaveBeenCalled();
     });
 
-    it('tut nichts, wenn der Kanal nicht abrufbar ist', async () => {
+    it('tut nichts, wenn der Kanal nicht abrufbar ist, und sagt im Log warum', async () => {
         channelsFetch.mockResolvedValue(null);
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
         await drachenHandler.pruefeLevel([{name: 'Acaine', level: '1'}]);
 
         expect(drachen.setLevel).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledWith(expect.stringMatching(
+            /^Spielwelt-Ankündigungskanal .+ nicht abrufbar, Gratulation wird verworfen: Discord lieferte nichts zurück$/));
+        warn.mockRestore();
     });
 
     it('überspringt Einträge mit unlesbarer Stufe', async () => {

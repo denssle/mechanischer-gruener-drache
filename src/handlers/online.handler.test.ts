@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const getOnline = vi.fn();
+// Namensauflösung ist in anzeigename.service.test.ts geprüft; hier reicht ein fester Name je ID.
+vi.mock('../services/anzeigename.service.js', () => ({
+    UNBEKANNTER_NAME: 'unbekannt',
+    holeAnzeigenamen: vi.fn(async (_guild: unknown, ids: string[]) => new Map(ids.map(id => [id, `Name-${id}`]))),
+}));
+
 vi.mock('../services/online.service.js', () => ({
     default: { getOnline: (...args: unknown[]) => getOnline(...args) },
 }));
@@ -132,7 +138,7 @@ describe('OnlineHandler', () => {
         await onlineHandler.handleOnline(interaction);
 
         const reply = content(interaction);
-        expect(reply).toContain('**Centurio Acaine** (<@42>) — Stufe 9 Elf');
+        expect(reply).toContain('**Centurio Acaine** (Name-42) — Stufe 9 Elf');
         expect(reply).toContain('Cvetanka — Stufe 14');
         // Niemand soll von einem /online angepingt werden.
         expect(interaction.editReply.mock.calls[0][0].allowedMentions).toEqual({ parse: [] });
@@ -145,7 +151,7 @@ describe('OnlineHandler', () => {
 
         await onlineHandler.handleOnline(interaction);
 
-        expect(content(interaction)).toContain('**Xara** (<@42>)');
+        expect(content(interaction)).toContain('**Xara** (Name-42)');
     });
 
     it('zeigt die Liste auch dann, wenn die Verknüpfungen nicht ladbar sind', async () => {

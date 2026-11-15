@@ -10,6 +10,7 @@ import {
     TextInputStyle,
 } from 'discord.js';
 import bashService, {BashZitat} from '../services/bash.service.js';
+import {holeAnzeigenamen, UNBEKANNTER_NAME} from '../services/anzeigename.service.js';
 
 // Zitatsammlung (Vorbild: die !quote-Funktion in Twitch-Chats). Erfasst wird per RECHTSKLICK auf
 // eine Nachricht (Apps → "Als Bash-Zitat speichern"), nicht per Slash-Befehl: ein Slash-Command
@@ -67,10 +68,12 @@ export function parseDatum(eingabe: string): {ok: true; wert: string | null} | {
 }
 
 // Anzeigeform. Der Zitattext steht als Blockzitat (jede Zeile mit "> "), damit ein mehrzeiliger
-// Wortwechsel als Zitat erkennbar bleibt und nicht mit dem Bot-Text verschwimmt.
-export function formatZitat(zitat: BashZitat): string {
+// Wortwechsel als Zitat erkennbar bleibt und nicht mit dem Bot-Text verschwimmt. Die zitierte
+// Person steht mit Namen da, nicht als Erwähnung (siehe anzeigename.service) - `personName`
+// kommt deshalb vom Aufrufer, die Funktion selbst bleibt rein.
+export function formatZitat(zitat: BashZitat, personName: string): string {
     const zitiert = zitat.text.split('\n').map(zeile => `> ${zeile}`).join('\n');
-    const angaben = [`<@${zitat.personId}>`, zitat.kontext, formatDatum(zitat.datum)]
+    const angaben = [personName, zitat.kontext, formatDatum(zitat.datum)]
         .filter((wert): wert is string => Boolean(wert));
     return `**Zitat #${zitat.nummer}**\n${zitiert}\n– ${angaben.join(', ')}`;
 }
@@ -130,6 +133,15 @@ function baueModal(customId: string, titel: string, werte: {text: string; kontex
 }
 
 class BashHandler {
+    // Öffentliche Antwort mit einem Zitat. allowedMentions bleibt leer: Zitattext ist fremder Text.
+    async zeigeZitat(interaction: ChatInputCommandInteraction | ModalSubmitInteraction, zitat: BashZitat) {
+        const namen = await holeAnzeigenamen(interaction.guild, [zitat.personId], '/bash');
+        return interaction.reply({
+            content: formatZitat(zitat, namen.get(zitat.personId) ?? UNBEKANNTER_NAME),
+            allowedMentions: {parse: []},
+        });
+    }
+
     // Rechtsklick auf eine Nachricht → vorbefülltes Modal. Vor einem showModal darf NICHT deferred
     // werden (Discord lässt das Modal dann nicht mehr zu), deshalb keine deferReply hier.
     async handleNachrichtSpeichern(interaction: MessageContextMenuCommandInteraction) {
@@ -199,9 +211,9 @@ class BashHandler {
                 erstelltAm: new Date().toISOString(),
                 quelle: {channelId, messageId},
             });
-            // Öffentlich: das Festhalten ist der halbe Spaß, und die zitierte Person soll mitbekommen,
+            // Öffentlich: das Festhalten ist der halbe Spaß, und die zitierte Person soll sehen können,
             // dass sie in der Sammlung steht (löschen darf sie es selbst).
-            return interaction.reply({content: formatZitat(zitat), allowedMentions: {parse: []}});
+            return this.zeigeZitat(interaction, zitat);
         }
 
         if (modus === 'bearbeiten') {
@@ -213,7 +225,7 @@ class BashHandler {
                     flags: MessageFlags.Ephemeral,
                 });
             }
-            return interaction.reply({content: formatZitat(zitat), allowedMentions: {parse: []}});
+            return this.zeigeZitat(interaction, zitat);
         }
     }
 
@@ -228,7 +240,7 @@ class BashHandler {
                     flags: MessageFlags.Ephemeral,
                 });
             }
-            return interaction.reply({content: formatZitat(zitat), allowedMentions: {parse: []}});
+            return this.zeigeZitat(interaction, zitat);
         }
 
         const zufall = await bashService.holeZufaellig();
@@ -238,7 +250,7 @@ class BashHandler {
                 flags: MessageFlags.Ephemeral,
             });
         }
-        return interaction.reply({content: formatZitat(zufall), allowedMentions: {parse: []}});
+        return this.zeigeZitat(interaction, zufall);
     }
 
     async handleBearbeiten(interaction: ChatInputCommandInteraction) {

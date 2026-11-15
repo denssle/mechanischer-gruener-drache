@@ -4,6 +4,8 @@ import config from '../../config.json' with {type: 'json'};
 import geburtstagService, {Geburtstag} from '../services/geburtstag.service.js';
 import {ALTERS_ZEILEN, GEBURTSTAGS_GLUECKWUENSCHE} from '../data/geburtstagsglueckwuensche.js';
 import {formatTag} from '../services/zeit.service.js';
+import {holeOderWarne} from '../services/fehler.service.js';
+import {holeAnzeigenamen} from '../services/anzeigename.service.js';
 
 // Geburtstagskalender: jede:r trägt den eigenen Geburtstag selbst ein (Jahr optional), der Bot
 // gratuliert am Tag im konfigurierten Kanal (gesetzt über /config). Angestoßen vom EINEN 60-s-Timer
@@ -209,7 +211,7 @@ class GeburtstagHandler {
         const alle = await geburtstagService.getAlle();
         const heute = new Date();
 
-        // Nur Leute, die noch auf dem Server sind - ein Eintrag ohne Mitglied wäre eine tote Erwähnung.
+        // Nur Leute, die noch auf dem Server sind - wer gegangen ist, hat hier nichts mehr verloren.
         const guild = client.guilds.cache.get(config.GUILD_ID);
         const eintraege = sammleEintraege(alle, (userId) => !!guild?.members.cache.has(userId))
             .map(([userId, geburtstag]) => ({userId, geburtstag, naechster: naechstesVorkommen(geburtstag, heute)}))
@@ -223,8 +225,9 @@ class GeburtstagHandler {
 
         // Ohne Jahr: die Liste ist öffentlich, das Geburtsjahr sieht die Person nur selbst
         // (/geburtstag status). Es ist freiwillig und hilft hier niemandem.
+        const namen = await holeAnzeigenamen(guild, eintraege.map(({userId}) => userId), 'Geburtstagsliste');
         const zeilen = eintraege.map(({userId, geburtstag}) =>
-            `- <@${userId}> – ${formatDatum({...geburtstag, jahr: null})}`);
+            `- ${namen.get(userId)} – ${formatDatum({...geburtstag, jahr: null})}`);
 
         return interaction.reply({
             content: baueGeburtstagsliste(zeilen),
@@ -302,12 +305,8 @@ class GeburtstagHandler {
             return null;
         }
 
-        const channel = await client.channels.fetch(channelId).catch(() => null) as TextChannel | null;
-        if (!channel) {
-            console.warn(`Geburtstagskanal ${channelId} nicht abrufbar - Glückwunsch wird zurückgestellt.`);
-            return null;
-        }
-        return channel;
+        return await holeOderWarne(client.channels.fetch(channelId),
+            `Geburtstagskanal ${channelId} nicht abrufbar, Glückwunsch wird zurückgestellt`) as TextChannel | null;
     }
 }
 

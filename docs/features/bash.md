@@ -54,11 +54,11 @@ selbst eingeschlossen. Geprüft wird in `darfBearbeiten`/`darfEntfernen` (export
 ## Anzeige
 
 - `formatZitat` setzt den Wortlaut als **Blockzitat** (jede Zeile mit `> `), damit ein mehrzeiliger
-  Wortwechsel als Zitat erkennbar bleibt; darunter Person (`<@id>`), Kontext und Datum, jeweils nur
-  wenn vorhanden. Emojifrei wie alle Bot-Antworten.
+  Wortwechsel als Zitat erkennbar bleibt; darunter Person (**Name als Text**, seit 2026-11-15 über `holeAnzeigenamen` in `zeigeZitat`;
+  vorher `<@id>`, das ohne Ping-Freigabe oft als „Unbekannter Benutzer“ erschien), Kontext und Datum,
+  jeweils nur wenn vorhanden. `formatZitat` bekommt den Namen übergeben und bleibt so rein. Emojifrei wie alle Bot-Antworten.
 - **`allowedMentions: {parse: []}` ist hier Pflicht** – Zitattext ist per Definition Fremdtext, in dem
-  ein `<@…>` oder `@everyone` stehen kann (siehe CLAUDE.md). Die Person wird als Mention *angezeigt*,
-  aber nie gepingt.
+  ein `<@…>` oder `@everyone` stehen kann (siehe CLAUDE.md). Die Person wird genannt, aber nie gepingt.
 - Die Eingabe ist auf **1500 Zeichen** begrenzt (`MAX_ZITAT_LAENGE`), damit ein Zitat samt Rahmen
   immer in eine Discord-Nachricht passt – begrenzt wird die Eingabe, nicht später die Anzeige.
 - Gespeichert wird das Datum als ISO (`YYYY-MM-DD`, sortierbar), eingegeben deutsch (`TT.MM.JJJJ`).
