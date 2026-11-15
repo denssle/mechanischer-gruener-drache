@@ -25,3 +25,16 @@ export function warneUndWeiter(kontext: string): (error: unknown) => null {
         return null;
     };
 }
+
+// Wie warneUndWeiter, aber für Abrufe, die auch ohne Fehler leer zurückkommen können (discord.js'
+// channels.fetch liefert dann null): beide Fälle landen im Log, jeweils mit eigenem Grund.
+export async function holeOderWarne<T>(abruf: Promise<T | null>, kontext: string): Promise<T | null> {
+    try {
+        const wert = await abruf;
+        if (wert === null) console.warn(`${kontext}: Discord lieferte nichts zurück`);
+        return wert;
+    } catch (error) {
+        console.warn(`${kontext}: ${beschreibeFehler(error)}`);
+        return null;
+    }
+}

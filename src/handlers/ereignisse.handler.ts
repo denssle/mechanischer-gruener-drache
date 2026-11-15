@@ -1,6 +1,7 @@
 import {ChatInputCommandInteraction} from 'discord.js';
 import newsService from '../services/news.service.js';
 import characterService, {CharacterLink, findLinksInText} from '../services/character.service.js';
+import {holeAnzeigenamen, UNBEKANNTER_NAME} from '../services/anzeigename.service.js';
 
 const EVENT_COUNT = 5;
 // Discord-Nachrichtenlimit ist 2000 Zeichen; der Rest der Nachricht (Überschrift, Link)
@@ -8,8 +9,8 @@ const EVENT_COUNT = 5;
 const MAX_EVENTS_LENGTH = 1500;
 
 // Taucht ein verknüpfter Charakter im Ereignis auf, wird sein Name fett gesetzt und der Discord-User
-// dahinter genannt. Die Erwähnung wird beim Senden per allowedMentions entschärft (kein Ping).
-function highlightLinked(event: string, links: CharacterLink[]): string {
+// dahinter mit Namen genannt - als Text, nicht als Erwähnung (siehe anzeigename.service).
+function highlightLinked(event: string, links: CharacterLink[], namen: Map<string, string>): string {
     const found = findLinksInText(links, event);
     if (found.length === 0) return event;
 
@@ -17,7 +18,7 @@ function highlightLinked(event: string, links: CharacterLink[]): string {
     for (const link of found) {
         text = text.replaceAll(link.name, `**${link.name}**`);
     }
-    return `${text} (${found.map(link => `<@${link.discordUserId}>`).join(', ')})`;
+    return `${text} (${found.map(link => namen.get(link.discordUserId) ?? UNBEKANNTER_NAME).join(', ')})`;
 }
 
 class EreignisseHandler {
@@ -37,10 +38,14 @@ class EreignisseHandler {
             console.error('Konnte die Charakter-Verknüpfungen für /ereignisse nicht laden:', error);
         }
 
+        const gezeigt = gameEvents.events.slice(0, EVENT_COUNT);
+        const genannt = gezeigt.flatMap(event => findLinksInText(links, event).map(link => link.discordUserId));
+        const namen = await holeAnzeigenamen(interaction.guild, genannt, '/ereignisse');
+
         const lines: string[] = [];
         let length = 0;
-        for (const event of gameEvents.events.slice(0, EVENT_COUNT)) {
-            const line = `- ${highlightLinked(event, links)}`;
+        for (const event of gezeigt) {
+            const line = `- ${highlightLinked(event, links, namen)}`;
             if (length + line.length > MAX_EVENTS_LENGTH) break;
 
             lines.push(line);

@@ -11,6 +11,12 @@ const svc = vi.hoisted(() => ({
     getLastPostDay: vi.fn(),
     setLastPostDay: vi.fn(),
 }));
+// Namensauflösung ist in anzeigename.service.test.ts geprüft; hier reicht ein fester Name je ID.
+vi.mock('../services/anzeigename.service.js', () => ({
+    UNBEKANNTER_NAME: 'unbekannt',
+    holeAnzeigenamen: vi.fn(async (_guild: unknown, ids: string[]) => new Map(ids.map(id => [id, `Name-${id}`]))),
+}));
+
 vi.mock('../services/geburtstag.service.js', () => ({default: svc}));
 
 vi.mock('../../config.json', () => ({default: {GUILD_ID: 'guild-1'}}));
@@ -254,8 +260,8 @@ describe('GeburtstagHandler', () => {
 
             const reply = interaction.reply.mock.calls[0][0];
             expect(reply.allowedMentions).toEqual({parse: []});
-            expect(reply.content).toContain('<@u1>');
-            expect(reply.content).toContain('<@u2>');
+            expect(reply.content).toContain('Name-u1');
+            expect(reply.content).toContain('Name-u2');
         });
 
         it('zeigt das freiwillige Geburtsjahr nicht öffentlich', async () => {
@@ -290,7 +296,7 @@ describe('GeburtstagHandler', () => {
 
             await geburtstagHandler.handleListe(interaction);
 
-            expect(interaction.reply.mock.calls[0][0].content).not.toContain('<@weg>');
+            expect(interaction.reply.mock.calls[0][0].content).not.toContain('Name-weg');
         });
 
         // Der Bot hat selbst Geburtstag (erster Commit) - fest verdrahtet, steht in keinem Hash.
@@ -301,7 +307,7 @@ describe('GeburtstagHandler', () => {
             await geburtstagHandler.handleListe(interaction);
 
             const reply = interaction.reply.mock.calls[0][0];
-            expect(reply.content).toContain('<@bot-1>');
+            expect(reply.content).toContain('Name-bot-1');
             expect(reply.content).toContain('11. Juni');
         });
     });
@@ -386,10 +392,14 @@ describe('GeburtstagHandler', () => {
             setzeZeit(2026, 3, 5, GRATULATIONS_STUNDE);
             svc.getAlle.mockResolvedValue({u1: {tag: 5, monat: 3, jahr: null}});
             channelsFetch.mockRejectedValue(new Error('weg'));
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
             await geburtstagHandler.posteGeburtstagsgruesse();
 
             expect(svc.setLastPostDay).not.toHaveBeenCalled();
+            expect(warn).toHaveBeenCalledWith(expect.stringMatching(
+                /^Geburtstagskanal .+ nicht abrufbar, Glückwunsch wird zurückgestellt: weg$/));
+            warn.mockRestore();
         });
 
         it('überspringt Leute, die nicht mehr auf dem Server sind', async () => {

@@ -1,6 +1,6 @@
 import {describe, it, expect, vi, afterEach} from 'vitest';
 import {DiscordAPIError, RESTJSONErrorCodes} from 'discord.js';
-import {beschreibeFehler, warneUndWeiter} from './fehler.service.js';
+import {beschreibeFehler, holeOderWarne, warneUndWeiter} from './fehler.service.js';
 
 function discordFehler(code: number, message: string, inhalt: string): DiscordAPIError {
     return new DiscordAPIError(
@@ -41,5 +41,30 @@ describe('warneUndWeiter', () => {
 
         expect(ergebnis).toBeNull();
         expect(warn).toHaveBeenCalledWith('Kanal 123 nicht abrufbar: weg');
+    });
+});
+
+describe('holeOderWarne', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('reicht einen gefundenen Wert ohne Logzeile durch', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        expect(await holeOderWarne(Promise.resolve('kanal'), 'Kanal 1')).toBe('kanal');
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('meldet einen leeren Abruf mit eigenem Grund', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        expect(await holeOderWarne(Promise.resolve(null), 'Kanal 1')).toBeNull();
+        expect(warn).toHaveBeenCalledWith('Kanal 1: Discord lieferte nichts zurück');
+    });
+
+    it('meldet einen gescheiterten Abruf mit dem Fehler als Grund', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        expect(await holeOderWarne(Promise.reject(discordFehler(50001, 'Missing Access', 'x')), 'Kanal 1')).toBeNull();
+        expect(warn).toHaveBeenCalledWith('Kanal 1: Missing Access (Discord-Code 50001, HTTP 404)');
     });
 });

@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Namensauflösung ist in anzeigename.service.test.ts geprüft; hier reicht ein fester Name je ID.
+vi.mock('../services/anzeigename.service.js', () => ({
+    UNBEKANNTER_NAME: 'unbekannt',
+    holeAnzeigenamen: vi.fn(async (_guild: unknown, ids: string[]) => new Map(ids.map(id => [id, `Name-${id}`]))),
+}));
+
 vi.mock('../services/news.service.js', () => ({
     default: { getGameEvents: vi.fn() }
 }));
@@ -64,7 +70,7 @@ describe('EreignisseHandler', () => {
         await ereignisseHandler.handleEreignisse(interaction);
 
         const reply = content(interaction);
-        expect(reply).toContain('- **Zalia** blamierte sich. (<@42>)');
+        expect(reply).toContain('- **Zalia** blamierte sich. (Name-42)');
         expect(reply).toContain('- Treva wurde wiederbelebt.');
     });
 

@@ -7,6 +7,12 @@ const rpService = vi.hoisted(() => ({
     getSuchende: vi.fn(),
     istSuchend: vi.fn(),
 }));
+// Namensauflösung ist in anzeigename.service.test.ts geprüft; hier reicht ein fester Name je ID.
+vi.mock('../services/anzeigename.service.js', () => ({
+    UNBEKANNTER_NAME: 'unbekannt',
+    holeAnzeigenamen: vi.fn(async (_guild: unknown, ids: string[]) => new Map(ids.map(id => [id, `Name-${id}`]))),
+}));
+
 vi.mock('../services/rp.service.js', () => ({default: rpService}));
 
 import rpHandler, {formatArt} from './rp.handler.js';
@@ -76,8 +82,8 @@ describe('RpHandler', () => {
             await rpHandler.handleSuchende(interaction);
 
             const reply = interaction.reply.mock.calls[0][0];
-            expect(reply.content).toContain('<@u1> – PbP');
-            expect(reply.content).toContain('<@u2> – PbP & Live');
+            expect(reply.content).toContain('Name-u1 – PbP');
+            expect(reply.content).toContain('Name-u2 – PbP & Live');
             expect(reply.allowedMentions).toEqual({parse: []});
         });
 

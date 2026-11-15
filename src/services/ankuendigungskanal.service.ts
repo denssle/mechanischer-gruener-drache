@@ -1,7 +1,7 @@
 import {TextChannel} from 'discord.js';
 import client from '../client.js';
 import sportService from './sport.service.js';
-import {warneUndWeiter} from './fehler.service.js';
+import {holeOderWarne} from './fehler.service.js';
 
 class AnkuendigungskanalService {
     async holeAnkuendigungskanal(): Promise<TextChannel | null> {
@@ -11,8 +11,8 @@ class AnkuendigungskanalService {
             return null;
         }
 
-        return await client.channels.fetch(channelId).catch(warneUndWeiter(
-            `Ankündigungskanal ${channelId} nicht abrufbar, Meldung wird verworfen`)) as TextChannel | null;
+        return await holeOderWarne(client.channels.fetch(channelId),
+            `Ankündigungskanal ${channelId} nicht abrufbar, Meldung wird verworfen`) as TextChannel | null;
     }
 }
 

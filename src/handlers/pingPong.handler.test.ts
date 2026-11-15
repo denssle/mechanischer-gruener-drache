@@ -1,6 +1,17 @@
 import {describe, it, expect, vi, beforeEach} from 'vitest';
 import {DiscordAPIError, MessageFlags, RESTJSONErrorCodes} from 'discord.js';
 
+// Namensauflösung ist in anzeigename.service.test.ts geprüft. Hier reicht der gespeicherte Name aus
+// dem user.service-Mock, damit die Ranglisten-Tests ihre gewohnten Namen behalten.
+vi.mock("../services/anzeigename.service.js", async () => {
+    const userService = (await import("../services/user.service.js")).default;
+    return {
+        UNBEKANNTER_NAME: 'unbekannt',
+        holeAnzeigenamen: vi.fn(async (_guild: unknown, ids: string[]) => new Map(await Promise.all(
+            ids.map(async id => [id, (await userService.getUser(id))?.displayName ?? 'unbekannt'] as const)))),
+    };
+});
+
 vi.mock("../services/redis.service.js", () => ({
     default: {
         get: vi.fn(),
@@ -280,6 +291,19 @@ describe('PingPongHandler', () => {
                 components: [],
             }));
             expect(redisService.set).not.toHaveBeenCalled();
+        });
+
+        // Bearbeitungen geben die Genannten frei, sonst zeigt die App "Unbekannter Benutzer"
+        // (siehe erwaehnteUser). Mit echten, numerischen IDs - nur die erkennt die Freigabe.
+        it('gibt bei Absage und Ergebnis beide Spieler als Erwähnung frei', async () => {
+            const absage = mockButton('pingpong-duell:ablehnen:111:222', '222');
+            await pingPongHandler.handleDuellButton(absage);
+            expect(absage.update.mock.calls[0][0].allowedMentions).toEqual({users: ['222', '111']});
+
+            scoresInRedis({});
+            const spiel = mockButton('pingpong-duell:annehmen:111:222', '222');
+            await pingPongHandler.handleDuellButton(spiel);
+            expect([...spiel.editReply.mock.calls[0][0].allowedMentions.users].sort()).toEqual(['111', '222']);
         });
 
         it('gibt dem Sieger einen Punkt und zieht dem Verlierer einen ab', async () => {
@@ -791,6 +815,14 @@ describe('PingPongHandler', () => {
             expect(redisService.set).not.toHaveBeenCalled();
         });
 
+        it('gibt bei der Absage beide Spieler als Erwähnung frei', async () => {
+            const interaction = mockButton('pingpong-taktik:ablehnen:111:222:lupfer', '222');
+
+            await pingPongHandler.handleTaktikButton(interaction);
+
+            expect(interaction.update.mock.calls[0][0].allowedMentions).toEqual({users: ['222', '111']});
+        });
+
         it('lässt die stärkere Aktion gewinnen und deckt beide Wahlen auf', async () => {
             scoresInRedis({'user-aPING_PONG': '5', 'user-bPING_PONG': '5'});
             // Herausforderer: Lupfer, Gegner: Konter -> Lupfer übertrumpft Konter
@@ -972,7 +1004,8 @@ describe('PingPongHandler', () => {
             expect(interaction.reply.mock.calls[0][0].allowedMentions).toEqual({parse: []});
         });
 
-        it('fällt auf die rohe User-ID zurück wenn kein gespeicherter User existiert', async () => {
+        // Wie der Name ermittelt wird (und was ohne Namen im Log steht), prüft anzeigename.service.test.ts.
+        it('zeigt "unbekannt", wenn sich kein Name ermitteln lässt', async () => {
             vi.mocked(redisService.getSortedSet).mockResolvedValue([
                 { value: 'user-1', score: 5 },
             ] as any);
@@ -981,7 +1014,7 @@ describe('PingPongHandler', () => {
 
             await pingPongHandler.handlePingPongHighscore(interaction);
 
-            expect(interaction.reply.mock.calls[0][0].content).toContain('1. 🌞 user-1 - 5');
+            expect(interaction.reply.mock.calls[0][0].content).toContain('1. 🌞 unbekannt - 5');
         });
 
         // getScore legt jeden Duell-Teilnehmer im Sorted Set an - wer nach dem Season-Reset seine
@@ -1196,6 +1229,11 @@ describe('PingPongHandler', () => {
         });
 
         describe('handleRundlaeufe', () => {
+            beforeEach(() => {
+                vi.mocked(userService.getUser).mockImplementation(async (id: string) =>
+                    ({displayName: `Name-${id}`}) as Awaited<ReturnType<typeof userService.getUser>>);
+            });
+
             // Was Discord für eine Lobby liefert: offen = Buttons noch dran.
             const lobby = (id: string, teilnehmer: string[], offen = true) => ({
                 id,
@@ -1234,7 +1272,7 @@ describe('PingPongHandler', () => {
                 await pingPongHandler.handleRundlaeufe(interaction);
 
                 const antwort = interaction.editReply.mock.calls[0][0];
-                expect(antwort.content).toContain(`<@111>s Runde – 2/${MAX_RUNDLAUF} an der Platte`);
+                expect(antwort.content).toContain(`Runde von Name-111 – 2/${MAX_RUNDLAUF} an der Platte`);
                 expect(antwort.content).toContain('https://discord.com/channels/g1/c1/m1');
                 expect(antwort.content).toContain('<t:1700000000:R>');
                 expect(interaction.deferReply).toHaveBeenCalledWith({flags: MessageFlags.Ephemeral});
@@ -1304,7 +1342,7 @@ describe('PingPongHandler', () => {
                 expect(redisService.removeFromSortedSet).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_OFFEN', 'g1:c1:m1');
                 expect(redisService.removeFromSortedSet).toHaveBeenCalledWith('PING_PONG:RUNDLAUF_OFFEN', 'g1:c1:m9');
                 const content = interaction.editReply.mock.calls[0][0].content;
-                expect(content).toContain('1. <@333>s Runde');
+                expect(content).toContain('1. Runde von Name-333');
                 expect(content).not.toContain('/m1');
             });
 
@@ -1706,6 +1744,7 @@ describe('PingPongHandler', () => {
                     await pingPongHandler.handleDoppelButton(interaction);
 
                     expect(parseTeilnehmer(interaction.update.mock.calls[0][0].content)).toEqual(['111', '222']);
+                    expect(interaction.update.mock.calls[0][0].allowedMentions).toEqual({users: ['111', '222']});
                 });
 
                 it('lässt niemanden doppelt beitreten', async () => {
@@ -1794,6 +1833,8 @@ describe('PingPongHandler', () => {
                     await pingPongHandler.handleDoppelButton(interaction);
 
                     expect(parseDoppelLobby(interaction.update.mock.calls[0][0].content).ausstehend).toEqual(['222']);
+                    expect([...interaction.update.mock.calls[0][0].allowedMentions.users].sort())
+                        .toEqual(['111', '222', '333', '444']);
                     expect(redisService.setIfAbsent).not.toHaveBeenCalled();
                 });
 
@@ -1810,6 +1851,7 @@ describe('PingPongHandler', () => {
                     // Die festen Teams bleiben zusammen, egal wer gewinnt.
                     expect(ergebnis.content).toMatch(/<@111> & <@222>|<@222> & <@111>/);
                     expect(ergebnis.content).toMatch(/<@333> & <@444>|<@444> & <@333>/);
+                    expect([...ergebnis.allowedMentions.users].sort()).toEqual(['111', '222', '333', '444']);
                 });
 
                 it('lässt das Doppel ausfallen, wenn der Partner abspringt', async () => {

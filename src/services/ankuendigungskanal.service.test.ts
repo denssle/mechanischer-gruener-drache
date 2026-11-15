@@ -61,9 +61,14 @@ describe('AnkuendigungskanalService', () => {
         vi.mocked(client.channels.fetch)
             .mockRejectedValue(new Error('Kanal nicht erreichbar'));
 
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
         const result =
             await ankuendigungskanalService.holeAnkuendigungskanal();
 
         expect(result).toBeNull();
+        expect(warn).toHaveBeenCalledWith(
+            'Ankündigungskanal chan-1 nicht abrufbar, Meldung wird verworfen: Kanal nicht erreichbar');
+        warn.mockRestore();
     });
 });

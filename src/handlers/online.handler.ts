@@ -1,23 +1,24 @@
 import {ChatInputCommandInteraction} from 'discord.js';
 import onlineService, {OnlinePlayer} from '../services/online.service.js';
 import characterService, {CharacterLink, findLinkForName} from '../services/character.service.js';
+import {holeAnzeigenamen, UNBEKANNTER_NAME} from '../services/anzeigename.service.js';
 import spielzeitService from '../services/spielzeit.service.js';
 import drachenHandler from './drachen.handler.js';
 
 // Discord-Nachrichtenlimit ist 2000 Zeichen; mit Puffer bleiben, lieber ganze Einträge weglassen.
 const MAX_LENGTH = 1900;
 
-// Verknüpfte Charaktere werden fett gesetzt und mit ihrem Discord-User beschriftet. Die Erwähnung
-// wird beim Senden per allowedMentions entschärft - /online soll niemanden anpingen.
-function markLinked(name: string, link: CharacterLink | null): string {
-    return link ? `**${name}** (<@${link.discordUserId}>)` : name;
+// Verknüpfte Charaktere werden fett gesetzt und mit dem Namen ihres Discord-Users beschriftet -
+// als Text, nicht als Erwähnung (siehe anzeigename.service).
+function markLinked(name: string, link: CharacterLink | null, namen: Map<string, string>): string {
+    return link ? `**${name}** (${namen.get(link.discordUserId) ?? UNBEKANNTER_NAME})` : name;
 }
 
 // Ort fällt hier bewusst raus - er steht als Gruppen-Überschrift über den Zeilen (siehe groupByCity).
-function formatPlayer(player: OnlinePlayer, links: CharacterLink[]): string {
+function formatPlayer(player: OnlinePlayer, links: CharacterLink[], namen: Map<string, string>): string {
     const gilde = player.gilde ? `${player.gilde} ` : '';
     const tot = player.lebt ? '' : ' (tot)';
-    const name = markLinked(player.name, findLinkForName(links, player.name));
+    const name = markLinked(player.name, findLinkForName(links, player.name), namen);
     return `${gilde}${name} — Stufe ${player.level} ${player.rasse}${tot}`;
 }
 
@@ -75,6 +76,13 @@ class OnlineHandler {
         // Redis-/Channel-Roundtrip warten, und der Handler fängt intern schon alles ab.
         void drachenHandler.pruefeLevel(players);
 
+        // Namen nur für die verknüpften Charaktere, die hier auch auftauchen (eingeloggt oder
+        // in den letzten 30 Minuten aktiv) - nicht für alle Verknüpfungen des Servers.
+        const genannt = [...players.map(player => player.name), ...recent]
+            .map(name => findLinkForName(links, name)?.discordUserId)
+            .filter((id): id is string => id !== undefined);
+        const namen = await holeAnzeigenamen(interaction.guild, genannt, '/online');
+
         const parts: string[] = [];
         let length = 0;
         // Platz für den Countdown vorab abziehen: an einem vollen Tag ist er sonst das Erste,
@@ -97,7 +105,7 @@ class OnlineHandler {
                 parts.push(stadtZeile);
                 length += stadtZeile.length + 1;
                 for (const player of spieler) {
-                    const line = formatPlayer(player, links);
+                    const line = formatPlayer(player, links, namen);
                     if (length + line.length + 1 > budget) {
                         voll = true;
                         break;
@@ -116,7 +124,7 @@ class OnlineHandler {
             const fitting: string[] = [];
             let recentLength = length + prefix.length;
             for (const name of extras) {
-                const marked = markLinked(name, findLinkForName(links, name));
+                const marked = markLinked(name, findLinkForName(links, name), namen);
                 const addition = (fitting.length ? ', ' : '') + marked;
                 if (recentLength + addition.length + 3 > budget) break;
                 fitting.push(marked);
