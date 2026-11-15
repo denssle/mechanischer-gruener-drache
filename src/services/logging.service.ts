@@ -37,6 +37,8 @@ class LoggingService {
         try {
             return JSON.parse(raw) as CachedMessage;
         } catch {
+            // Nur die ID, nie den Inhalt: der Cache hält Nachrichtentexte (siehe docs/datenhaltung.md).
+            console.warn(`Unlesbarer Nachrichten-Cache-Eintrag für ${messageId} - wird ignoriert.`);
             return null;
         }
     }

@@ -1,6 +1,12 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
 import {MessageFlags} from 'discord.js';
 
+// Namensauflösung ist in anzeigename.service.test.ts geprüft; hier reicht ein fester Name je ID.
+vi.mock('../services/anzeigename.service.js', () => ({
+    UNBEKANNTER_NAME: 'unbekannt',
+    holeAnzeigenamen: vi.fn(async (_guild: unknown, ids: string[]) => new Map(ids.map(id => [id, `Name-${id}`]))),
+}));
+
 vi.mock("../services/redis.service.js", () => ({
     default: {
         get: vi.fn(),
@@ -338,6 +344,8 @@ describe('PingPongSeasonHandler', () => {
             expect(altTraeger.roles.remove).toHaveBeenCalled();
             expect(pingPongService.addRuhmeshalleEintrag).toHaveBeenCalledWith('2026-06', 'weg', 5);
             expect(pingPongService.setLastSeason).toHaveBeenCalledWith('2026-07');
+            expect(warn).toHaveBeenCalledWith(
+                'Ping-Pong-Champion weg nicht abrufbar (nicht mehr auf dem Server?), Rolle nicht vergeben: Unknown Member');
             warn.mockRestore();
             client.guilds.cache.clear();
         });
@@ -420,8 +428,8 @@ describe('PingPongSeasonHandler', () => {
             await pingPongSeasonHandler.handleRuhmeshalle(interaction);
 
             const antwort = interaction.reply.mock.calls[0][0];
-            expect(antwort.content).toContain('Juni 2026: <@user-1> mit **12** Punkten');
-            expect(antwort.content).toContain('Mai 2026: <@user-2> mit **9** Punkten');
+            expect(antwort.content).toContain('Juni 2026: Name-user-1 mit **12** Punkten');
+            expect(antwort.content).toContain('Mai 2026: Name-user-2 mit **9** Punkten');
             // Pflicht: sonst pingt jede Abfrage sämtliche Ex-Champions.
             expect(antwort.allowedMentions).toEqual({parse: []});
         });

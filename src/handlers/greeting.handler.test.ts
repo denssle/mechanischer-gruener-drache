@@ -175,6 +175,26 @@ describe('GreetingHandler.lerneAusHistorie', () => {
         expect(svc.setLearnedEmoji).not.toHaveBeenCalled();
     });
 
+    it('gibt null zurück und sagt im Log warum, wenn der Kanal nicht abrufbar ist', async () => {
+        svc.getChannel.mockResolvedValue('greet-channel');
+        channelsFetch.mockRejectedValue(new Error('Missing Access'));
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        expect(await greetingHandler.lerneAusHistorie()).toBeNull();
+        expect(warn).toHaveBeenCalledWith('Morgengruß-Kanal greet-channel nicht abrufbar: Missing Access');
+        warn.mockRestore();
+    });
+
+    it('gibt null zurück und meldet es, wenn der Kanal kein Textkanal ist', async () => {
+        svc.getChannel.mockResolvedValue('greet-channel');
+        channelsFetch.mockResolvedValue({isTextBased: () => false});
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        expect(await greetingHandler.lerneAusHistorie()).toBeNull();
+        expect(warn).toHaveBeenCalledWith('Morgengruß-Kanal greet-channel ist kein Textkanal - Gruß entfällt.');
+        warn.mockRestore();
+    });
+
     it('scannt die Historie, speichert die abgeleiteten Emojis und gibt die Anzahl zurück', async () => {
         svc.getChannel.mockResolvedValue('greet-channel');
         // Eine Begrüßung von "tirsis": Welle + persönliches ☀️ - genau das Signal, das gelernt wird.

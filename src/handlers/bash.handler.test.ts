@@ -11,6 +11,12 @@ const service = vi.hoisted(() => ({
     entferne: vi.fn(),
     anzahl: vi.fn(),
 }));
+// Namensauflösung ist in anzeigename.service.test.ts geprüft; hier reicht ein fester Name je ID.
+vi.mock('../services/anzeigename.service.js', () => ({
+    UNBEKANNTER_NAME: 'unbekannt',
+    holeAnzeigenamen: vi.fn(async (_guild: unknown, ids: string[]) => new Map(ids.map(id => [id, `Name-${id}`]))),
+}));
+
 vi.mock('../services/bash.service.js', () => ({default: service}));
 
 import bashHandler, {darfBearbeiten, darfEntfernen, formatDatum, formatZitat, MODAL_PREFIX, parseDatum} from './bash.handler.js';
@@ -59,14 +65,14 @@ describe('parseDatum', () => {
 
 describe('formatZitat', () => {
     it('setzt jede Zeile als Blockzitat und hängt die Angaben an', () => {
-        expect(formatZitat(zitat({text: 'A: hallo\nB: tschüss'}))).toBe(
-            '**Zitat #7**\n> A: hallo\n> B: tschüss\n– <@person-1>, #plauderei, 12.03.2026'
+        expect(formatZitat(zitat({text: 'A: hallo\nB: tschüss'}), 'Anna')).toBe(
+            '**Zitat #7**\n> A: hallo\n> B: tschüss\n– Anna, #plauderei, 12.03.2026'
         );
     });
 
     it('lässt weggelassene Angaben einfach weg', () => {
-        expect(formatZitat(zitat({kontext: null, datum: null}))).toBe(
-            '**Zitat #7**\n> Ein Spruch\n– <@person-1>'
+        expect(formatZitat(zitat({kontext: null, datum: null}), 'Anna')).toBe(
+            '**Zitat #7**\n> Ein Spruch\n– Anna'
         );
     });
 
@@ -244,7 +250,7 @@ describe('BashHandler – Befehle', () => {
         await bashHandler.handleZitat(interaction);
 
         expect(service.holeZufaellig).toHaveBeenCalled();
-        expect(interaction.reply).toHaveBeenCalledWith({content: formatZitat(zitat()), allowedMentions: {parse: []}});
+        expect(interaction.reply).toHaveBeenCalledWith({content: formatZitat(zitat(), 'Name-person-1'), allowedMentions: {parse: []}});
     });
 
     it('zeigt mit Nummer genau dieses Zitat', async () => {

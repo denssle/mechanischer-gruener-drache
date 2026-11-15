@@ -1,5 +1,6 @@
 import {ChatInputCommandInteraction, MessageFlags} from 'discord.js';
 import rpService, {RpArt} from '../services/rp.service.js';
+import {holeAnzeigenamen} from '../services/anzeigename.service.js';
 
 // Menschlich lesbare Beschriftung je Art. Exportiert + getestet, weil sie an mehreren Stellen
 // (Bestätigung + Liste) auftaucht und der einzige Ort ist, an dem die internen Werte übersetzt werden.
@@ -52,9 +53,11 @@ class RpHandler {
             return interaction.reply('Aktuell sucht niemand nach Roleplay. Mit `/rollenspiel suche` kannst du dich melden.');
         }
 
-        const zeilen = eintraege.map(([userId, art]) => `- <@${userId}> – ${formatArt(art)}`);
+        const namen = await holeAnzeigenamen(interaction.guild, eintraege.map(([userId]) => userId), 'Rollenspiel-Suchende');
+        const zeilen = eintraege.map(([userId, art]) => `- ${namen.get(userId)} – ${formatArt(art)}`);
 
-        // Die Erwähnungen sind zum Anklicken/Sehen gedacht, nicht zum Anpingen (allowedMentions leer).
+        // Namen als Text statt Erwähnung (siehe anzeigename.service); allowedMentions bleibt leer,
+        // weil Anzeigenamen Freitext sind.
         return interaction.reply({
             content: `**Diese Leute suchen gerade Roleplay:**\n${zeilen.join('\n')}`,
             allowedMentions: {parse: []},
