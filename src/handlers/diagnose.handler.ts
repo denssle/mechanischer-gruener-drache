@@ -16,6 +16,7 @@ import pingPongService from '../services/pingPong.service.js';
 import {formatMonat} from './pingPongSeason.handler.js';
 import {oauthConfigured} from '../services/discordOAuth.service.js';
 import {sessionConfigured} from '../server/config.session.js';
+import {holePersistenz} from '../services/gesundheit.service.js';
 import config from '../../config.json' with {type: 'json'};
 
 // Adresse der Verwaltungsseite. Optionales Config-Feld per Cast (Muster twitch.service.ts), Default
@@ -152,6 +153,9 @@ class DiagnoseHandler {
         lines.push('\n**Config-Seite (/config)**');
         this.pruefeConfig(lines);
 
+        lines.push('\n**Datenbank (Redis)**');
+        await this.pruefePersistenz(lines);
+
         const [erste, ...rest] = teileInNachrichten(lines);
         await interaction.editReply(erste);
         for (const nachricht of rest) {
@@ -249,6 +253,27 @@ class DiagnoseHandler {
         const fehlt = [!login && 'DISCORD_CLIENT_SECRET', !session && 'CONFIG_SESSION_SECRET']
             .filter(Boolean).join(' + ');
         lines.push(`❌ Login NICHT konfiguriert (${fehlt} fehlt) – /config bleibt gesperrt (503).`);
+    }
+
+    // Die Redis-Konfiguration liegt nur auf dem Host. Bis 2026-11-22 stand dort `save ""`, ein Neustart
+    // des Hosts hat die ganze Datenbank gelöscht (docs/betrieb.md). Fällt sie je zurück, steht es hier.
+    // Fehlertolerant wie pruefeCharaktere: der Rest der Diagnose soll nicht daran hängen.
+    private async pruefePersistenz(lines: string[]): Promise<void> {
+        try {
+            const persistenz = await holePersistenz();
+            lines.push(persistenz.regeln
+                ? `Persistenz: ✅ an (\`save ${persistenz.regeln}\`)`
+                : 'Persistenz: ❌ aus (`save` ist leer) – ein Neustart von Redis löscht alle Daten');
+            const wann = persistenz.letzteSicherung
+                ? `<t:${Math.floor(persistenz.letzteSicherung.getTime() / 1000)}:R>`
+                : 'unbekannt';
+            lines.push(persistenz.letzteSicherungOk
+                ? `Letzte Sicherung: ✅ ${wann}`
+                : `Letzte Sicherung: ❌ fehlgeschlagen (zuletzt erfolgreich ${wann})`);
+        } catch (error) {
+            console.error('Diagnose: Redis-Persistenz nicht abfragbar:', error);
+            lines.push('⚠️ Persistenz nicht abfragbar (Fehler beim Lesen der Redis-Konfiguration)');
+        }
     }
 
     // Ohne "Audit-Log ansehen" nennt das Protokoll keine Urheber mehr (Rollen/Bans/Timeouts), meldet
