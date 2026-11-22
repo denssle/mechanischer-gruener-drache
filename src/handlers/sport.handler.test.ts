@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MessageFlags } from 'discord.js';
 
 vi.mock('../services/sport.service.js', () => ({
@@ -1115,6 +1115,18 @@ describe('SportHandler', () => {
             expect(sportService.setLastDailyPostDay).not.toHaveBeenCalled();
         });
 
+        // Feste Uhr für die Zeitraum-Tests: Handler und Erwartung lesen sonst getrennt new Date(), ein
+        // Lauf um 23:59:59.999 würde rot.
+        describe('nur nach Tagen mit Eingabe', () => {
+            const JETZT = new Date(2026, 10, 22, 0, 0, 30);
+            beforeEach(() => {
+                vi.useFakeTimers({toFake: ['Date']});
+                vi.setSystemTime(JETZT);
+            });
+            afterEach(() => {
+                vi.useRealTimers();
+            });
+
         // User-Wunsch: keine Meldung nach Tagen ohne Eingabe. Der Tag gilt trotzdem als erledigt.
         it('postet nicht, wenn seit dem letzten Post nichts eingetragen wurde, setzt aber den Marker', async () => {
             vi.mocked(sportService.getLastDailyPostDay).mockResolvedValue('2026-07-01');
@@ -1126,7 +1138,7 @@ describe('SportHandler', () => {
             await sportHandler.posteTaeglichenAktivitaetsstand();
 
             expect(send).not.toHaveBeenCalled();
-            expect(sportService.setLastDailyPostDay).toHaveBeenCalledWith(formatTag(new Date()));
+            expect(sportService.setLastDailyPostDay).toHaveBeenCalledWith('2026-11-22');
         });
 
         // Zeitraum = Beginn des letzten Post-Tags bis heute 00:00; nach einem Ausfall also auch mehrere Tage.
@@ -1138,8 +1150,22 @@ describe('SportHandler', () => {
 
             expect(sportService.hatEintraegeZwischen).toHaveBeenCalledWith(
                 tagesbeginn('2026-07-01'),
-                tagesbeginn(formatTag(new Date()))
+                new Date(2026, 10, 22)
             );
+        });
+
+        // Ein kaputter Marker darf den Post nicht dauerhaft blockieren: zählt wie ein fehlender (= gestern).
+        it('nimmt bei unlesbarem Marker gestern als Beginn', async () => {
+            vi.mocked(sportService.getLastDailyPostDay).mockResolvedValue('kaputt');
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue(null);
+
+            await sportHandler.posteTaeglichenAktivitaetsstand();
+
+            expect(sportService.hatEintraegeZwischen).toHaveBeenCalledWith(
+                new Date(2026, 10, 21),
+                new Date(2026, 10, 22)
+            );
+        });
         });
 
         // Ohne abrufbaren Kanal bleibt der Marker stehen -> wird nachgeholt, sobald ein Kanal existiert.

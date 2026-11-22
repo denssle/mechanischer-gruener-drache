@@ -89,6 +89,15 @@ describe.skipIf(!process.env.REDIS_INTEGRATION)('redisService gegen echtes Redis
     });
 
     // So fragt sportService.getIndexedEntries: Infinity muss als Grenze durchgehen.
+    it('countSortedSetByScore zählt mit inklusiven Grenzen', async () => {
+        const k = key('count');
+        await redisService.setSortedSet(k, 'a', 1000);
+        await redisService.setSortedSet(k, 'b', 2000);
+
+        expect(await redisService.countSortedSetByScore(k, 1000, 1999)).toBe(1);
+        expect(await redisService.countSortedSetByScore(k, 1000, 2000)).toBe(2);
+    });
+
     it('getSortedSetByScore versteht Infinity als Grenze', async () => {
         const k = key('zeitachse');
         await redisService.setSortedSet(k, 'alt', 1000);

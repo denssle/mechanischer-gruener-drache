@@ -31,10 +31,10 @@ steht in [Betrieb](betrieb.md); es enthält dieselben Daten und landet in `~/bac
 | `TWITCH:USER:*`, `TWITCH:MAPPING:*`, `TWITCH:SUBSCRIPTION:*`, `TWITCH:ALL_LINKS` | Twitch-Login ↔ Discord-User, EventSub-Subscription-IDs | bis `/twitch entfernen` (oder Revocation) | Live-Benachrichtigungen |
 | `TWITCH:NOTIFICATION_CHANNEL`, `TWITCH:NOTIFICATION_ROLE` | Admin-Konfiguration | bis zum Überschreiben | Live-Benachrichtigungen |
 | `SPORT:ENTRY:<id>`, `SPORT:USER:<userId>` | Sport-Einträge: Distanz, optionale Aktivitätsminuten, Aktivität, Datum, optionale Notiz | dauerhaft (bis `/sport loeschen`) | `/sport statistik` |
-| `SPORT:ENTRIES` | Globaler Index der Sporteintrags-IDs als Sorted Set; Erfassungszeitpunkt (`createdAt`) als Score | dauerhaft | Zeitlich begrenzte Auswertungen, insbesondere Ressourcenberechnung ab Staffel 2 |
+| `SPORT:ENTRIES` | Globaler Index der Sporteintrags-IDs als Sorted Set; Erfassungszeitpunkt (`createdAt`) als Score | dauerhaft | Zeitlich begrenzte Auswertungen, insbesondere Ressourcenberechnung ab Staffel 2; Prüfung, ob der Mitternachts-Post fällig ist (nur nach Tagen mit Eingabe) |
 | `SPORT:HIGHSCORE`, `SPORT:MILESTONES`, `SPORT:ANNOUNCEMENT_CHANNEL` | Kilometer je User, Meilensteine, Ankündigungskanal | dauerhaft | `/sport gesamt`, Meilenstein-Ankündigungen |
 | `SPORT:MINUTEN` | Aktivitätsminuten je User | dauerhaft | `/sport gesamt` (ab Schritt 2) |
-| `SPORT:LAST_DAILY_POST` | Tag (YYYY-MM-DD) des zuletzt geposteten täglichen Kilometerstands | bis zum Überschreiben | Doppelpost-Schutz der Mitternachts-Meldung |
+| `SPORT:LAST_DAILY_POST` | Tag (YYYY-MM-DD), an dem der tägliche Kilometerstand zuletzt erledigt wurde – gepostet **oder** mangels Eingabe ausgelassen | bis zum Überschreiben | Doppelpost-Schutz der Mitternachts-Meldung |
 | `CAMP:START_DATE` | Zeitpunkt, ab dem Sporteinträge für Camp-Ressourcen zählen | dauerhaft nach `/camp starten` | Startpunkt der Camp-/Staffel-Auswertung |
 | `CAMP:CURRENT_LEVEL` | Anzahl der insgesamt abgeschlossenen Einträge aus `CAMP_STUFEN`; nicht die phaseninterne Stufennummer | bis zum nächsten Camp-Aufstieg | Aktueller Camp-Fortschritt und Berechnung bereits verbrauchter Ressourcen |
 | `<userId>PING_PONG`, `PING_PONG` (Sorted Set) | Ping-Pong-Punktestand der laufenden Season | bis zum Monatsende (Season-Reset) | `/pingpong bestenliste` |

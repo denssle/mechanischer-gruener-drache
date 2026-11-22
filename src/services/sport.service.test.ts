@@ -13,6 +13,7 @@ vi.mock('../services/redis.service.js', () => ({
         getSortedSet: vi.fn(),
         getSortedSetAll: vi.fn(),
         getSortedSetByScore: vi.fn(),
+        countSortedSetByScore: vi.fn(),
         setSortedSet: vi.fn(),
         setHashField: vi.fn(),
         getHashAll: vi.fn(),
@@ -318,10 +319,10 @@ describe('SportService', () => {
         it('fragt den Index von "von" bis eine Millisekunde vor "bis" ab', async () => {
             const von = new Date('2026-11-21T00:00:00.000Z');
             const bis = new Date('2026-11-22T00:00:00.000Z');
-            vi.mocked(redisService.getSortedSetByScore).mockResolvedValue(['entry-1']);
+            vi.mocked(redisService.countSortedSetByScore).mockResolvedValue(1);
 
             expect(await sportService.hatEintraegeZwischen(von, bis)).toBe(true);
-            expect(redisService.getSortedSetByScore).toHaveBeenCalledWith(
+            expect(redisService.countSortedSetByScore).toHaveBeenCalledWith(
                 'SPORT:ENTRIES',
                 von.getTime(),
                 bis.getTime() - 1
@@ -329,7 +330,7 @@ describe('SportService', () => {
         });
 
         it('meldet false ohne Einträge im Zeitraum', async () => {
-            vi.mocked(redisService.getSortedSetByScore).mockResolvedValue([]);
+            vi.mocked(redisService.countSortedSetByScore).mockResolvedValue(0);
 
             expect(await sportService.hatEintraegeZwischen(new Date(0), new Date(1000))).toBe(false);
         });

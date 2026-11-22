@@ -179,12 +179,12 @@ class SportService {
     // tägliche Aktivitätsstand nur nach Tagen mit Eingabe kommt. Die Scores sind ganze Millisekunden,
     // bis - 1 macht die obere Grenze also exklusiv.
     async hatEintraegeZwischen(von: Date, bis: Date): Promise<boolean> {
-        const entryIds = await redisService.getSortedSetByScore(
+        const anzahl = await redisService.countSortedSetByScore(
             KEYS.allEntries,
             von.getTime(),
             bis.getTime() - 1
         );
-        return entryIds.length > 0;
+        return anzahl > 0;
     }
 
     async setKilometer(userId: string, kilometers: number): Promise<void> {

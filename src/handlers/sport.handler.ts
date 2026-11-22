@@ -561,8 +561,11 @@ class SportHandler {
             // Zeitraum: vom Beginn des letzten Post-Tags bis heute 00:00 (lokal). Fehlt der Marker,
             // zählt nur gestern. Einträge aus den ersten Sekunden von heute gehören in die nächste Nacht.
             const heuteBeginn = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate());
-            const vonBeginn = letzterTag !== null
-                ? tagesbeginn(letzterTag)
+            // Ein unlesbarer Marker (nicht YYYY-MM-DD) zählt wie ein fehlender: sonst ginge NaN an Redis,
+            // der Abruf scheiterte jede Minute, und der Post käme nie wieder.
+            const markerBeginn = letzterTag !== null ? tagesbeginn(letzterTag) : null;
+            const vonBeginn = markerBeginn !== null && !Number.isNaN(markerBeginn.getTime())
+                ? markerBeginn
                 : new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate() - 1);
             if (!(await sportService.hatEintraegeZwischen(vonBeginn, heuteBeginn))) {
                 await sportService.setLastDailyPostDay(heute);
