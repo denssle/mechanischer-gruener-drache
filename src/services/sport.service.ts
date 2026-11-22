@@ -175,6 +175,18 @@ class SportService {
         return this.ladeEintraege(entryIds);
     }
 
+    // Gibt es im globalen Index mindestens einen Eintrag mit von <= createdAt < bis? Basis dafür, dass der
+    // tägliche Aktivitätsstand nur nach Tagen mit Eingabe kommt. Die Scores sind ganze Millisekunden,
+    // bis - 1 macht die obere Grenze also exklusiv.
+    async hatEintraegeZwischen(von: Date, bis: Date): Promise<boolean> {
+        const entryIds = await redisService.getSortedSetByScore(
+            KEYS.allEntries,
+            von.getTime(),
+            bis.getTime() - 1
+        );
+        return entryIds.length > 0;
+    }
+
     async setKilometer(userId: string, kilometers: number): Promise<void> {
         await redisService.setSortedSet(KEYS.highscore, userId, kilometers);
     }

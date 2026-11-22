@@ -313,6 +313,28 @@ describe('SportService', () => {
         });
     });
 
+    describe('hatEintraegeZwischen', () => {
+        // Obere Grenze exklusiv: ein Eintrag genau um Mitternacht gehört zum neuen Tag.
+        it('fragt den Index von "von" bis eine Millisekunde vor "bis" ab', async () => {
+            const von = new Date('2026-11-21T00:00:00.000Z');
+            const bis = new Date('2026-11-22T00:00:00.000Z');
+            vi.mocked(redisService.getSortedSetByScore).mockResolvedValue(['entry-1']);
+
+            expect(await sportService.hatEintraegeZwischen(von, bis)).toBe(true);
+            expect(redisService.getSortedSetByScore).toHaveBeenCalledWith(
+                'SPORT:ENTRIES',
+                von.getTime(),
+                bis.getTime() - 1
+            );
+        });
+
+        it('meldet false ohne Einträge im Zeitraum', async () => {
+            vi.mocked(redisService.getSortedSetByScore).mockResolvedValue([]);
+
+            expect(await sportService.hatEintraegeZwischen(new Date(0), new Date(1000))).toBe(false);
+        });
+    });
+
     describe('addEntry', () => {
         it('speichert den Eintrag, verknüpft ihn mit dem User und erhöht die Bestenliste', async () => {
             const entry = await sportService.addEntry('user-123', 'laufen', 10);

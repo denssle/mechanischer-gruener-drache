@@ -23,6 +23,7 @@ vi.mock('../services/sport.service.js', () => ({
         setAnnouncementChannel: vi.fn(),
         getLastDailyPostDay: vi.fn().mockResolvedValue(null),
         setLastDailyPostDay: vi.fn(),
+        hatEintraegeZwischen: vi.fn().mockResolvedValue(true),
     }
 }));
 
@@ -42,7 +43,7 @@ vi.mock('../client.js', () => ({
 
 import sportService from '../services/sport.service.js';
 import client from '../client.js';
-import {formatTag} from '../services/zeit.service.js';
+import {formatTag, tagesbeginn} from '../services/zeit.service.js';
 import sportHandler, { parseKilometer, parseMinuten, erkenneAktivitaet, erkenneSportLeistungen, siehtNachSportAus, DEFAULT_AKTIVITAET, BESTAETIGUNGS_REAKTION, RUECKFRAGE_REAKTION, rundeKilometer, rundeMinuten, SPORT_HILFE } from './sport.handler.js';
 import { HELP_TEXT } from './hilfe.handler.js';
 import campHandler from './camp.handler.js';
@@ -59,6 +60,7 @@ const mockEntry = (overrides = {}) => ({
 describe('SportHandler', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(sportService.hatEintraegeZwischen).mockResolvedValue(true);
     });
 
     describe('handleEintragen', () => {
@@ -1111,6 +1113,33 @@ describe('SportHandler', () => {
 
             expect(sportService.getAnnouncementChannel).not.toHaveBeenCalled();
             expect(sportService.setLastDailyPostDay).not.toHaveBeenCalled();
+        });
+
+        // User-Wunsch: keine Meldung nach Tagen ohne Eingabe. Der Tag gilt trotzdem als erledigt.
+        it('postet nicht, wenn seit dem letzten Post nichts eingetragen wurde, setzt aber den Marker', async () => {
+            vi.mocked(sportService.getLastDailyPostDay).mockResolvedValue('2026-07-01');
+            vi.mocked(sportService.hatEintraegeZwischen).mockResolvedValue(false);
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue('chan-1');
+            const send = vi.fn();
+            vi.mocked(client.channels.fetch).mockResolvedValue({ send } as any);
+
+            await sportHandler.posteTaeglichenAktivitaetsstand();
+
+            expect(send).not.toHaveBeenCalled();
+            expect(sportService.setLastDailyPostDay).toHaveBeenCalledWith(formatTag(new Date()));
+        });
+
+        // Zeitraum = Beginn des letzten Post-Tags bis heute 00:00; nach einem Ausfall also auch mehrere Tage.
+        it('prüft den Zeitraum seit Beginn des letzten Post-Tags bis heute Mitternacht', async () => {
+            vi.mocked(sportService.getLastDailyPostDay).mockResolvedValue('2026-07-01');
+            vi.mocked(sportService.getAnnouncementChannel).mockResolvedValue(null);
+
+            await sportHandler.posteTaeglichenAktivitaetsstand();
+
+            expect(sportService.hatEintraegeZwischen).toHaveBeenCalledWith(
+                tagesbeginn('2026-07-01'),
+                tagesbeginn(formatTag(new Date()))
+            );
         });
 
         // Ohne abrufbaren Kanal bleibt der Marker stehen -> wird nachgeholt, sobald ein Kanal existiert.

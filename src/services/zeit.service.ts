@@ -7,3 +7,9 @@ export function formatTag(date: Date): string {
     const tag = String(date.getDate()).padStart(2, '0');
     return `${jahr}-${monat}-${tag}`;
 }
+
+// Gegenstück zu formatTag: lokale Mitternacht zu Beginn des Tages YYYY-MM-DD.
+export function tagesbeginn(tag: string): Date {
+    const [jahr, monat, tagImMonat] = tag.split('-').map(Number);
+    return new Date(jahr, monat - 1, tagImMonat);
+}
