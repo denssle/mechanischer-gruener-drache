@@ -5,7 +5,7 @@ Was im laufenden Betrieb gilt und nicht aus dem Code hervorgeht. Deployment steh
 ## Überwachung
 
 - **Beim Deploy:** `deploy.yml` wartet nach dem Neustart bis zu drei Minuten, bis der Bot wieder antwortet.
-- **Im Betrieb:** `uptime.yml` prüft alle 30 Minuten `https://enzlor.uber.space/twitch/eventsub`. Gesund ist `404`. Schlägt der Lauf fehl, mailt GitHub. Das ist kein Alarm auf die Minute: geplante Läufe können sich verspäten, und GitHub schaltet sie ab, wenn im Repo 60 Tage lang nichts passiert.
+- **Im Betrieb:** `uptime.yml` fragt alle 30 Minuten `https://enzlor.uber.space/config/gesundheit`. Gesund ist `200` mit `ok`. `503` heißt: der Bot läuft, aber Redis ist nicht verbunden, keine einzige Kanal-Einstellung gesetzt (Datenbank leer), `save` leer, die letzte Sicherung gescheitert oder Discord getrennt; der Befund steht im Antworttext und im Log des Workflow-Laufs. `502` kommt von nginx, dann läuft der Bot gar nicht. Schlägt der Lauf fehl, mailt GitHub. Bis 2026-11-22 prüfte der Lauf nur, ob `/twitch/eventsub` mit `404` antwortet. Das blieb bei der leeren Datenbank grün, weil der Prozess ja lief. Das ist kein Alarm auf die Minute: geplante Läufe können sich verspäten, und GitHub schaltet sie ab, wenn im Repo 60 Tage lang nichts passiert.
 - **Fehler im Bot:** Mit gesetztem „Kanal für Bot-Fehler" auf `/config` kommen `console.error`-Meldungen gesammelt dort an, siehe [Logging](features/logging.md).
 
 ## Persistenz von Redis
@@ -16,7 +16,7 @@ Redis läuft als eigener Supervisor-Dienst (`~/etc/services.d/redis.ini`) mit de
 
 Damit schreibt Redis regelmäßig und beim Beenden `~/.redis/dump.rdb` und lädt die Datei beim Start wieder.
 
-**Vorfall 2026-11-22:** Bis dahin stand dort `save ""`. Redis lief seit Juni rein im Speicher, ohne jemals auf Platte zu schreiben. Als Uberspace den Host um 14:08 neu startete, war die komplette Datenbank weg, `/diagnose` zeigte keine einzige Einstellung mehr. Gerettet hat das tägliche Backup von 04:23, die Änderungen des Vormittags blieben verloren. Beim Zurückspielen mussten die Tagesmarker (`GEBURTSTAG:LAST_DAY`, `SPORT:LAST_DAILY_POST`) auf den Stand von nach dem Neustart gesetzt werden, sonst wären Geburtstagsgruß bzw. Tagespost ein zweites Mal gekommen. **Wer die Redis-Konfiguration ändert: `save` nie leer lassen.** Prüfen lässt sich das live per `redis-cli -s ~/.redis/sock CONFIG GET save`.
+**Vorfall 2026-11-22:** Bis dahin stand dort `save ""`. Redis lief seit Juni rein im Speicher, ohne jemals auf Platte zu schreiben. Als Uberspace den Host um 14:08 neu startete, war die komplette Datenbank weg, `/diagnose` zeigte keine einzige Einstellung mehr. Gerettet hat das tägliche Backup von 04:23, die Änderungen des Vormittags blieben verloren. Beim Zurückspielen mussten die Tagesmarker (`GEBURTSTAG:LAST_DAY`, `SPORT:LAST_DAILY_POST`) auf den Stand von nach dem Neustart gesetzt werden, sonst wären Geburtstagsgruß bzw. Tagespost ein zweites Mal gekommen. **Wer die Redis-Konfiguration ändert: `save` nie leer lassen.** Prüfen lässt sich das live per `redis-cli -s ~/.redis/sock CONFIG GET save`. Seit 2026-11-22 zeigt `/diagnose` die Einstellung und die letzte Sicherung, und der Gesundheits-Endpunkt (siehe Überwachung) schlägt Alarm, wenn `save` leer ist.
 
 ## Backup
 

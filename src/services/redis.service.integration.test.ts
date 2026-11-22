@@ -24,6 +24,15 @@ describe.skipIf(!process.env.REDIS_INTEGRATION)('redisService gegen echtes Redis
         }
     });
 
+    // Daran hängt die Gesundheitsprüfung (gesundheit.service.ts): CONFIG GET und INFO liefern je nach
+    // node-redis-Version andere Formen, ein Mock zeigt das nicht.
+    it('liest Konfiguration und INFO-Abschnitt als Text', async () => {
+        expect(redisService.verbunden).toBe(true);
+        expect(typeof await redisService.getConfigWert('save')).toBe('string');
+        expect(await redisService.getConfigWert('gibt-es-nicht')).toBeNull();
+        expect(await redisService.getInfo('persistence')).toMatch(/rdb_last_bgsave_status:\w+/);
+    });
+
     it('liest zurück, was geschrieben wurde, und liefert für Fehlendes null', async () => {
         const k = key('text');
 

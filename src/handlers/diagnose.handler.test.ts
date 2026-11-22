@@ -23,6 +23,7 @@ const rollenhinweis = vi.hoisted(() => ({
 }));
 const session = vi.hoisted(() => ({ sessionConfigured: vi.fn() }));
 const pingPong = vi.hoisted(() => ({ getLastSeason: vi.fn(), getChampionRole: vi.fn() }));
+const gesundheit = vi.hoisted(() => ({ holePersistenz: vi.fn() }));
 const channelsFetch = vi.hoisted(() => vi.fn());
 const guildsCache = vi.hoisted(() => new Map<string, unknown>());
 
@@ -40,6 +41,7 @@ vi.mock('../services/event.service.js', () => ({ default: event }));
 vi.mock('../services/pingPong.service.js', () => ({ default: pingPong }));
 vi.mock('../services/discordOAuth.service.js', () => oauth);
 vi.mock('../server/config.session.js', () => session);
+vi.mock('../services/gesundheit.service.js', () => gesundheit);
 // findInRoster (rein) real lassen, nur den Service-Default mocken.
 vi.mock('../services/character.service.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../services/character.service.js')>();
@@ -128,6 +130,11 @@ describe('DiagnoseHandler', () => {
         // Standard: Config-Login konfiguriert
         oauth.oauthConfigured.mockReturnValue(true);
         session.sessionConfigured.mockReturnValue(true);
+        // Standard: Redis sichert, letzte Sicherung ok
+        gesundheit.holePersistenz.mockReset();
+        gesundheit.holePersistenz.mockResolvedValue({
+            regeln: '3600 1 300 100 60 10000', letzteSicherung: new Date(1795362430000), letzteSicherungOk: true,
+        });
         // Standard: Bot darf das Audit-Log lesen
         guildsCache.clear();
         guildsCache.set(config.GUILD_ID, mockGuild());
@@ -398,6 +405,47 @@ describe('DiagnoseHandler', () => {
             await diagnoseHandler.handleDiagnose(interaction);
 
             expect(report(interaction)).toContain('Audit-Log-Zugriff: ⚠️');
+        });
+    });
+
+    describe('Datenbank (Redis)', () => {
+        it('meldet eingeschaltete Persistenz und die letzte Sicherung', async () => {
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Persistenz: ✅ an (`save 3600 1 300 100 60 10000`)');
+            expect(report(interaction)).toContain('Letzte Sicherung: ✅ <t:1795362430:R>');
+        });
+
+        it('schlägt Alarm bei leerem save, wie bis 2026-11-22 auf dem Host', async () => {
+            gesundheit.holePersistenz.mockResolvedValue({regeln: '', letzteSicherung: null, letzteSicherungOk: true});
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Persistenz: ❌ aus');
+        });
+
+        it('meldet eine fehlgeschlagene Sicherung', async () => {
+            gesundheit.holePersistenz.mockResolvedValue({
+                regeln: '3600 1', letzteSicherung: new Date(1795362430000), letzteSicherungOk: false,
+            });
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('Letzte Sicherung: ❌ fehlgeschlagen');
+        });
+
+        it('übersteht eine nicht abfragbare Konfiguration', async () => {
+            gesundheit.holePersistenz.mockRejectedValue(new Error('ERR unknown command CONFIG'));
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const interaction = makeInteraction();
+
+            await diagnoseHandler.handleDiagnose(interaction);
+
+            expect(report(interaction)).toContain('⚠️ Persistenz nicht abfragbar');
         });
     });
 

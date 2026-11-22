@@ -29,6 +29,23 @@ class RedisService {
         }
     }
 
+    // Für die Gesundheitsprüfung (gesundheit.service.ts): true, solange die Verbindung steht.
+    get verbunden(): boolean {
+        return this.#client.isReady;
+    }
+
+    // Ein Wert aus der Redis-Konfiguration, z.B. "save". Die Konfiguration liegt nur auf dem Host
+    // (~/.redis/conf), deshalb wird sie live gefragt statt aus dem Repo gelesen.
+    async getConfigWert(name: string): Promise<string | null> {
+        const ergebnis = await this.#client.configGet(name);
+        return ergebnis[name] ?? null;
+    }
+
+    // Rohtext eines INFO-Abschnitts (z.B. "persistence"), Zeilen der Form "schluessel:wert".
+    async getInfo(abschnitt: string): Promise<string> {
+        return this.#client.info(abschnitt);
+    }
+
     async set(key: string, value: string): Promise<string> {
         await this.#client.set(key, value);
         return value;
