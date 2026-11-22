@@ -74,6 +74,11 @@ class RedisService {
         return this.#client.zRangeByScore(key, min, max);
     }
 
+    // Nur die Anzahl im Score-Bereich (beide Grenzen inklusiv), ohne die Mitglieder zu laden.
+    countSortedSetByScore(key: string, min: number, max: number) {
+        return this.#client.zCount(key, min, max);
+    }
+
     async delete(key: string): Promise<void> {
         await this.#client.del(key);
     }

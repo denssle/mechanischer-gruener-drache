@@ -17,7 +17,7 @@ import {
 
 import campHandler from './camp.handler.js';
 import ankuendigungskanalService from '../services/ankuendigungskanal.service.js';
-import {formatTag} from '../services/zeit.service.js';
+import {formatTag, tagesbeginn} from '../services/zeit.service.js';
 
 // Ohne Schlüsselwort im Text wird Laufen angenommen (bewusst: lieber ein Eintrag mit der
 // häufigsten Aktivität als gar keiner - die Distanz zählt fürs kooperative Gesamtziel).
@@ -546,12 +546,29 @@ class SportHandler {
     // den Tagesmarker: heute schon gepostet -> nichts. War der Bot um Mitternacht aus, wird beim ersten
     // Lauf des neuen Tages nachgeholt. Der Marker wird NUR nach erfolgreichem Post gesetzt - ohne
     // abrufbaren Kanal bleibt er stehen, damit die Meldung nachgeholt wird, sobald ein Kanal existiert.
+    // Gab es seit dem letzten Post keinen einzigen Eintrag, entfällt die Meldung (User-Wunsch: nur nach
+    // Tagen mit Eingabe); der Marker wird dann trotzdem gesetzt, der Tag ist erledigt.
     // Bewusst fehlertolerant (wie die Meilenstein-Ankündigung).
     async posteTaeglichenAktivitaetsstand(): Promise<void> {
         try {
-            const heute = formatTag(new Date());
+            const jetzt = new Date();
+            const heute = formatTag(jetzt);
             const letzterTag = await sportService.getLastDailyPostDay();
             if (letzterTag === heute) {
+                return;
+            }
+
+            // Zeitraum: vom Beginn des letzten Post-Tags bis heute 00:00 (lokal). Fehlt der Marker,
+            // zählt nur gestern. Einträge aus den ersten Sekunden von heute gehören in die nächste Nacht.
+            const heuteBeginn = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate());
+            // Ein unlesbarer Marker (nicht YYYY-MM-DD) zählt wie ein fehlender: sonst ginge NaN an Redis,
+            // der Abruf scheiterte jede Minute, und der Post käme nie wieder.
+            const markerBeginn = letzterTag !== null ? tagesbeginn(letzterTag) : null;
+            const vonBeginn = markerBeginn !== null && !Number.isNaN(markerBeginn.getTime())
+                ? markerBeginn
+                : new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate() - 1);
+            if (!(await sportService.hatEintraegeZwischen(vonBeginn, heuteBeginn))) {
+                await sportService.setLastDailyPostDay(heute);
                 return;
             }
 

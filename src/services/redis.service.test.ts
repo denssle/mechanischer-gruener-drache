@@ -11,6 +11,7 @@ vi.mock('redis', () => {
         zAdd: vi.fn().mockResolvedValue(1),
         zRangeWithScores: vi.fn().mockResolvedValue([]),
         zRangeByScore: vi.fn().mockResolvedValue([]),
+        zCount: vi.fn().mockResolvedValue(0),
         del: vi.fn().mockResolvedValue(1),
         rPush: vi.fn().mockResolvedValue(1),
         lRem: vi.fn().mockResolvedValue(1),
@@ -60,6 +61,13 @@ describe('RedisService', () => {
         const mockClient = vi.mocked(createClient).mock.results[0].value;
         await redisService.setSortedSet('key', 'val', 10);
         expect(mockClient.zAdd).toHaveBeenCalledWith('key', { value: 'val', score: 10 });
+    });
+
+    it('sollte countSortedSetByScore an zCount weiterreichen', async () => {
+        const mockClient = vi.mocked(createClient).mock.results[0].value;
+        await redisService.countSortedSetByScore('key', 100, 200);
+
+        expect(mockClient.zCount).toHaveBeenCalledWith('key', 100, 200);
     });
 
     it('sollte getSortedSetByScore korrekt aufrufen', async () => {
